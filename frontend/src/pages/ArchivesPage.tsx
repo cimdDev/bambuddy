@@ -997,6 +997,16 @@ function ArchiveCard({
         <div className="flex items-center justify-between text-xs text-bambu-gray border-t border-bambu-dark-tertiary pt-3">
           <span>{formatDateTime(archive.created_at, timeFormat)}</span>
           <div className="flex items-center gap-2">
+            {/* Slicer user (Custom Feature) */}
+            {(archive.slicer_user || archive.slicer_user_email) && (
+              <span
+                className="flex items-center gap-1"
+                title={`Sliced by: ${archive.slicer_user || archive.slicer_user_email}`}
+              >
+                <User className="w-3 h-3" />
+                {archive.slicer_user || archive.slicer_user_email}
+              </span>
+            )}
             {archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
                 <User className="w-3 h-3" />
@@ -1900,6 +1910,15 @@ function ArchiveListRow({
         </div>
         <div className="col-span-2 text-sm text-bambu-gray">
           <div>{formatDateOnly(archive.created_at)}</div>
+            {(archive.slicer_user || archive.slicer_user_email) && (
+              <div
+                className="flex items-center gap-1 text-xs opacity-75"
+                title={`Sliced by: ${archive.slicer_user || archive.slicer_user_email}`}
+              >
+                <User className="w-3 h-3" />
+                {archive.slicer_user || archive.slicer_user_email}
+              </div>
+            )}
           {archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
               <User className="w-3 h-3" />
