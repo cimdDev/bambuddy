@@ -63,6 +63,10 @@ class ArchiveResponse(BaseModel):
     bed_temperature: int | None
     nozzle_temperature: int | None
 
+    # custome feature: slicer user info from 3MF printersettings/note
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
+
     sliced_for_model: str | None = None  # Printer model this file was sliced for
 
     status: str

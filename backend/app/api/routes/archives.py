@@ -104,6 +104,9 @@ def archive_to_response(
         "energy_kwh": archive.energy_kwh,
         "energy_cost": archive.energy_cost,
         "created_at": archive.created_at,
+        # custome feature: slicer user info from 3MF printersettings/note
+        "slicer_user": archive.slicer_user,
+        "slicer_user_email": archive.slicer_user_email,
         # User tracking (Issue #206)
         "created_by_id": archive.created_by_id,
         "created_by_username": archive.created_by.username if archive.created_by else None,
@@ -160,7 +163,7 @@ async def search_archives(
 ):
     """Full-text search across archives.
 
-    Searches print_name, filename, tags, notes, designer, and filament_type fields.
+    Searches print_name, filename, tags, notes, designer, and filament_type and CUSTOM slicer_user + slicer_user_email fields.
     Supports partial matches with wildcards (e.g., 'vor*' matches 'voron').
     """
     from sqlalchemy import text
@@ -181,7 +184,7 @@ async def search_archives(
     """)
 
     try:
-        result = await db.execute(fts_query, {"search_term": search_term, "limit": limit + 100, "offset": 0})
+        result = await db.execute(fts_query, {"search_term": search_term, "limit": limit, "offset": offset})
         matched_ids = [row[0] for row in result.fetchall()]
     except Exception as e:
         logger.warning("FTS search failed, falling back to LIKE search: %s", e)
@@ -197,6 +200,8 @@ async def search_archives(
                 | (PrintArchive.notes.ilike(like_pattern))
                 | (PrintArchive.designer.ilike(like_pattern))
                 | (PrintArchive.filament_type.ilike(like_pattern))
+                | (PrintArchive.slicer_user.ilike(like_pattern))
+                | (PrintArchive.slicer_user_email.ilike(like_pattern))
             )
             .order_by(PrintArchive.created_at.desc())
         )
@@ -232,9 +237,7 @@ async def search_archives(
 
     # Preserve FTS ranking order and apply pagination
     ordered_archives = [archives_dict[id] for id in matched_ids if id in archives_dict]
-    paginated = ordered_archives[offset : offset + limit]
-
-    return [archive_to_response(a) for a in paginated]
+    return [archive_to_response(a) for a in ordered_archives]
 
 
 @router.post("/search/rebuild-index")
@@ -253,12 +256,16 @@ async def rebuild_search_index(
         await db.execute(text("DELETE FROM archive_fts"))
 
         # Repopulate from print_archives
+
         await db.execute(
             text("""
-            INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type)
-            SELECT id, print_name, filename, tags, notes, designer, filament_type
+            INSERT INTO archive_fts(
+                rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+            )
+            SELECT
+                id, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
             FROM print_archives
-        """)
+            """)
         )
 
         await db.commit()
@@ -808,8 +815,10 @@ async def toggle_favorite(
     archive.is_favorite = not archive.is_favorite
     await db.commit()
     await db.refresh(archive)
-    return archive
-
+    # keep output consistent with ArchiveResponse
+    service = ArchiveService(db)
+    full = await service.get_archive(archive.id)
+    return archive_to_response(full)
 
 @router.post("/{archive_id}/rescan", response_model=ArchiveResponse)
 async def rescan_archive(
@@ -856,6 +865,12 @@ async def rescan_archive(
     if metadata.get("designer"):
         archive.designer = metadata["designer"]
 
+    # custome feature: extract slicer user info from 3MF printersettings/note
+    if metadata.get("slicer_user"):
+        archive.slicer_user = metadata["slicer_user"]
+    if metadata.get("slicer_user_email"):
+        archive.slicer_user_email = metadata["slicer_user_email"]
+
     # Calculate cost based on filament usage and type
     if archive.filament_used_grams and archive.filament_type:
         primary_type = archive.filament_type.split(",")[0].strip()
@@ -871,8 +886,9 @@ async def rescan_archive(
 
     await db.commit()
     await db.refresh(archive)
-    return archive
-
+    service = ArchiveService(db)
+    full = await service.get_archive(archive.id)
+    return archive_to_response(full)
 
 @router.post("/recalculate-costs")
 async def recalculate_all_costs(
@@ -947,6 +963,12 @@ async def rescan_all_archives(
                 archive.makerworld_url = metadata["makerworld_url"]
             if metadata.get("designer"):
                 archive.designer = metadata["designer"]
+
+            # custome feature: extract slicer user info from 3MF printersettings/note
+            if metadata.get("slicer_user"):
+                archive.slicer_user = metadata["slicer_user"]
+            if metadata.get("slicer_user_email"):
+                archive.slicer_user_email = metadata["slicer_user_email"]
 
             updated += 1
         except Exception as e:
@@ -2232,7 +2254,10 @@ async def upload_archive(
         if not archive:
             raise HTTPException(400, "Failed to archive file")
 
-        return ArchiveResponse.model_validate(archive)
+        # Return consistent response with computed fields
+        archive = await service.get_archive(archive.id)  # loads relationships
+        return archive_to_response(archive)
+
     finally:
         if temp_path.exists():
             temp_path.unlink()
@@ -2269,11 +2294,13 @@ async def upload_archives_bulk(
             )
 
             if archive:
+                full = await service.get_archive(archive.id)
                 results.append(
                     {
                         "filename": file.filename,
                         "id": archive.id,
                         "status": "success",
+                        "archive": archive_to_response(full),
                     }
                 )
             else:
