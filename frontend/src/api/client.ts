@@ -419,6 +419,9 @@ export interface Archive {
   // User tracking (Issue #206)
   created_by_id: number | null;
   created_by_username: string | null;
+  // Slicer user tracking (Custom Feature)
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
 }
 
 export interface ArchiveSlim {
