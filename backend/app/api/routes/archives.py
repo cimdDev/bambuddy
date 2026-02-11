@@ -106,6 +106,9 @@ def archive_to_response(
         "energy_kwh": archive.energy_kwh,
         "energy_cost": archive.energy_cost,
         "created_at": archive.created_at,
+        # custom feature: slicer user info from 3MF printersettings/note
+        "slicer_user": archive.slicer_user,
+        "slicer_user_email": archive.slicer_user_email,
         # User tracking (Issue #206)
         "created_by_id": archive.created_by_id,
         "created_by_username": archive.created_by.username if archive.created_by else None,
@@ -162,7 +165,8 @@ async def search_archives(
 ):
     """Full-text search across archives.
 
-    Searches print_name, filename, tags, notes, designer, and filament_type fields.
+    Searches print_name, filename, tags, notes, designer, and filament_type fields,
+    plus custom slicer_user and slicer_user_email fields.
     Supports partial matches with wildcards (e.g., 'vor*' matches 'voron').
     """
     from sqlalchemy import text
@@ -199,6 +203,8 @@ async def search_archives(
                 | (PrintArchive.notes.ilike(like_pattern))
                 | (PrintArchive.designer.ilike(like_pattern))
                 | (PrintArchive.filament_type.ilike(like_pattern))
+                | (PrintArchive.slicer_user.ilike(like_pattern))
+                | (PrintArchive.slicer_user_email.ilike(like_pattern))
             )
             .order_by(PrintArchive.created_at.desc())
         )
@@ -257,8 +263,10 @@ async def rebuild_search_index(
         # Repopulate from print_archives
         await db.execute(
             text("""
-            INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type)
-            SELECT id, print_name, filename, tags, notes, designer, filament_type
+            INSERT INTO archive_fts(
+                rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+            )
+            SELECT id, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
             FROM print_archives
         """)
         )
@@ -857,6 +865,11 @@ async def rescan_archive(
         archive.makerworld_url = metadata["makerworld_url"]
     if metadata.get("designer"):
         archive.designer = metadata["designer"]
+    # custom feature: extract slicer user info from 3MF printersettings/note
+    if metadata.get("slicer_user"):
+        archive.slicer_user = metadata["slicer_user"]
+    if metadata.get("slicer_user_email"):
+        archive.slicer_user_email = metadata["slicer_user_email"]
 
     # Calculate cost: prefer spool-based cost if available, else catalog-based
 
@@ -989,6 +1002,11 @@ async def rescan_all_archives(
                 archive.makerworld_url = metadata["makerworld_url"]
             if metadata.get("designer"):
                 archive.designer = metadata["designer"]
+            # custom feature: extract slicer user info from 3MF printersettings/note
+            if metadata.get("slicer_user"):
+                archive.slicer_user = metadata["slicer_user"]
+            if metadata.get("slicer_user_email"):
+                archive.slicer_user_email = metadata["slicer_user_email"]
 
             updated += 1
         except Exception as e:

@@ -260,6 +260,63 @@ class ThreeMFParser:
         except Exception:
             pass  # Filament info is optional; fall back to slice_info values
 
+    # custome feature: helper for slicer user info from 3MF printersettings/note
+    @staticmethod
+    def _parse_printer_notes(notes: str) -> tuple[str | None, str | None]:
+        """Parse custom user info from printer_notes.
+
+        Expected formats (best-effort):
+          - "User=useralias\nmymail@email.ch"
+          - "User=useralias\nemail=mymail@email.ch"
+          - "user: useralias\r\nEmail: mymail@email.ch"
+        """
+        if not notes:
+            return (None, None)
+
+        # Normalize
+        raw = str(notes).replace("\x00", "").strip()
+        if not raw:
+            return (None, None)
+
+        user: str | None = None
+        email: str | None = None
+
+        # Split into non-empty lines
+        lines = [ln.strip() for ln in re.split(r"\r\n|\n|\r", raw) if ln.strip()]
+
+        # Regexes
+        user_re = re.compile(r"^\s*user\s*[:=]\s*(.+?)\s*$", re.IGNORECASE)
+        email_kv_re = re.compile(r"^\s*(?:e-?mail|email)\s*[:=]\s*(.+?)\s*$", re.IGNORECASE)
+        email_plain_re = re.compile(
+            r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$",
+            re.IGNORECASE,
+        )
+
+        for ln in lines:
+            if user is None:
+                m = user_re.match(ln)
+                if m:
+                    candidate = m.group(1).strip()
+                    # Basic sanity: keep it short-ish and no spaces at ends
+                    if candidate and len(candidate) <= 64:
+                        user = candidate
+                    continue
+
+            if email is None:
+                m = email_kv_re.match(ln)
+                if m:
+                    candidate = m.group(1).strip()
+                    if candidate and len(candidate) <= 320 and "@" in candidate:
+                        email = candidate
+                    continue
+
+                # If the line itself is a plain email (your example)
+                if email_plain_re.match(ln):
+                    email = ln.strip()
+                    continue
+
+        return (user, email)
+
     def _extract_print_settings(self, data: dict):
         """Extract print settings from JSON config."""
         try:
@@ -298,6 +355,20 @@ class ThreeMFParser:
                     elif isinstance(val, (int, float, str)):
                         self.metadata["nozzle_temperature"] = int(float(val))
                     break
+
+            # user from printernotes (custom feature) parse "User=useralias\nmymail@email.ch"
+            if "printer_notes" in data:
+                notes = data.get("printer_notes")
+                if isinstance(notes, list):
+                    # sometimes settings are arrays; join if so
+                    notes = "\n".join(str(x) for x in notes if x is not None)
+
+                if isinstance(notes, str):
+                    slicer_user, slicer_user_email = self._parse_printer_notes(notes)
+                    if slicer_user:
+                        self.metadata["slicer_user"] = slicer_user
+                    if slicer_user_email:
+                        self.metadata["slicer_user_email"] = slicer_user_email
 
             # Printer model (extract and normalize)
             if "printer_model" in data:
@@ -950,6 +1021,9 @@ class ArchiveService:
             completed_at=completed_at,
             cost=cost,
             quantity=quantity,
+            # custome feature: slicer user info from 3MF printersettings/note
+            slicer_user=metadata.get("slicer_user"),
+            slicer_user_email=metadata.get("slicer_user_email"),
             extra_data=metadata,
             created_by_id=created_by_id,
         )
