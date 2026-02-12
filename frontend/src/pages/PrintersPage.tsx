@@ -1638,6 +1638,21 @@ function PrinterCard({
   // Combine both sources: queue item user takes precedence, then reprint user
   const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
 
+  const archiveId = (() => {
+    const raw = printingQueueItems?.[0]?.archive_id;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  })();
+
+  const printingArchiveQuery = useQuery({
+    queryKey: ['printingArchive', printer.id, archiveId],
+    queryFn: () => api.getArchive(archiveId!),
+    enabled: (status?.state === 'RUNNING' || status?.state === 'PAUSE') && archiveId !== undefined,
+  });
+
+  const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? null;
+  const badgeUser = currentSlicerUser || currentPrintUser || null;
+
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
     queryKey: ['archives', printer.id, 'last'],
@@ -2728,9 +2743,21 @@ function PrinterCard({
                             <p className="text-sm text-bambu-gray">{getStatusDisplay(status.state, status.stg_cur_name)}</p>
                             {plateStatusPill}
                           </div>
-                          <p className="text-white text-sm mb-2 truncate">
-                            {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t)}
-                          </p>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-white text-sm truncate min-w-0 flex-1">
+                              {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t)}
+                            </p>
+
+                            {badgeUser && (
+                              <span
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light flex-shrink-0"
+                                title={`Started by ${badgeUser}`}
+                              >
+                                <User className="w-3 h-3" />
+                                {badgeUser}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
                               <div
