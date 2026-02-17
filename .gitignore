@@ -51,6 +51,8 @@ firmware/
 # Screenshots (development - root folder only)
 /screenshots/
 
+/photos/
+
 # Logs
 *.log
 logs/
