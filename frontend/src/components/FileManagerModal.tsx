@@ -6,6 +6,9 @@ import {
   Folder,
   File,
   ChevronLeft,
+  Printer,
+  Calendar,
+  MoveRight,
   Download,
   Trash2,
   Loader2,
@@ -26,10 +29,12 @@ import { api } from '../api/client';
 import { parseUTCDate } from '../utils/date';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
+import { PrintModal } from './PrintModal';
 import { ModelViewer } from './ModelViewer';
 import { GcodeViewer } from './GcodeViewer';
 import type { PlateMetadata } from '../types/plates';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { formatFileSize } from '../utils/file';
 
 interface FileManagerModalProps {
@@ -268,6 +273,11 @@ function getFileIcon(filename: string, isDirectory: boolean) {
   }
 }
 
+function isSlicedFilename(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.endsWith('.gcode') || lower.includes('.gcode.');
+}
+
 type SortOption = 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc' | 'date-asc' | 'date-desc';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -282,14 +292,18 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 export function FileManagerModal({ printerId, printerName, onClose }: FileManagerModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState('/');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>('name-asc');
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const [viewerFile, setViewerFile] = useState<{ path: string; name: string } | null>(null);
+  const [printFile, setPrintFile] = useState<{ id: number; name: string } | null>(null);
+  const [scheduleFile, setScheduleFile] = useState<{ id: number; name: string } | null>(null);
 
   // Close on Escape key
   useEffect(() => {
@@ -408,6 +422,68 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
     setFilesToDelete(Array.from(selectedFiles));
   };
 
+  const importPrinterFiles = async (paths: string[], deleteAfterImport: boolean) => {
+    if (paths.length === 0) return null;
+    setIsImporting(true);
+    try {
+      const result = await api.importPrinterFilesToLibrary(printerId, paths, { deleteAfterImport });
+      queryClient.invalidateQueries({ queryKey: ['library-files'] });
+      queryClient.invalidateQueries({ queryKey: ['library-folders'] });
+      queryClient.invalidateQueries({ queryKey: ['library-stats'] });
+      if (deleteAfterImport) {
+        queryClient.invalidateQueries({ queryKey: ['printerFiles', printerId] });
+        await refetch();
+      }
+      return result;
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleMoveToBambuddy = async () => {
+    const paths = Array.from(selectedFiles);
+    if (paths.length === 0) return;
+
+    try {
+      const result = await importPrinterFiles(paths, true);
+      if (!result) return;
+
+      if (result.imported.length > 0) {
+        showToast(`Moved ${result.imported.length} file${result.imported.length !== 1 ? 's' : ''} to Bambuddy`);
+      }
+      if (result.errors.length > 0) {
+        showToast(result.errors[0].error, 'error');
+      }
+      setSelectedFiles(new Set());
+    } catch (error) {
+      showToast(`Move failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    }
+  };
+
+  const handleImportAndOpenPrint = async (mode: 'print' | 'queue') => {
+    const paths = Array.from(selectedFiles);
+    if (paths.length !== 1) return;
+
+    try {
+      const result = await importPrinterFiles(paths, false);
+      if (!result || result.imported.length === 0) {
+        const message = result?.errors?.[0]?.error || 'Failed to import file';
+        showToast(message, 'error');
+        return;
+      }
+
+      const imported = result.imported[0];
+      if (mode === 'print') {
+        setPrintFile({ id: imported.file_id, name: imported.filename });
+      } else {
+        setScheduleFile({ id: imported.file_id, name: imported.filename });
+      }
+      setSelectedFiles(new Set());
+    } catch (error) {
+      showToast(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    }
+  };
+
   // Quick navigation buttons for common directories
   const quickDirs = [
     { path: '/', label: 'Root' },
@@ -415,6 +491,11 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
     { path: '/model', label: 'Models' },
     { path: '/timelapse', label: 'Timelapse' },
   ];
+
+  const selectedFileEntries = data?.files?.filter((file) => selectedFiles.has(file.path)) || [];
+  const singleSelectedFile = selectedFileEntries.length === 1 ? selectedFileEntries[0] : null;
+  const canPrintQueueSelected = !!singleSelectedFile && isSlicedFilename(singleSelectedFile.name);
+  const isActionBusy = downloadProgress !== null || deleteMutation.isPending || isImporting;
 
   return (
     <div
@@ -678,7 +759,7 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
           <div className="flex gap-2">
             <Button
               variant="secondary"
-              disabled={selectedFiles.size === 0 || downloadProgress !== null}
+              disabled={selectedFiles.size === 0 || isActionBusy}
               onClick={handleDownload}
             >
               {downloadProgress ? (
@@ -695,7 +776,46 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
             </Button>
             <Button
               variant="secondary"
-              disabled={selectedFiles.size === 0 || deleteMutation.isPending}
+              disabled={!canPrintQueueSelected || isActionBusy || !hasPermission('printers:control')}
+              onClick={() => handleImportAndOpenPrint('print')}
+              title={!hasPermission('printers:control') ? t('fileManager.noPermissionPrint') : undefined}
+            >
+              {isImporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Printer className="w-4 h-4" />
+              )}
+              {t('common.print')}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!canPrintQueueSelected || isActionBusy || !hasPermission('queue:create')}
+              onClick={() => handleImportAndOpenPrint('queue')}
+              title={!hasPermission('queue:create') ? t('fileManager.noPermissionAddToQueue') : undefined}
+            >
+              {isImporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Calendar className="w-4 h-4" />
+              )}
+              {t('fileManager.schedulePrint')}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={selectedFiles.size === 0 || isActionBusy || !hasPermission('library:upload')}
+              onClick={handleMoveToBambuddy}
+              title={!hasPermission('library:upload') ? 'Missing permission: library:upload' : undefined}
+            >
+              {isImporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <MoveRight className="w-4 h-4" />
+              )}
+              Move to Bambuddy
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={selectedFiles.size === 0 || isActionBusy}
               onClick={handleDelete}
               className="text-red-400 hover:text-red-300"
             >
@@ -734,6 +854,35 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
           filePath={viewerFile.path}
           filename={viewerFile.name}
           onClose={() => setViewerFile(null)}
+        />
+      )}
+
+      {printFile && (
+        <PrintModal
+          mode="reprint"
+          libraryFileId={printFile.id}
+          archiveName={printFile.name}
+          onClose={() => setPrintFile(null)}
+          onSuccess={() => {
+            setPrintFile(null);
+            queryClient.invalidateQueries({ queryKey: ['library-files'] });
+            queryClient.invalidateQueries({ queryKey: ['archives'] });
+          }}
+        />
+      )}
+
+      {scheduleFile && (
+        <PrintModal
+          mode="add-to-queue"
+          libraryFileId={scheduleFile.id}
+          archiveName={scheduleFile.name}
+          onClose={() => setScheduleFile(null)}
+          onSuccess={() => {
+            setScheduleFile(null);
+            queryClient.invalidateQueries({ queryKey: ['library-files'] });
+            queryClient.invalidateQueries({ queryKey: ['queue'] });
+            queryClient.invalidateQueries({ queryKey: ['archives'] });
+          }}
         />
       )}
     </div>
