@@ -2472,6 +2472,33 @@ export const api = {
     }
     return response.blob();
   },
+  importPrinterFilesToLibrary: (
+    printerId: number,
+    paths: string[],
+    options?: {
+      folderId?: number | null;
+      deleteAfterImport?: boolean;
+    }
+  ) =>
+    request<{
+      imported: Array<{
+        path: string;
+        file_id: number;
+        filename: string;
+        duplicate_of: number | null;
+      }>;
+      errors: Array<{
+        path: string;
+        error: string;
+      }>;
+    }>(`/printers/${printerId}/files/import-to-library`, {
+      method: 'POST',
+      body: JSON.stringify({
+        paths,
+        folder_id: options?.folderId ?? null,
+        delete_after_import: options?.deleteAfterImport ?? false,
+      }),
+    }),
   deletePrinterFile: (printerId: number, path: string) =>
     request<{ status: string; path: string }>(`/printers/${printerId}/files?path=${encodeURIComponent(path)}`, {
       method: 'DELETE',
