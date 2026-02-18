@@ -316,6 +316,19 @@ describe('FileManagerModal', () => {
       // Check that options exist
       expect(screen.getByText('Name (A-Z)')).toBeInTheDocument();
     });
+
+    it('defaults to newest-first sorting', () => {
+      render(
+        <FileManagerModal
+          printerId={1}
+          printerName="X1 Carbon"
+          onClose={mockOnClose}
+        />
+      );
+
+      const sortSelect = screen.getByRole('combobox') as HTMLSelectElement;
+      expect(sortSelect.value).toBe('date-desc');
+    });
   });
 
   describe('close behavior', () => {
