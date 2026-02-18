@@ -1,0 +1,298 @@
+From a0271b0a860ed37fb440f8be6bf807d1c8796238 Mon Sep 17 00:00:00 2001
+From: tridev <c.tripod@gmx.ch>
+Date: Wed, 18 Feb 2026 20:44:44 +0100
+Subject: [PATCH 2/2] custom: add printer SD import endpoint and client API
+
+---
+ backend/app/api/routes/printers.py | 198 ++++++++++++++++++++++++++++-
+ frontend/src/api/client.ts         |  27 ++++
+ 2 files changed, 224 insertions(+), 1 deletion(-)
+
+diff --git a/backend/app/api/routes/printers.py b/backend/app/api/routes/printers.py
+index 47d20de..60de892 100644
+--- a/backend/app/api/routes/printers.py
++++ b/backend/app/api/routes/printers.py
+@@ -2,18 +2,32 @@ import asyncio
+ import logging
+ import re
+ import zipfile
++from pathlib import Path
++from uuid import uuid4
+
+ from fastapi import APIRouter, Depends, HTTPException, Query
+ from fastapi.responses import Response
++from pydantic import BaseModel, Field
+ from sqlalchemy import select
+ from sqlalchemy.ext.asyncio import AsyncSession
+
+-from backend.app.core.auth import RequirePermissionIfAuthEnabled
++from backend.app.api.routes.library import (
++    IMAGE_EXTENSIONS,
++    calculate_file_hash,
++    create_image_thumbnail,
++    extract_gcode_thumbnail,
++    get_library_files_dir,
++    get_library_thumbnails_dir,
++    to_relative_path,
++)
++from backend.app.core.auth import RequirePermissionIfAuthEnabled, require_permission_if_auth_enabled
+ from backend.app.core.config import settings
+ from backend.app.core.database import get_db
+ from backend.app.core.permissions import Permission
++from backend.app.models.library import LibraryFile, LibraryFolder
+ from backend.app.models.printer import Printer
+ from backend.app.models.slot_preset import SlotPresetMapping
++from backend.app.models.user import User
+ from backend.app.schemas.printer import (
+     AMSTray,
+     AMSUnit,
+@@ -26,6 +40,7 @@ from backend.app.schemas.printer import (
+     PrinterUpdate,
+     PrintOptionsResponse,
+ )
++from backend.app.services.archive import ThreeMFParser
+ from backend.app.services.bambu_ftp import (
+     delete_file_async,
+     download_file_bytes_async,
+@@ -34,6 +49,7 @@ from backend.app.services.bambu_ftp import (
+     list_files_async,
+ )
+ from backend.app.services.printer_manager import get_derived_status_name, printer_manager, supports_chamber_temp
++from backend.app.services.stl_thumbnail import generate_stl_thumbnail
+
+ logger = logging.getLogger(__name__)
+ router = APIRouter(prefix="/printers", tags=["printers"])
+@@ -767,6 +783,44 @@ async def get_printer_cover(
+ # ============================================
+
+
++class ImportPrinterFilesRequest(BaseModel):
++    paths: list[str] = Field(..., min_length=1)
++    folder_id: int | None = None
++    delete_after_import: bool = False
++
++
++class ImportPrinterFileResult(BaseModel):
++    path: str
++    file_id: int
++    filename: str
++    duplicate_of: int | None = None
++
++
++class ImportPrinterFileError(BaseModel):
++    path: str
++    error: str
++
++
++class ImportPrinterFilesResponse(BaseModel):
++    imported: list[ImportPrinterFileResult]
++    errors: list[ImportPrinterFileError]
++
++
++def _clean_metadata_for_storage(obj):
++    """Strip non-JSON fields from parsed metadata before DB storage."""
++    if isinstance(obj, dict):
++        return {
++            k: _clean_metadata_for_storage(v)
++            for k, v in obj.items()
++            if not isinstance(v, bytes) and k not in ("_thumbnail_data", "_thumbnail_ext")
++        }
++    if isinstance(obj, list):
++        return [_clean_metadata_for_storage(i) for i in obj if not isinstance(i, bytes)]
++    if isinstance(obj, bytes):
++        return None
++    return obj
++
++
+ @router.get("/{printer_id}/files")
+ async def list_printer_files(
+     printer_id: int,
+@@ -1195,6 +1249,148 @@ async def download_printer_files_as_zip(
+     )
+
+
++@router.post("/{printer_id}/files/import-to-library", response_model=ImportPrinterFilesResponse)
++async def import_printer_files_to_library(
++    printer_id: int,
++    request: ImportPrinterFilesRequest,
++    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_FILES),
++    current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
++    db: AsyncSession = Depends(get_db),
++):
++    """Copy files from printer SD storage into Bambuddy library storage."""
++    result = await db.execute(select(Printer).where(Printer.id == printer_id))
++    printer = result.scalar_one_or_none()
++    if not printer:
++        raise HTTPException(404, "Printer not found")
++
++    if request.folder_id is not None:
++        folder_result = await db.execute(select(LibraryFolder).where(LibraryFolder.id == request.folder_id))
++        if folder_result.scalar_one_or_none() is None:
++            raise HTTPException(404, "Target folder not found")
++
++    imported: list[ImportPrinterFileResult] = []
++    errors: list[ImportPrinterFileError] = []
++    files_dir = get_library_files_dir()
++    thumbnails_dir = get_library_thumbnails_dir()
++
++    for remote_path in request.paths:
++        remote_path = remote_path.strip()
++        if not remote_path:
++            errors.append(ImportPrinterFileError(path=remote_path, error="Path cannot be empty"))
++            continue
++
++        filename = Path(remote_path).name
++        if not filename:
++            errors.append(ImportPrinterFileError(path=remote_path, error="Invalid file path"))
++            continue
++
++        stored_path: Path | None = None
++        try:
++            data = await download_file_bytes_async(
++                printer.ip_address,
++                printer.access_code,
++                remote_path,
++                printer_model=printer.model,
++            )
++            if data is None:
++                errors.append(ImportPrinterFileError(path=remote_path, error="File not found on printer"))
++                continue
++
++            ext = Path(filename).suffix.lower()
++            file_type = ext[1:] if ext else "unknown"
++
++            unique_filename = f"{uuid4().hex}{ext}"
++            stored_path = files_dir / unique_filename
++            stored_path.write_bytes(data)
++
++            file_hash = calculate_file_hash(stored_path)
++            dup_result = await db.execute(select(LibraryFile.id).where(LibraryFile.file_hash == file_hash).limit(1))
++            duplicate_of = dup_result.scalar()
++
++            metadata: dict | None = None
++            thumbnail_path: str | None = None
++
++            if ext == ".3mf":
++                try:
++                    parser = ThreeMFParser(str(stored_path))
++                    raw_metadata = parser.parse()
++                    thumbnail_data = raw_metadata.get("_thumbnail_data")
++                    thumbnail_ext = raw_metadata.get("_thumbnail_ext", ".png")
++                    if thumbnail_data:
++                        thumb_filename = f"{uuid4().hex}{thumbnail_ext}"
++                        thumb_path = thumbnails_dir / thumb_filename
++                        with open(thumb_path, "wb") as thumb_file:
++                            thumb_file.write(thumbnail_data)
++                        thumbnail_path = str(thumb_path)
++                    metadata = _clean_metadata_for_storage(raw_metadata)
++                except Exception as e:
++                    logger.warning("Failed to parse imported 3MF from printer path %s: %s", remote_path, e)
++            elif ext == ".gcode":
++                try:
++                    thumb_data = extract_gcode_thumbnail(stored_path)
++                    if thumb_data:
++                        thumb_filename = f"{uuid4().hex}.png"
++                        thumb_path = thumbnails_dir / thumb_filename
++                        with open(thumb_path, "wb") as thumb_file:
++                            thumb_file.write(thumb_data)
++                        thumbnail_path = str(thumb_path)
++                except Exception as e:
++                    logger.warning("Failed to extract imported gcode thumbnail from %s: %s", remote_path, e)
++            elif ext.lower() in IMAGE_EXTENSIONS:
++                thumbnail_path = create_image_thumbnail(stored_path, thumbnails_dir)
++            elif ext == ".stl":
++                thumbnail_path = generate_stl_thumbnail(stored_path, thumbnails_dir)
++
++            library_file = LibraryFile(
++                folder_id=request.folder_id,
++                filename=filename,
++                file_path=to_relative_path(stored_path),
++                file_type=file_type,
++                file_size=len(data),
++                file_hash=file_hash,
++                thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
++                file_metadata=metadata,
++                created_by_id=current_user.id if current_user else None,
++            )
++            db.add(library_file)
++            await db.flush()
++
++            imported.append(
++                ImportPrinterFileResult(
++                    path=remote_path,
++                    file_id=library_file.id,
++                    filename=library_file.filename,
++                    duplicate_of=duplicate_of,
++                )
++            )
++
++            if request.delete_after_import:
++                deleted = await delete_file_async(
++                    printer.ip_address,
++                    printer.access_code,
++                    remote_path,
++                    printer_model=printer.model,
++                )
++                if not deleted:
++                    errors.append(
++                        ImportPrinterFileError(
++                            path=remote_path,
++                            error="Imported but failed to remove source file from printer",
++                        )
++                    )
++
++        except Exception as e:
++            logger.exception("Failed importing printer file %s to library", remote_path)
++            errors.append(ImportPrinterFileError(path=remote_path, error=str(e)))
++            if stored_path and stored_path.exists():
++                try:
++                    stored_path.unlink()
++                except OSError:
++                    pass
++
++    return ImportPrinterFilesResponse(imported=imported, errors=errors)
++
++
+ @router.delete("/{printer_id}/files")
+ async def delete_printer_file(
+     printer_id: int,
+diff --git a/frontend/src/api/client.ts b/frontend/src/api/client.ts
+index 18f4526..35b6765 100644
+--- a/frontend/src/api/client.ts
++++ b/frontend/src/api/client.ts
+@@ -2456,6 +2456,33 @@ export const api = {
+     }
+     return response.blob();
+   },
++  importPrinterFilesToLibrary: (
++    printerId: number,
++    paths: string[],
++    options?: {
++      folderId?: number | null;
++      deleteAfterImport?: boolean;
++    }
++  ) =>
++    request<{
++      imported: Array<{
++        path: string;
++        file_id: number;
++        filename: string;
++        duplicate_of: number | null;
++      }>;
++      errors: Array<{
++        path: string;
++        error: string;
++      }>;
++    }>(`/printers/${printerId}/files/import-to-library`, {
++      method: 'POST',
++      body: JSON.stringify({
++        paths,
++        folder_id: options?.folderId ?? null,
++        delete_after_import: options?.deleteAfterImport ?? false,
++      }),
++    }),
+   deletePrinterFile: (printerId: number, path: string) =>
+     request<{ status: string; path: string }>(`/printers/${printerId}/files?path=${encodeURIComponent(path)}`, {
+       method: 'DELETE',
+--
+2.47.3
