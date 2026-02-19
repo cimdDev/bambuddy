@@ -1249,6 +1249,9 @@ export interface PrintQueueItem {
   // User tracking (Issue #206)
   created_by_id?: number | null;
   created_by_username?: string | null;
+  // 3MF slicer user tracking (from archive/library metadata)
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
 }
 
 export interface PrintQueueItemCreate {
@@ -4357,6 +4360,9 @@ export interface LibraryFile {
   // User tracking (Issue #206)
   created_by_id: number | null;
   created_by_username: string | null;
+  // 3MF slicer user tracking (from file metadata)
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
   created_at: string;
   updated_at: string;
   // Metadata fields
@@ -4378,6 +4384,9 @@ export interface LibraryFileListItem {
   // User tracking (Issue #206)
   created_by_id: number | null;
   created_by_username: string | null;
+  // 3MF slicer user tracking (from file metadata)
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
   created_at: string;
   print_name: string | null;
   print_time_seconds: number | null;

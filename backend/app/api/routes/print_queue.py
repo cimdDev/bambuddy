@@ -209,6 +209,9 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
         "created_by_username": item.created_by.username if item.created_by else None,
+        # 3MF slicer user tracking (custom feature)
+        "slicer_user": None,
+        "slicer_user_email": None,
     }
     response = PrintQueueItemResponse(**item_dict)
     if item.archive:
@@ -221,6 +224,8 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         response.layer_height = item.archive.layer_height
         response.nozzle_diameter = item.archive.nozzle_diameter
         response.sliced_for_model = item.archive.sliced_for_model
+        response.slicer_user = item.archive.slicer_user
+        response.slicer_user_email = item.archive.slicer_user_email
         if item.plate_id:
             archive_path = settings.base_dir / item.archive.file_path
             if archive_path.exists():
@@ -246,6 +251,11 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
             response.layer_height = item.library_file.file_metadata.get("layer_height")
             response.nozzle_diameter = item.library_file.file_metadata.get("nozzle_diameter")
             response.sliced_for_model = item.library_file.file_metadata.get("sliced_for_model")
+            # Fill slicer user from library metadata only when archive is not present.
+            if not response.slicer_user:
+                response.slicer_user = item.library_file.file_metadata.get("slicer_user")
+            if not response.slicer_user_email:
+                response.slicer_user_email = item.library_file.file_metadata.get("slicer_user_email")
         if item.plate_id:
             lib_path = Path(item.library_file.file_path)
             library_file_path = lib_path if lib_path.is_absolute() else settings.base_dir / item.library_file.file_path
