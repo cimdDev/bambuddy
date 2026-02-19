@@ -1,41 +1,160 @@
-import { useQuery } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight } from 'lucide-react';
+import { useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, Coins, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { formatRelativeTime } from '../utils/date';
 import { filterCompatibleQueueItems } from '../utils/printer';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
+import { SlicerUserBadge } from './SlicerUserBadge';
 
 interface PrinterQueueWidgetProps {
   printerId: number;
   printerModel?: string | null;
+  /** @deprecated use awaitingPlateClear - kept so existing callers/tests still compile */
+  printerState?: string | null;
+  awaitingPlateClear?: boolean;
+  requirePlateClear?: boolean;
   loadedFilamentTypes?: Set<string>;
   loadedFilaments?: Set<string>;  // "TYPE:rrggbb" pairs for filament override color matching
 }
 
-export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentTypes, loadedFilaments }: PrinterQueueWidgetProps) {
+export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear, requirePlateClear = false, loadedFilamentTypes, loadedFilaments }: PrinterQueueWidgetProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
     refetchInterval: 30000,
   });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
+
+  const clearPlateMutation = useMutation({
+    mutationFn: () => api.clearPlate(printerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printerId] });
+      queryClient.invalidateQueries({ queryKey: ['printerStatus', printerId] });
+      showToast(t('queue.clearPlateSuccess'), 'success');
+    },
+    onError: (err: Error) => {
+      showToast(err.message, 'error');
+    },
+  });
+
+  // Reset mutation state when the awaiting flag clears so the button is clickable
+  // again after the next finished print (fixes #912). The flag is the authoritative
+  // signal - state alone is not reliable across power cycles (#961).
+  useEffect(() => {
+    if (!awaitingPlateClear) {
+      clearPlateMutation.reset();
+    }
+  }, [awaitingPlateClear, clearPlateMutation]);
 
   // Filter queue to items this printer can actually print (filament type + color check)
   const compatibleQueue = queue ? filterCompatibleQueueItems(queue, loadedFilamentTypes, loadedFilaments) : undefined;
+
+  // Split into auto-dispatchable vs staged (manual_start) items
+  const autoDispatchQueue = compatibleQueue?.filter(item => !item.manual_start) ?? [];
   const totalPending = compatibleQueue?.length || 0;
 
   if (totalPending === 0) {
     return null;
   }
 
+  const nextAutoItem = autoDispatchQueue[0];
   const nextItem = compatibleQueue?.[0];
+  const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
+  const nextMissingSlicerUser = !nextSlicerUser;
+  const nextComment = nextItem?.comment?.trim() || null;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+  // Prompt "Clear Plate & Start Next" whenever the backend flags the printer as awaiting
+  // acknowledgment. Don't gate on reported state: after Auto Off cycles the printer, it
+  // boots into IDLE while still awaiting - the prompt must survive that (#961). The flag
+  // is cleared by the backend on ack or when the next print dispatches.
+  const needsClearPlate = requirePlateClear && !!awaitingPlateClear && autoDispatchQueue.length > 0;
 
-  // Passive next-in-queue preview. Plate-clear acknowledgment is handled by the
-  // card-level "Mark plate as cleared" button (PrintersPage.tsx). Having a
-  // second button in this widget caused the two controls to overlap whenever
-  // the plate-clear gate was up with auto-dispatch items queued — both POSTed
-  // to the same /clear-plate endpoint, so the widget button was pure noise.
+  if (needsClearPlate) {
+    const displayItem = nextAutoItem || nextItem;
+    const displaySlicerUser = displayItem?.slicer_user || displayItem?.slicer_user_email || null;
+    const displayMissingSlicerUser = !displaySlicerUser;
+    const displayComment = displayItem?.comment?.trim() || null;
+    const displayCost = estimatePrintCost(displayItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+    return (
+      <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
+        <div className="flex items-center gap-3 mb-2">
+          <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
+            <p className="text-sm text-white truncate">
+              {displayItem?.archive_name || displayItem?.library_file_name || `File #${displayItem?.archive_id || displayItem?.library_file_id}`}
+            </p>
+            {displayComment && (
+              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                {displayComment}
+              </p>
+            )}
+            {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
+                {displayMissingSlicerUser && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                    <AlertTriangle className="w-3 h-3" />
+                    {t('queue.badges.slicerUserMissingWarning')}
+                  </span>
+                )}
+                {displayItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
+                )}
+                {displayCost != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                    <Coins className="w-3 h-3" />
+                    {formatCurrencyAmount(displayCost, currencySymbol)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          {totalPending > 1 && (
+            <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded flex-shrink-0">
+              +{totalPending - 1}
+            </span>
+          )}
+        </div>
+        {clearPlateMutation.isSuccess ? (
+          <div className="w-full py-2 px-3 rounded-lg bg-bambu-green/10 border border-bambu-green/20 text-bambu-green text-sm flex items-center justify-center gap-2">
+            <CircleCheck className="w-4 h-4" />
+            {t('queue.plateReady')}
+          </div>
+        ) : (
+          <button
+            onClick={() => clearPlateMutation.mutate()}
+            disabled={clearPlateMutation.isPending || !hasPermission('printers:clear_plate')}
+            className="w-full py-2 px-3 rounded-lg bg-bambu-green/20 border border-bambu-green/40 text-bambu-green hover:bg-bambu-green/30 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {clearPlateMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CircleCheck className="w-4 h-4" />
+            )}
+            {t('queue.clearPlate')}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <Link
       to="/queue"
@@ -49,6 +168,35 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {nextComment && (
+              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                {nextComment}
+              </p>
+            )}
+            {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                {nextSlicerUser && (
+                  <SlicerUserBadge user={nextSlicerUser} />
+                )}
+                {nextMissingSlicerUser && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                    <AlertTriangle className="w-3 h-3" />
+                    {t('queue.badges.slicerUserMissingWarning')}
+                  </span>
+                )}
+                {nextItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
+                )}
+                {nextCost != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                    <Coins className="w-3 h-3" />
+                    {formatCurrencyAmount(nextCost, currencySymbol)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

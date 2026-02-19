@@ -1103,11 +1103,15 @@ async def list_files(
         print_time = None
         filament_grams = None
         sliced_for_model = None
+        slicer_user = None
+        slicer_user_email = None
         if f.file_metadata:
             print_name = f.file_metadata.get("print_name")
             print_time = f.file_metadata.get("print_time_seconds")
             filament_grams = f.file_metadata.get("filament_used_grams")
             sliced_for_model = f.file_metadata.get("sliced_for_model")
+            slicer_user = f.file_metadata.get("slicer_user")
+            slicer_user_email = f.file_metadata.get("slicer_user_email")
 
         file_list.append(
             FileListResponse(
@@ -1122,6 +1126,8 @@ async def list_files(
                 duplicate_count=hash_counts.get(f.file_hash, 0) if f.file_hash else 0,
                 created_by_id=f.created_by_id,
                 created_by_username=f.created_by.username if f.created_by else None,
+                slicer_user=slicer_user,
+                slicer_user_email=slicer_user_email,
                 created_at=f.created_at,
                 print_name=print_name,
                 print_time_seconds=print_time,
@@ -2320,11 +2326,15 @@ async def get_file(
     print_time = None
     filament_grams = None
     sliced_for_model = None
+    slicer_user = None
+    slicer_user_email = None
     if file.file_metadata:
         print_name = file.file_metadata.get("print_name")
         print_time = file.file_metadata.get("print_time_seconds")
         filament_grams = file.file_metadata.get("filament_used_grams")
         sliced_for_model = file.file_metadata.get("sliced_for_model")
+        slicer_user = file.file_metadata.get("slicer_user")
+        slicer_user_email = file.file_metadata.get("slicer_user_email")
 
     return FileResponseSchema(
         id=file.id,
@@ -2346,6 +2356,8 @@ async def get_file(
         duplicate_count=duplicate_count,
         created_by_id=file.created_by_id,
         created_by_username=file.created_by.username if file.created_by else None,
+        slicer_user=slicer_user,
+        slicer_user_email=slicer_user_email,
         created_at=file.created_at,
         updated_at=file.updated_at,
         print_name=print_name,
