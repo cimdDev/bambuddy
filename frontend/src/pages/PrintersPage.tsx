@@ -41,6 +41,7 @@ import {
   CheckCircle,
   XCircle,
   User,
+  FileText,
   Home,
 } from 'lucide-react';
 
@@ -1437,7 +1438,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, authEnabled } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -1649,9 +1650,10 @@ function PrinterCard({
     enabled: status?.state === 'RUNNING',
   });
 
-  // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
-  
+  // Combine both sources: queue item user takes precedence, then reprint user.
+  // Bambuddy user badges are auth-gated.
+  const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
+
   const archiveId = (() => {
     const raw = printingQueueItems?.[0]?.archive_id;
     const n = Number(raw);
@@ -1664,8 +1666,7 @@ function PrinterCard({
     enabled: status?.state === 'RUNNING' && archiveId !== undefined,
   });
 
-    const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? null;
-    const badgeUser = currentSlicerUser || currentPrintUser || null;
+  const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? printingArchiveQuery.data?.slicer_user_email ?? null;
 
   useEffect(() => {
     console.log('RUNNING?', status?.state, 'archiveId', archiveId, 'raw', printingQueueItems?.[0]?.archive_id);
@@ -2429,14 +2430,27 @@ function PrinterCard({
                               {status.subtask_name || status.current_print}
                             </p>
 
-                            {badgeUser && (
-                              <span
-                                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light flex-shrink-0"
-                                title={`Started by ${badgeUser}`}
-                              >
-                                <User className="w-3 h-3" />
-                                {badgeUser}
-                              </span>
+                            {(currentPrintUser || currentSlicerUser) && (
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {currentPrintUser && (
+                                  <span
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light"
+                                    title={`Started by ${currentPrintUser}`}
+                                  >
+                                    <User className="w-3 h-3" />
+                                    {currentPrintUser}
+                                  </span>
+                                )}
+                                {currentSlicerUser && (
+                                  <span
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light"
+                                    title={`Sliced by: ${currentSlicerUser}`}
+                                  >
+                                    <FileText className="w-3 h-3" />
+                                    {currentSlicerUser}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center justify-between text-sm">
@@ -2470,6 +2484,12 @@ function PrinterCard({
                               <span className="flex items-center gap-1" title={`Started by ${currentPrintUser}`}>
                                 <User className="w-3 h-3" />
                                 {currentPrintUser}
+                              </span>
+                            )}
+                            {currentSlicerUser && (
+                              <span className="flex items-center gap-1" title={`Sliced by: ${currentSlicerUser}`}>
+                                <FileText className="w-3 h-3" />
+                                {currentSlicerUser}
                               </span>
                             )}
                           </div>

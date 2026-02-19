@@ -102,6 +102,9 @@ class PrintQueueItemResponse(BaseModel):
     # User tracking (Issue #206)
     created_by_id: int | None = None
     created_by_username: str | None = None
+    # 3MF slicer user tracking (from archive or library 3MF metadata)
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
     class Config:
         from_attributes = True

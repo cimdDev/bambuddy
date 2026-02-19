@@ -46,6 +46,7 @@ import {
   CheckSquare,
   Square,
   User,
+  FileText,
   Pause,
   Weight,
 } from 'lucide-react';
@@ -279,6 +280,7 @@ function SortableQueueItem({
   isSelected = false,
   onToggleSelect,
   hasPermission,
+  authEnabled,
   canModify,
   printerState,
   t,
@@ -295,6 +297,7 @@ function SortableQueueItem({
   isSelected?: boolean;
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
+  authEnabled: boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
   printerState?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -345,6 +348,8 @@ function SortableQueueItem({
   const isPrinting = item.status === 'printing';
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
+  const bambuUser = authEnabled ? item.created_by_username : null;
+  const slicerUser = item.slicer_user || item.slicer_user_email;
 
   const isMobileSelectable = isPending && onToggleSelect;
 
@@ -484,10 +489,16 @@ function SortableQueueItem({
                 {formatWeight(item.filament_used_grams)}
               </span>
             )}
-            {item.created_by_username && (
-              <span className="hidden sm:flex items-center gap-1.5" title={t('queue.addedBy', { name: item.created_by_username })}>
+            {bambuUser && (
+              <span className="hidden sm:flex items-center gap-1.5" title={t('queue.addedBy', { name: bambuUser })}>
                 <User className="w-3.5 h-3.5" />
-                {item.created_by_username}
+                {bambuUser}
+              </span>
+            )}
+            {slicerUser && (
+              <span className="hidden sm:flex items-center gap-1.5" title={`Sliced by: ${slicerUser}`}>
+                <FileText className="w-3.5 h-3.5" />
+                {slicerUser}
               </span>
             )}
             {isPending && !item.manual_start && (
@@ -662,7 +673,7 @@ export function QueuePage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission, hasAnyPermission, canModify } = useAuth();
+  const { hasPermission, hasAnyPermission, canModify, authEnabled } = useAuth();
   const [filterPrinter, setFilterPrinter] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterLocation, setFilterLocation] = useState<string>('');
@@ -1162,6 +1173,7 @@ export function QueuePage() {
                     onStart={() => {}}
                     timeFormat={timeFormat}
                     hasPermission={hasPermission}
+                    authEnabled={authEnabled}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
                     t={t}
@@ -1280,6 +1292,7 @@ export function QueuePage() {
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
+                        authEnabled={authEnabled}
                         canModify={canModify}
                         t={t}
                       />
@@ -1336,6 +1349,7 @@ export function QueuePage() {
                     onStart={() => {}}
                     timeFormat={timeFormat}
                     hasPermission={hasPermission}
+                    authEnabled={authEnabled}
                     canModify={canModify}
                     t={t}
                   />
