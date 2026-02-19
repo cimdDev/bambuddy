@@ -176,7 +176,7 @@ function ArchiveCard({
 
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission, canModify } = useAuth();
+  const { hasPermission, canModify, authEnabled } = useAuth();
   const isMobile = useIsMobile();
   const [showViewer, setShowViewer] = useState(false);
   const [showReprint, setShowReprint] = useState(false);
@@ -1054,11 +1054,11 @@ function ArchiveCard({
                 className="flex items-center gap-1"
                 title={`Sliced by: ${archive.slicer_user || archive.slicer_user_email}`}
               >
-                <User className="w-3 h-3" />
+                <FileText className="w-3 h-3" />
                 {archive.slicer_user || archive.slicer_user_email}
               </span>
             )}
-            {archive.created_by_username && (
+            {authEnabled && archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
                 <User className="w-3 h-3" />
                 {archive.created_by_username}
@@ -1455,7 +1455,7 @@ function ArchiveListRow({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission, canModify } = useAuth();
+  const { hasPermission, canModify, authEnabled } = useAuth();
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReprint, setShowReprint] = useState(false);
@@ -1994,11 +1994,11 @@ function ArchiveListRow({
                 className="flex items-center gap-1 text-xs opacity-75"
                 title={`Sliced by: ${archive.slicer_user || archive.slicer_user_email}`}
               >
-                <User className="w-3 h-3" />
+                <FileText className="w-3 h-3" />
                 {archive.slicer_user || archive.slicer_user_email}
               </div>
             )}
-          {archive.created_by_username && (
+          {authEnabled && archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
               <User className="w-3 h-3" />
               {archive.created_by_username}

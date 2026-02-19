@@ -16,6 +16,7 @@ import {
   Clock,
   HardDrive,
   File,
+  FileText,
   MoveRight,
   CheckSquare,
   Square,
@@ -704,6 +705,7 @@ interface FileCardProps {
 
 function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
+  const slicerUser = file.slicer_user || file.slicer_user_email;
 
   return (
     <div
@@ -761,10 +763,20 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
             {t('fileManager.printedCount', { count: file.print_count })}
           </div>
         )}
-        {authEnabled && file.created_by_username && (
-          <div className="mt-1 text-xs text-bambu-gray flex items-center gap-1">
-            <User className="w-3 h-3" />
-            {file.created_by_username}
+        {(slicerUser || (authEnabled && file.created_by_username)) && (
+          <div className="mt-1 text-xs text-bambu-gray flex flex-wrap items-center gap-x-2 gap-y-1">
+            {authEnabled && file.created_by_username && (
+              <span className="inline-flex items-center gap-1" title={t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}>
+                <User className="w-3 h-3" />
+                {file.created_by_username}
+              </span>
+            )}
+            {slicerUser && (
+              <span className="inline-flex items-center gap-1" title={`Sliced by: ${slicerUser}`}>
+                <FileText className="w-3 h-3" />
+                {slicerUser}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -1079,6 +1091,7 @@ export function FileManagerPage() {
 
     return result;
   }, [files, searchQuery, filterType, filterUsername, sortField, sortDirection]);
+  const showUserInfoColumn = authEnabled || filteredAndSortedFiles.some((f) => !!(f.slicer_user || f.slicer_user_email));
 
   // Check if disk space is low
   const isDiskSpaceLow = useMemo(() => {
@@ -1918,10 +1931,10 @@ export function FileManagerPage() {
             <div className="flex-1 lg:overflow-y-auto">
               <div className="bg-bambu-dark-secondary rounded-lg border border-bambu-dark-tertiary overflow-hidden">
                 {/* List header - hidden on mobile, show simplified on small screens */}
-                <div className={`hidden sm:grid ${authEnabled ? 'grid-cols-[auto_1fr_120px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-2 bg-bambu-dark-secondary border-b border-bambu-dark-tertiary text-xs text-bambu-gray font-medium`}>
+                <div className={`hidden sm:grid ${showUserInfoColumn ? 'grid-cols-[auto_1fr_120px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-2 bg-bambu-dark-secondary border-b border-bambu-dark-tertiary text-xs text-bambu-gray font-medium`}>
                   <div className="w-6" />
                   <div>{t('common.name')}</div>
-                  {authEnabled && <div>{t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}</div>}
+                  {showUserInfoColumn && <div>{authEnabled ? t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' }) : 'Sliced By'}</div>}
                   <div>{t('common.type')}</div>
                   <div>{t('fileManager.size')}</div>
                   <div>{t('fileManager.prints')}</div>
@@ -1931,7 +1944,7 @@ export function FileManagerPage() {
                 {filteredAndSortedFiles.map((file) => (
                   <div
                     key={file.id}
-                    className={`grid ${authEnabled ? 'grid-cols-[auto_1fr_120px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-3 items-center border-b border-bambu-dark-tertiary last:border-b-0 cursor-pointer hover:bg-bambu-dark/50 transition-colors ${
+                    className={`grid ${showUserInfoColumn ? 'grid-cols-[auto_1fr_120px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-3 items-center border-b border-bambu-dark-tertiary last:border-b-0 cursor-pointer hover:bg-bambu-dark/50 transition-colors ${
                       selectedFiles.includes(file.id) ? 'bg-bambu-green/10' : ''
                     }`}
                     onClick={() => handleFileSelect(file.id)}
@@ -1977,17 +1990,30 @@ export function FileManagerPage() {
                         <div className="text-sm text-white truncate">{file.print_name || file.filename}</div>
                       </div>
                     </div>
-                    {/* Uploaded By - only show when auth is enabled */}
-                    {authEnabled && (
+                    {/* User badges: Bambuddy user is auth-gated, 3MF user is always shown when present */}
+                    {showUserInfoColumn && (
                       <div className="text-sm text-bambu-gray flex items-center gap-1">
-                        {file.created_by_username ? (
-                          <>
-                            <User className="w-3 h-3" />
-                            <span className="truncate">{file.created_by_username}</span>
-                          </>
-                        ) : (
-                          '-'
-                        )}
+                        {(() => {
+                          const slicerUser = file.slicer_user || file.slicer_user_email;
+                          const bambuUser = authEnabled ? file.created_by_username : null;
+                          if (!bambuUser && !slicerUser) return '-';
+                          return (
+                            <div className="min-w-0 flex flex-col">
+                              {bambuUser && (
+                                <span className="inline-flex items-center gap-1 truncate" title={t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}>
+                                  <User className="w-3 h-3" />
+                                  <span className="truncate">{bambuUser}</span>
+                                </span>
+                              )}
+                              {slicerUser && (
+                                <span className="inline-flex items-center gap-1 truncate" title={`Sliced by: ${slicerUser}`}>
+                                  <FileText className="w-3 h-3" />
+                                  <span className="truncate">{slicerUser}</span>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                     {/* Type */}

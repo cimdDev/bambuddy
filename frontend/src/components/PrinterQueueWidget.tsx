@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, Loader2, CircleCheck } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
@@ -24,7 +24,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, authEnabled } = useAuth();
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
@@ -65,14 +65,18 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
 
   const nextAutoItem = autoDispatchQueue[0];
   const nextItem = compatibleQueue?.[0];
+  const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
+  const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
   // Prompt "Clear Plate & Start Next" whenever the backend flags the printer as awaiting
   // acknowledgment. Don't gate on reported state: after Auto Off cycles the printer, it
-  // boots into IDLE while still awaiting — the prompt must survive that (#961). The flag
+  // boots into IDLE while still awaiting - the prompt must survive that (#961). The flag
   // is cleared by the backend on ack or when the next print dispatches.
   const needsClearPlate = requirePlateClear && !!awaitingPlateClear && autoDispatchQueue.length > 0;
 
   if (needsClearPlate) {
     const displayItem = nextAutoItem || nextItem;
+    const displaySlicerUser = displayItem?.slicer_user || displayItem?.slicer_user_email || null;
+    const displayBambuUser = authEnabled ? (displayItem?.created_by_username || null) : null;
     return (
       <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
         <div className="flex items-center gap-3 mb-2">
@@ -82,6 +86,22 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
             <p className="text-sm text-white truncate">
               {displayItem?.archive_name || displayItem?.library_file_name || `File #${displayItem?.archive_id || displayItem?.library_file_id}`}
             </p>
+            {(displayBambuUser || displaySlicerUser) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                {displayBambuUser && (
+                  <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: displayBambuUser })}>
+                    <User className="w-3 h-3" />
+                    {displayBambuUser}
+                  </span>
+                )}
+                {displaySlicerUser && (
+                  <span className="inline-flex items-center gap-1" title={`Sliced by: ${displaySlicerUser}`}>
+                    <FileText className="w-3 h-3" />
+                    {displaySlicerUser}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           {totalPending > 1 && (
             <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded flex-shrink-0">
@@ -125,6 +145,22 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {(nextBambuUser || nextSlicerUser) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                {nextBambuUser && (
+                  <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
+                    <User className="w-3 h-3" />
+                    {nextBambuUser}
+                  </span>
+                )}
+                {nextSlicerUser && (
+                  <span className="inline-flex items-center gap-1" title={`Sliced by: ${nextSlicerUser}`}>
+                    <FileText className="w-3 h-3" />
+                    {nextSlicerUser}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
