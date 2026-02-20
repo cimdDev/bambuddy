@@ -1,10 +1,15 @@
-# Batch / Order Plan Layer Technical Design (Bambuddy)
+# Batch / Order Plan Layer Technical Design (Bambuddy) - Refined Draft
 
 This document defines the missing `Plan` layer above `PrintQueueItem` for production scheduling of multi-plate files.
 
 Scope intentionally covers:
 - Mid-level implementation (production feature)
 - High-end implementation (farm automation + advanced accounting)
+
+Core principle:
+- `Batch` is planning state, not execution ownership.
+- Batch describes "what is needed" (quantities and requirements).
+- Queue and scheduler decide "how/when/where" execution happens.
 
 ---
 
@@ -14,254 +19,286 @@ Scope intentionally covers:
 
 | Concept | Current model(s) | Current responsibility |
 |---|---|---|
-| Asset | `LibraryFile` | Stores 3MF/G-code file info, metadata snapshot, project link, creator, notes |
-| Dispatch | `PrintQueueItem` | Queue intent: printer targeting, mapping fields, lifecycle state, scheduling |
-| Run | `PrintArchive` | Immutable-ish run result storage: status, timing, cost, energy, extra data |
-| Project context | `Project` | High-level grouping and due/status metadata |
-| Printer/material state | `Printer`, `Spool`, `SpoolAssignment`, `Filament` | Live capability + loaded filament state |
+| Asset | `LibraryFile` | Stores file and metadata (`file_metadata`) plus project linkage |
+| Dispatch | `PrintQueueItem` + scheduler | Queue authority for dispatch timing and printer assignment |
+| Run | `PrintArchive` | Run result, cost/energy, completion status, runtime data |
+| Project context | `Project` | Optional business grouping and due/status context |
+| Printer/material state | `Printer`, `Spool`, `SpoolAssignment`, `Filament` | Available hardware/material state for matching |
 
-### Plate metadata representation
+### 3MF metadata location and normalization
 
-Plate data is already extractable from library/archive routes (`/plates`, `/filament-requirements`) and includes:
-- `plate index`, `name`, object metadata
-- `print_time_seconds`
-- `filament_used_grams`
-- filament entries with slot-level hints (`slot_id`, `tray_info_idx`, material/color attributes)
+Current state:
+- Canonical asset metadata is closest to `library_files.file_metadata`.
+- Queue stores execution references (`library_file_id`, `archive_id`, `plate_id`, mappings) but is not canonical metadata storage.
+- Archive stores run-time result snapshots (`extra_data`, parsed plate/filament output).
 
-This is sufficient to seed plan-layer plate/config rows.
+Assessment:
+- Current structure is usable for MID without invasive refactor.
+- There is no strict canonical artifact identity across file revisions and re-slices.
 
-### Cost storage and lifecycle facts
-
-- Primary stored runtime cost is on `PrintArchive` (`cost`, plus energy fields).
-- Queue item lifecycle currently drives dispatch and completion updates.
-- Status values in runtime include failure-like outcomes (`failed`, `aborted`) that should be normalized in batch aggregation.
+Pragmatic recommendation:
+- MID: store `source_file_hash` + metadata snapshot on batch and plate rows.
+- HIGH (optional): introduce `SlicerArtifact` (`artifact_id`, `artifact_hash`, normalized plates/objects), with `LibraryFile` as storage/reference.
 
 ### Mapping to conceptual layers
 
-- `Asset` = `LibraryFile`
-- `Plan` = **missing** (to be introduced as `PrintBatch*` tables)
-- `Dispatch` = existing queue + scheduler
-- `Run` = archive + logs
+- `Asset` = `LibraryFile` (+ optional future `SlicerArtifact`)
+- `Plan` = new `PrintBatch*` entities
+- `Dispatch` = existing queue/scheduler authority
+- `Run` = archive/logs/event callbacks
 
 ### Constraints and extension points
 
-- Keep queue engine additive; do not replace current scheduling core.
-- Introduce batch foreign keys on queue items.
-- Derive plan progress from queue/archive; do not duplicate run truth.
-- Use additive schema migration style compatible with existing SQLite migration approach.
+- Additive architecture only; no rewrite of queue scheduler.
+- Printer matching logic must live in queue/scheduler and be reusable by batch and non-batch jobs.
+- Batch captures declarative requirements, not slot-level hardware mapping.
+- Keep migrations SQLite-safe and additive.
 
 ---
 
 ## B - Domain Model Design
 
-### Core entities
+### Core entities (refined)
 
-- `PrintBatch` (Order header)
-- `PrintBatchPlate` (plate entry extracted from file metadata)
-- `PrintBatchPlateConfig` (one-or-more configurations per plate)
-- `PrintBatchConfigMaterialMap` (slot -> material/color mapping)
-- `PrintBatchAssignment` (user assignment, batch-level and optional config-level)
+- `PrintBatch` (order header and planning controls)
+- `PrintBatchPlate` (plate snapshot from source metadata)
+- `PrintBatchPlateConfig` (quantity + compatibility requirement profile)
+- `PrintBatchConfigRequirements` (declarative material/color requirements, no physical slot binding)
+- `PrintBatchRunLinks` (manual/external mapping of completed runs to configs)
+
+Removed from MID:
+- Complex multi-user assignment table
+- Batch-level slot mapping table
+- Pool ownership inside batch module
 
 ### Required capabilities
 
-- Multiple configurations per plate
-- Independent quantity/progress/cost per configuration
-- Editable targets while running
-- Safe reconcile for not-started queue rows only
-- Optional printer model/type constraints per configuration
-- Assignment of owner/operators/planners
+- Multiple configurations per plate with independent quantity/progress/cost
+- Editable while running (safe reconcile on pending items only)
+- Queue-owned printer assignment with generic matching inputs:
+  - printer type/model
+  - material and color requirements
+  - nozzle configuration, tool position, nozzle diameter
+- Ownership + visibility:
+  - owner/creator only
+  - visibility model (`private` vs `shared`)
+- External and manual correction path:
+  - attach completed jobs to batch configs after the fact
+
+### Batch lifecycle states
+
+- `draft`
+- `active`
+- `running`
+- `paused`
+- `completed`
+- `cancelled`
 
 ### Conceptual ER
 
 - `LibraryFile 1..N PrintBatch`
 - `PrintBatch 1..N PrintBatchPlate`
 - `PrintBatchPlate 1..N PrintBatchPlateConfig`
-- `PrintBatchPlateConfig 1..N PrintBatchConfigMaterialMap`
+- `PrintBatchPlateConfig 1..N PrintBatchConfigRequirements`
 - `PrintBatchPlateConfig 1..N PrintQueueItem`
-- `PrintBatch N..M User` through `PrintBatchAssignment`
+- `PrintQueueItem 0..1 PrintArchive`
+- `PrintArchive N..M PrintBatchPlateConfig` through `PrintBatchRunLinks` (manual/external attach)
 
 ---
 
 ## C - Database Schema (Core Deliverable)
 
-All changes are additive.
+All changes are additive. Schema is intentionally split between MID core and HIGH optional extensions.
+
+### MID core tables
 
 ### 1) `print_batches`
 
-| Field | Type | Null | Default | Notes |
+| Field | Type | Null | Default | Constraints / Notes |
 |---|---|---:|---|---|
 | `id` | INTEGER PK | No | auto | Primary key |
-| `name` | TEXT | No |  | Batch/order name |
-| `library_file_id` | INTEGER | Yes | NULL | FK -> `library_files.id` ON DELETE SET NULL |
-| `source_file_name` | TEXT | No |  | Immutable source reference |
-| `source_file_hash` | TEXT | Yes | NULL | Detect source drift |
-| `source_file_metadata_snapshot` | TEXT (JSON) | No |  | Plate metadata at creation |
+| `name` | TEXT | No |  | Batch name |
+| `source_library_file_id` | INTEGER | Yes | NULL | FK -> `library_files.id` ON DELETE SET NULL |
+| `source_file_name` | TEXT | No |  | Immutable display snapshot |
+| `source_file_hash` | TEXT | Yes | NULL | Identity aid for change detection |
+| `source_metadata_snapshot` | TEXT (JSON) | No |  | Original metadata snapshot |
+| `source_artifact_key` | TEXT | Yes | NULL | Optional forward-compatible canonical artifact id/hash |
 | `project_id` | INTEGER | Yes | NULL | FK -> `projects.id` ON DELETE SET NULL |
-| `customer_label` | TEXT | Yes | NULL | Optional customer |
-| `status` | TEXT | No | `draft` | `draft/planned/active/paused/completed/cancelled/deleted` |
-| `dispatch_mode` | TEXT | No | `auto` | `auto/manual` |
-| `auto_reconcile` | INTEGER | No | `1` | bool (0/1) |
-| `due_date` | DATETIME | Yes | NULL | Optional due date |
-| `notes` | TEXT | Yes | NULL | Editable during execution |
-| `plan_revision` | INTEGER | No | `1` | Optimistic concurrency token |
-| `owner_user_id` | INTEGER | No |  | FK -> `users.id`, primary owner assignment |
-| `created_by_id` | INTEGER | No |  | FK -> `users.id` |
-| `updated_by_id` | INTEGER | Yes | NULL | FK -> `users.id` ON DELETE SET NULL |
-| `started_at` | DATETIME | Yes | NULL | First dispatch/start |
+| `customer_label` | TEXT | Yes | NULL | Optional business label |
+| `status` | TEXT | No | `draft` | CHECK: `draft/active/running/paused/completed/cancelled` |
+| `dispatch_mode` | TEXT | No | `manual` | CHECK: `manual/auto` |
+| `visibility_scope` | TEXT | No | `private` | CHECK: `private/shared` |
+| `owner_user_id` | INTEGER | No |  | FK -> `users.id` ON DELETE RESTRICT |
+| `created_by_id` | INTEGER | No |  | FK -> `users.id` ON DELETE RESTRICT |
+| `due_date` | DATETIME | Yes | NULL | SLA target |
+| `notes` | TEXT | Yes | NULL | Editable while running |
+| `plan_revision` | INTEGER | No | `1` | CHECK >= 1 (pragmatic optimistic check) |
+| `rebase_policy` | TEXT | No | `locked` | CHECK: `locked/manual_rebase` |
+| `external_mapping_policy` | TEXT | No | `suggest_only` | CHECK: `disabled/suggest_only/auto_high_confidence` |
+| `unplanned_run_policy` | TEXT | No | `manual_review` | CHECK: `manual_review/auto_create_config/ignore` |
+| `started_at` | DATETIME | Yes | NULL | First queue dispatch |
 | `completed_at` | DATETIME | Yes | NULL | Completion marker |
 | `cancelled_at` | DATETIME | Yes | NULL | Cancellation marker |
-| `deleted_at` | DATETIME | Yes | NULL | Soft delete |
+| `deleted_at` | DATETIME | Yes | NULL | Soft-delete marker |
 | `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 | `updated_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 
 Indexes:
-- `(status, due_date)`
-- `(owner_user_id, status)`
-- `(project_id)`
-- `(library_file_id)`
-- `(deleted_at)`
+- `idx_print_batches_status_due (status, due_date)`
+- `idx_print_batches_owner_status (owner_user_id, status)`
+- `idx_print_batches_visibility_status (visibility_scope, status)`
+- `idx_print_batches_project (project_id)`
+- `idx_print_batches_source_file (source_library_file_id)`
+- `idx_print_batches_deleted (deleted_at)`
 
-### 2) `print_batch_assignments` (user assignment)
+### 2) `print_batch_plates`
 
-Supports both batch-level and configuration-level assignment.
-
-| Field | Type | Null | Default | Notes |
+| Field | Type | Null | Default | Constraints / Notes |
 |---|---|---:|---|---|
 | `id` | INTEGER PK | No | auto |  |
 | `batch_id` | INTEGER | No |  | FK -> `print_batches.id` ON DELETE CASCADE |
-| `batch_plate_config_id` | INTEGER | Yes | NULL | FK -> `print_batch_plate_configs.id` ON DELETE CASCADE |
-| `user_id` | INTEGER | No |  | FK -> `users.id` ON DELETE RESTRICT |
-| `role` | TEXT | No | `operator` | `owner/planner/operator/viewer/accounting` |
-| `is_primary` | INTEGER | No | `0` | bool (0/1) |
-| `assigned_by_id` | INTEGER | Yes | NULL | FK -> `users.id` ON DELETE SET NULL |
-| `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
-| `updated_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
-
-Constraints/Indexes:
-- Unique batch-level: `(batch_id, user_id, role)` when `batch_plate_config_id IS NULL`
-- Unique config-level: `(batch_plate_config_id, user_id, role)` when `batch_plate_config_id IS NOT NULL`
-- Index `(batch_id, role)`
-- Index `(user_id, role)`
-
-### 3) `print_batch_plates`
-
-| Field | Type | Null | Default | Notes |
-|---|---|---:|---|---|
-| `id` | INTEGER PK | No | auto |  |
-| `batch_id` | INTEGER | No |  | FK -> `print_batches.id` ON DELETE CASCADE |
-| `plate_index` | INTEGER | No |  | Stable index from source metadata |
+| `plate_index` | INTEGER | No |  | CHECK >= 0 |
 | `plate_name` | TEXT | Yes | NULL | Display name |
-| `is_required` | INTEGER | No | `1` | bool (supports explicit non-required plates) |
-| `object_count` | INTEGER | No | `0` | For planning/UI |
-| `estimated_duration_sec` | INTEGER | Yes | NULL | Optional baseline |
-| `estimated_filament_grams` | REAL | Yes | NULL | Optional baseline |
-| `plate_metadata_snapshot` | TEXT (JSON) | No |  | Immutable per-plate snapshot |
+| `plate_fingerprint` | TEXT | Yes | NULL | Optional hash of plate composition for drift detection |
+| `object_count` | INTEGER | No | `0` | CHECK >= 0 |
+| `estimated_duration_sec` | INTEGER | Yes | NULL | CHECK >= 0 |
+| `estimated_filament_grams` | REAL | Yes | NULL | CHECK >= 0 |
+| `plate_metadata_snapshot` | TEXT (JSON) | No |  | Per-plate snapshot |
 | `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 | `updated_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 
-Constraints/Indexes:
-- Unique `(batch_id, plate_index)`
-- Index `(batch_id)`
+Constraints/indexes:
+- UNIQUE `(batch_id, plate_index)`
+- `idx_print_batch_plates_batch (batch_id)`
 
-### 4) `print_batch_plate_configs`
+### 3) `print_batch_plate_configs`
 
-| Field | Type | Null | Default | Notes |
+| Field | Type | Null | Default | Constraints / Notes |
 |---|---|---:|---|---|
 | `id` | INTEGER PK | No | auto |  |
 | `batch_plate_id` | INTEGER | No |  | FK -> `print_batch_plates.id` ON DELETE CASCADE |
-| `config_code` | TEXT | No |  | Stable code (`A`, `B`, etc.) |
+| `config_code` | TEXT | No |  | Stable code per plate (`A`, `B`, ...) |
 | `name` | TEXT | Yes | NULL | Friendly name |
-| `quantity_target` | INTEGER | No | `0` | Required successful run count |
-| `priority` | INTEGER | No | `100` | Dispatch priority |
-| `status` | TEXT | No | `active` | `active/paused/completed/cancelled` |
-| `printer_model_target` | TEXT | Yes | NULL | Optional exact model target |
-| `printer_type_constraint` | TEXT | Yes | NULL | Optional family/type |
-| `allow_color_substitution` | INTEGER | No | `0` | bool |
-| `estimate_unit_cost` | REAL | Yes | NULL | Per-run estimate |
-| `estimate_unit_duration_sec` | INTEGER | Yes | NULL | Per-run estimate |
+| `quantity_target` | INTEGER | No | `0` | CHECK >= 0 |
+| `priority` | INTEGER | No | `100` | CHECK between 1 and 1000 |
+| `status` | TEXT | No | `active` | CHECK: `active/paused/completed/cancelled` |
+| `required_printer_type` | TEXT | Yes | NULL | Declarative requirement |
+| `required_printer_model` | TEXT | Yes | NULL | Optional exact model |
+| `required_nozzle_diameter_mm` | REAL | Yes | NULL | Optional nozzle diameter |
+| `required_tool_position` | TEXT | Yes | NULL | Optional tool/side identifier |
+| `required_nozzle_count` | INTEGER | Yes | NULL | Optional minimum nozzle count |
+| `color_match_mode` | TEXT | No | `exact` | CHECK: `exact/category/tolerance` |
+| `color_tolerance` | REAL | Yes | NULL | Optional fuzzy threshold |
+| `estimate_strategy` | TEXT | No | `slicer_metadata` | CHECK: `slicer_metadata/historical_avg/manual_override` |
+| `estimate_unit_cost_override` | REAL | Yes | NULL | CHECK >= 0 |
+| `estimate_unit_duration_sec_override` | INTEGER | Yes | NULL | CHECK >= 0 |
+| `failure_policy` | TEXT | No | `manual` | CHECK: `manual/auto_requeue_once/auto_requeue_until_target` |
+| `max_auto_requeues` | INTEGER | Yes | NULL | CHECK >= 0 |
 | `notes` | TEXT | Yes | NULL | Planner note |
-| `created_by_id` | INTEGER | No |  | FK -> `users.id` |
-| `updated_by_id` | INTEGER | Yes | NULL | FK -> `users.id` |
+| `created_by_id` | INTEGER | No |  | FK -> `users.id` ON DELETE RESTRICT |
+| `updated_by_id` | INTEGER | Yes | NULL | FK -> `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 | `updated_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 
-Constraints/Indexes:
-- Unique `(batch_plate_id, config_code)`
-- Index `(batch_plate_id)`
-- Index `(status, priority)`
-- Index `(printer_model_target, printer_type_constraint)`
+Constraints/indexes:
+- UNIQUE `(batch_plate_id, config_code)`
+- `idx_batch_configs_plate (batch_plate_id)`
+- `idx_batch_configs_status_priority (status, priority)`
+- `idx_batch_configs_printer_req (required_printer_type, required_printer_model)`
+- `idx_batch_configs_nozzle_req (required_nozzle_diameter_mm, required_tool_position)`
 
-### 5) `print_batch_config_material_maps`
+### 4) `print_batch_config_requirements` (renamed; declarative)
 
-| Field | Type | Null | Default | Notes |
+This replaces slot-based mapping at the Batch level.
+
+| Field | Type | Null | Default | Constraints / Notes |
 |---|---|---:|---|---|
 | `id` | INTEGER PK | No | auto |  |
 | `batch_plate_config_id` | INTEGER | No |  | FK -> `print_batch_plate_configs.id` ON DELETE CASCADE |
-| `slot_no` | INTEGER | No |  | Slot number |
-| `nozzle_id` | INTEGER | Yes | NULL | For multi-nozzle devices |
-| `material_type` | TEXT | Yes | NULL | Material requirement |
-| `filament_id` | INTEGER | Yes | NULL | FK -> `filaments.id` ON DELETE SET NULL |
-| `color_hex` | TEXT | Yes | NULL | Color requirement |
-| `color_name` | TEXT | Yes | NULL | UI label |
-| `tray_info_idx` | INTEGER | Yes | NULL | Bambu tray hint |
-| `match_mode` | TEXT | No | `exact` | `exact/type_only/color_family` |
-| `is_required` | INTEGER | No | `1` | bool |
+| `requirement_order` | INTEGER | No | `1` | CHECK >= 1 |
+| `material_type` | TEXT | Yes | NULL | PLA/PETG/etc |
+| `color_value` | TEXT | Yes | NULL | Raw color token (hex/name) |
+| `color_family` | TEXT | Yes | NULL | Normalized category (red/blue/black/...) |
+| `match_mode_override` | TEXT | Yes | NULL | CHECK: `exact/category/tolerance` |
+| `is_required` | INTEGER | No | `1` | bool (0/1) |
+| `metadata_json` | TEXT (JSON) | Yes | NULL | Future extensibility |
 | `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 | `updated_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
 
-Constraints/Indexes:
-- Unique `(batch_plate_config_id, slot_no, nozzle_id)`
-- Index `(batch_plate_config_id)`
-- Index `(material_type, color_hex)`
+Constraints/indexes:
+- UNIQUE `(batch_plate_config_id, requirement_order)`
+- `idx_batch_requirements_config (batch_plate_config_id)`
+- `idx_batch_requirements_material_color (material_type, color_family)`
 
-### 6) `print_queue_items` additions
+### 5) `print_batch_run_links` (manual/external corrections)
 
-| Field | Type | Null | Default | Notes |
+Used for:
+- external printer starts not originating from queue
+- manual corrections when mapping is wrong or missing
+
+| Field | Type | Null | Default | Constraints / Notes |
+|---|---|---:|---|---|
+| `id` | INTEGER PK | No | auto |  |
+| `batch_id` | INTEGER | No |  | FK -> `print_batches.id` ON DELETE CASCADE |
+| `batch_plate_config_id` | INTEGER | No |  | FK -> `print_batch_plate_configs.id` ON DELETE CASCADE |
+| `queue_item_id` | INTEGER | Yes | NULL | FK -> `print_queue_items.id` ON DELETE SET NULL |
+| `archive_id` | INTEGER | No |  | FK -> `print_archives.id` ON DELETE CASCADE |
+| `mapping_source` | TEXT | No | `manual` | CHECK: `queue_direct/manual/auto_external/suggested_confirmed` |
+| `confidence_score` | REAL | Yes | NULL | CHECK between 0 and 1 |
+| `mapped_by_user_id` | INTEGER | Yes | NULL | FK -> `users.id` ON DELETE SET NULL |
+| `mapping_notes` | TEXT | Yes | NULL | Operator note |
+| `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
+| `updated_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
+
+Constraints/indexes:
+- UNIQUE `(archive_id, batch_plate_config_id)`
+- `idx_batch_run_links_config (batch_plate_config_id)`
+- `idx_batch_run_links_archive (archive_id)`
+- `idx_batch_run_links_source (mapping_source, confidence_score)`
+
+### 6) `print_queue_items` additions (batch + generic matching hooks)
+
+| Field | Type | Null | Default | Constraints / Notes |
 |---|---|---:|---|---|
 | `batch_id` | INTEGER | Yes | NULL | FK -> `print_batches.id` ON DELETE SET NULL |
 | `batch_plate_id` | INTEGER | Yes | NULL | FK -> `print_batch_plates.id` ON DELETE SET NULL |
 | `batch_plate_config_id` | INTEGER | Yes | NULL | FK -> `print_batch_plate_configs.id` ON DELETE SET NULL |
-| `batch_plan_revision` | INTEGER | Yes | NULL | Revision used at queue generation time |
-| `batch_dispatch_seq` | INTEGER | Yes | NULL | Order inside batch dispatch |
-| `assigned_operator_user_id` | INTEGER | Yes | NULL | FK -> `users.id` ON DELETE SET NULL |
-| `batch_reconcile_state` | TEXT | Yes | NULL | `normal/cancelled_by_reconcile/manual_override` |
+| `batch_plan_revision` | INTEGER | Yes | NULL | Revision at queue generation |
+| `batch_dispatch_seq` | INTEGER | Yes | NULL | Dispatch ordering |
+| `matching_requirements_json` | TEXT (JSON) | Yes | NULL | Generic queue matcher input for batch and non-batch jobs |
+| `matching_diagnostics_json` | TEXT (JSON) | Yes | NULL | Why matched / why pending |
+| `batch_reconcile_state` | TEXT | Yes | NULL | CHECK: `normal/cancelled_by_reconcile/manual_override` |
 
 Indexes:
-- `(batch_id, status, created_at)`
-- `(batch_plate_config_id, status, created_at)`
-- `(assigned_operator_user_id, status)`
+- `idx_queue_batch_status_created (batch_id, status, created_at)`
+- `idx_queue_batch_config_status_created (batch_plate_config_id, status, created_at)`
+- `idx_queue_matching_pending (status, target_model, scheduled_time)`
 
-### Example records
+### Optional performance table (planned early, can be deferred)
 
-```json
-{
-  "print_batches": {
-    "id": 101,
-    "name": "Order-ACME-221",
-    "library_file_id": 55,
-    "source_file_name": "widget.gcode.3mf",
-    "status": "active",
-    "dispatch_mode": "auto",
-    "owner_user_id": 7,
-    "plan_revision": 3
-  },
-  "print_batch_assignments": [
-    { "batch_id": 101, "user_id": 7, "role": "owner", "is_primary": 1 },
-    { "batch_id": 101, "user_id": 9, "role": "operator", "is_primary": 1 }
-  ],
-  "print_batch_plates": [
-    { "id": 201, "batch_id": 101, "plate_index": 1, "plate_name": "Plate 1" }
-  ],
-  "print_batch_plate_configs": [
-    { "id": 301, "batch_plate_id": 201, "config_code": "A", "quantity_target": 5 },
-    { "id": 302, "batch_plate_id": 201, "config_code": "B", "quantity_target": 2 }
-  ],
-  "print_batch_config_material_maps": [
-    { "batch_plate_config_id": 301, "slot_no": 1, "material_type": "PLA", "color_hex": "#FF0000" },
-    { "batch_plate_config_id": 301, "slot_no": 2, "material_type": "PLA", "color_hex": "#0000FF" }
-  ]
-}
-```
+`print_batch_config_stats`
+- `batch_plate_config_id` PK/FK
+- `completed_runs`, `failed_runs`, `running_runs`, `queued_runs`, `remaining_runs`
+- `completed_cost`, `failure_cost`, `remaining_estimate`
+- `last_recalc_at`, `updated_at`
+
+This supports farm-scale dashboards without repeated heavy joins.
+
+### Migration impact from previous draft
+
+Added:
+- `visibility_scope`, `external_mapping_policy`, `unplanned_run_policy` on `print_batches`
+- `print_batch_run_links`
+- queue matching diagnostics hooks
+
+Modified:
+- `print_batch_config_material_maps` -> `print_batch_config_requirements` (no slot columns)
+- `print_batch_plate_configs` extended for nozzle/tool/failure/cost strategy controls
+
+Removed from MID:
+- `print_batch_assignments`
+- `assigned_operator_user_id` queue extension
+- batch-owned slot mapping semantics
 
 ---
 
@@ -269,157 +306,242 @@ Indexes:
 
 ### Progress computation
 
-For each config:
+Primary source is queue status for linked config jobs.
+Secondary source is `print_batch_run_links` for external/manual attachments.
 
-- `completed_runs = count(queue where status='completed')`
-- `failed_runs = count(queue where status in ('failed','aborted'))`
-- `running_runs = count(queue where status='printing')`
-- `queued_runs = count(queue where status='pending')`
+For each config:
+- `completed_runs = completed_queue_runs + completed_external_links`
+- `failed_runs = failed_queue_runs + failed_external_links`
+- `running_runs = queue(status='printing')`
+- `queued_runs = queue(status='pending')`
 - `remaining_runs = max(quantity_target - completed_runs, 0)`
 - `dispatch_gap = max(remaining_runs - running_runs - queued_runs, 0)`
-- `percent_complete = (completed_runs / quantity_target) * 100` (or 100 when target is 0)
+- `percent_complete = 100 * completed_runs / quantity_target` (or `100` if target `0`)
 
-Plate and batch metrics are sums of config metrics.
+### Failure recovery behavior
 
-### Cost computation
+Driven per config by `failure_policy`:
+- `manual`: mark failure; operator chooses reprint
+- `auto_requeue_once`: one replacement per failed run
+- `auto_requeue_until_target`: keep queue filled until target achieved (bounded by `max_auto_requeues` if set)
 
-Stored:
-- `estimate_unit_cost` on config
-- actual cost fields in `PrintArchive` (`cost`, optional `energy_cost`)
+### Cost model
+
+Stored inputs:
+- runtime actuals in `PrintArchive` (`cost`, `energy_cost`)
+- config estimate strategy:
+  - `slicer_metadata`
+  - `historical_avg`
+  - `manual_override`
 
 Derived:
-- `completed_cost = sum(archive.cost + coalesce(archive.energy_cost,0))` for completed runs
-- `failure_cost = sum(archive.cost + coalesce(archive.energy_cost,0))` for failed/aborted runs
-- `remaining_estimate = remaining_runs * estimate_unit_cost`
+- `completed_cost = sum(actual cost for completed runs)`
+- `failure_cost = sum(actual cost for failed/aborted runs)`
+- `remaining_estimate = remaining_runs * estimate_unit_cost(strategy)`
 - `total_estimate = completed_cost + failure_cost + remaining_estimate`
 
-### Store vs derive guidance
+### Performance considerations
 
-- Store plan inputs + immutable snapshots.
-- Derive progress/cost rollups from queue/archive for correctness.
-- If performance degrades, add a summary/materialized rollup table updated by queue/archive events.
+Farm scale can produce expensive multi-table aggregation.
 
-### Per-object accounting (advanced)
+Plan:
+- MID: indexed live queries
+- HIGH: event-updated `print_batch_config_stats` rollups
 
-Feasibility:
-- Only feasible when object-level material/time attribution is available and stable.
+### Per-object accounting
 
-Complexity:
-- Requires additional object entity mapping and allocation strategy.
-- Increases reconciliation and reporting complexity significantly.
-
-Recommended approach:
-- MID: plate-level accounting only.
-- HIGH: optional object allocation model with explicit policy (`equal`, `volume_ratio`, `slicer_weight`).
+Unchanged recommendation:
+- MID: per-plate/config accounting only
+- HIGH: optional per-object allocation after canonical object identity is stable
 
 ---
 
 ## E - Dispatch & Reconciliation Engine
 
-### Auto mode (`dispatch_mode=auto`)
+### Authority split (explicit)
 
-1. Trigger reconcile on batch/config edits, queue status changes, or run completion.
-2. Compute `dispatch_gap` per active config.
-3. Create pending queue rows for gap count, with batch references and revision.
-4. Do not alter running/completed rows.
+- Batch module: creates/updates declarative demand and generates queue items.
+- Queue/scheduler: selects printer and maps actual slots/tools at execution time.
 
-### Manual/staged mode (`dispatch_mode=manual`)
+### Auto mode
 
-1. User selects configs and dispatch quantity from batch UI.
-2. API validates requested counts.
-3. Creates only requested pending queue items.
+1. Trigger reconcile on batch/config edits and relevant queue/archive events.
+2. Recompute `dispatch_gap` per active config.
+3. Create pending queue items with `matching_requirements_json`.
+4. Do not pick printer in batch reconcile.
 
-### Quantity edits while running
+### Manual mode
 
-1. Increment `plan_revision`.
-2. Recompute config demand.
-3. If target increased: add pending rows (auto mode) or wait (manual mode).
-4. If target decreased: cancel oldest pending rows first.
-5. Never touch `printing` or completed history.
+1. User dispatches quantity from planner/execution UI.
+2. Queue items created without fixed slot mapping.
+3. Scheduler assigns printer/mapping later.
 
-### Cancel/delete/file-change handling
+### Quantity reconciliation strategy
 
-- Cancel remaining: set config/batch status to cancelled and cancel pending rows.
-- Delete batch: soft-delete preferred; pending queue rows cancelled; historical runs preserved.
-- Source file change: detect via `source_file_hash`; flag batch for explicit rebase action, never silent mutation.
+When target decreases:
+- Soft-cancel pending excess queue items (status `cancelled`, keep audit).
+- Never hard-delete by default.
+- Running items are untouched.
+
+Hard delete:
+- Admin-only maintenance operation for unstarted draft artifacts, not default reconcile behavior.
+
+If queue item already has a reserved printer:
+- release reservation on soft-cancel
+- keep run immutable if already printing
+
+### File revision handling
+
+- Batch remains tied to original snapshot by default (`rebase_policy=locked`).
+- Manual "Rebase to latest file revision" workflow computes drift and requires confirmation.
+- Plate fingerprint mismatch creates warning and blocks silent rebases.
+
+### External / unplanned run handling
+
+External starts:
+- Default: suggestion-only matching with confidence score.
+- Auto-link only when policy allows and confidence is high.
+
+Unplanned runs (plate/config not in plan):
+- Default: manual review + suggested actions.
+- Optional policy: auto-create config stub.
+- Optional policy: ignore.
+
+### Manual correction
+
+Users can:
+- attach archive to config
+- detach wrong mapping
+- remap and trigger progress recompute
+
+All actions recorded in `print_batch_run_links`.
 
 ---
 
 ## F - Printer Compatibility & Farm Automation (High-End)
 
-### Matching inputs
+### Design principle
 
-- Printer capability: model/type/nozzle/AMS capacity
-- Current loaded materials/colors from slot assignments
-- Config material map constraints and policy
-- Optional printer pool constraints
+Printer matching is a generic queue capability, not batch-specific logic.
 
-### Matching algorithm
+### Matching dimensions
 
-1. Build idle/available candidate printer set.
-2. Hard filter by model/type/pool/required slots.
-3. Score candidates:
-   - exact material+color slot match
-   - exact material type match
-   - substitution rules if enabled
-   - load balancing / fairness
-4. Reserve selected printer briefly to avoid races.
-5. Assign and dispatch queue row.
-6. If no fit, leave pending with clear waiting reason.
+- printer model/type
+- material compatibility
+- color compatibility (exact/category/tolerance)
+- nozzle count/configuration
+- tool position (`left/right/tool0/tool1`)
+- nozzle diameter
+- printer availability/state
 
-### Additional high-end structures
+### Phased automation model
+
+Level 1:
+- Manual printer selection with ranked suggestions and diagnostics.
+
+Level 2:
+- Auto-match during dispatch for pending queue items.
+
+Level 3:
+- Continuous farm optimizer with reservations, fairness, and optional pools.
+
+### Optional advanced structures (HIGH)
 
 - `printer_pools`
 - `printer_pool_members`
-- `print_batch_config_printer_pools`
-- `print_batch_dispatch_reservations`
+- `print_queue_dispatch_reservations`
+- `print_queue_match_audit`
+
+### Diagnostics requirement
+
+System must expose explainability:
+- why a printer was selected
+- why none were eligible
+- which requirement blocked dispatch
+
+This is mandatory for operator trust.
 
 ---
 
 ## G - UI / UX Workflow Design
 
+### Workflow mode model
+
+Batch is treated as workflow mode with three focused surfaces:
+- `Batch Dashboard` (monitoring and KPIs)
+- `Batch Planner` (plate/config editing and quantity planning)
+- `Batch Execution` (dispatch, queue state, exception handling)
+
+### Visual flow (explicit)
+
+`Planning -> Dispatch -> Queue -> Printer -> Archive -> Batch Progress Update`
+
 ### 1) Batch List Page
-- Columns: Name, Due, Status, Owner, Assignees, Mode, Progress, Remaining, Cost
-- Filters: status, owner/assignee, project, customer, due range
 
-### 2) Create Batch Dialog
-- Select library file
-- Auto-load plate metadata
-- Set name/due/customer/project/owner/assignees/mode
+Cards/rows show:
+- name, due date, lifecycle status
+- owner, visibility (`private/shared`)
+- progress bar (completed/running/remaining)
+- warnings (file drift, unresolved external mappings)
 
-### 3) Batch Detail Page
-- Editable header while active
-- Global progress/cost summary
-- Tabs: Plates, Queue, Cost, Activity, Assignments
+Primary actions:
+- create, open dashboard, pause/resume, cancel
 
-### 4) Plate Configuration Editor
-- Per-plate cards
-- Add/clone/remove configurations
-- Quantity, constraints, slot mapping editor
-- Assignment per config (optional)
+### 2) Batch Planner Page
 
-### 5) Dispatch Controls
-- Auto reconcile toggle
-- Manual dispatch action with per-config quantity input
+Hierarchy:
+- header (batch metadata and policies)
+- plate cards
+- config cards under each plate
 
-### 6) Progress Visualization
-- Config bars: completed/failed/running/queued/remaining
-- Plate and batch rollups
+Config card fields:
+- quantity target, priority, failure policy
+- printer requirement summary
+- material/color requirement chips
+- estimated unit cost/time source
 
-### 7) Queue Integration
-- Batch badge on queue rows
-- Deep link to batch detail
-- Show operator assignment and plan revision
+Interactions:
+- add/clone/remove config
+- edit quantity while running with impact preview
 
-### 8) Editing While Running UX
-- Diff/impact preview before save (added pending / cancelled pending)
-- Explicit confirmation for reduction-induced cancellations
-- Conflict warning on stale revision
+### 3) Batch Execution Page
 
-### 9) High-End Farm Controls
-- Printer pool selector
-- Match strictness policies
-- Live candidate/mismatch diagnostics
+Shows:
+- dispatch controls (`manual`/`auto`)
+- queue integration view (all batch queue items)
+- pending reasons + matcher diagnostics
+- quick actions: dispatch now, cancel pending excess, retry failed
+
+### 4) Batch Dashboard Page
+
+Shows:
+- overall KPI tiles (completed, failed, remaining, cost)
+- per-plate and per-config progress bars
+- trend chart over time (optional)
+- external/manual mapping queue
+
+### 5) Queue Integration View
+
+Each queue row shows:
+- batch badge, plate/config identity
+- matcher summary
+- status timeline
+- deep links to archive and batch config
+
+### 6) Manual Mapping / Corrections UI
+
+Dedicated panel:
+- suggested external runs with confidence
+- attach/detach/remap actions
+- recompute preview before confirm
+
+### 7) Permissions UX (simplified)
+
+- Owner: full edit rights for batch plan.
+- Operators: view/start/stop/monitor queue/run state, no config edits.
+
+Implementation note:
+- permission checks should be extensible for future sharing/role expansion.
 
 ---
 
@@ -428,99 +550,113 @@ Recommended approach:
 ## MID IMPLEMENTATION
 
 Scope:
-- Core batch tables + user assignment
-- Multi-config per plate
-- Auto/manual dispatch + safe reconciliation
-- Progress/cost rollups from queue/archive
+- Planning-first batch entities
+- Declarative requirements (no slot map)
+- Manual + auto reconcile dispatch
+- Queue-owned matching hooks
+- Owner + visibility model (no assignment matrix)
+- Manual attach/correction for external/unplanned runs
 
 Data model:
 - `print_batches`
-- `print_batch_assignments`
 - `print_batch_plates`
 - `print_batch_plate_configs`
-- `print_batch_config_material_maps`
-- queue FK additions
+- `print_batch_config_requirements`
+- `print_batch_run_links`
+- queue FK + matching JSON additions
 
 API:
-- CRUD for batches/plates/configs
+- batch CRUD + planner operations
 - dispatch/reconcile endpoints
-- assignment endpoints
-- progress/cost endpoints
+- manual attach/detach/remap endpoints
+- diagnostics endpoint for pending/mismatch reasons
 
-UI complexity: medium
+UI complexity: medium-high (because of workflow mode + corrections)
 
 Risks:
-- race conditions without strict transaction handling
-- lifecycle status normalization (`aborted`)
+- matching diagnostics quality
+- metadata drift across file revisions
 
-Migration difficulty: low-medium
+Migration difficulty: medium (table rename/replacement and queue column additions)
 
-Estimated effort: 6-10 weeks (2 engineers)
+Estimated effort: 8-12 weeks (2 engineers)
 
 ## HIGH IMPLEMENTATION
 
 Scope:
-- Farm-scale matching and auto-assignment
-- Pool-aware dispatch
-- Reservation and conflict controls
-- Optional per-object accounting
+- farm optimizer (reservations/fairness/pools)
+- fuzzy color intelligence and similarity models
+- cached rollups by event streams
+- optional canonical `SlicerArtifact` layer
+- optional per-object accounting
 
 Data model additions:
-- pool + reservation tables
-- optional object-accounting tables
+- pool/reservation/audit tables
+- `print_batch_config_stats`
+- optional artifact/object tables
 
 API:
-- pool/policy management
-- auto-map simulation and diagnostics
-- reservation introspection
+- optimizer controls and simulation
+- pool management
+- webhook/events for ERP integrations
 
 UI complexity: high
 
 Risks:
-- mapping correctness and explainability
-- increased operational complexity
+- optimizer starvation/oscillation
+- explainability and trust failures
+- cross-system integration reliability
 
-Migration difficulty: medium-high
+Migration difficulty: high
 
-Estimated effort: 14-24 weeks (2-3 engineers)
+Estimated effort: 16-28 weeks (2-3 engineers)
 
 ---
 
 ## I - Implementation Roadmap
 
-### Phase 1
-- Add schema for core plan layer and user assignments
-- Implement batch CRUD + config editor APIs
-- Implement manual dispatch
-- Add basic batch UI pages
+### Phase 1 - Planning Core + Manual Dispatch
 
-### Phase 2
-- Implement auto reconcile engine
-- Add safe quantity-change behavior while running
-- Add full progress/cost rollups and assignment UX
-- Add concurrency guards (`plan_revision`)
+- Add core batch schema (simplified ownership, declarative requirements)
+- Build Planner + Execution pages
+- Create queue items from batch demand (no printer assignment in batch code)
+- Add manual attach/remap for completed runs
 
-### Phase 3
-- Implement high-end printer pool matching + reservations
-- Add automation controls and diagnostics
-- Add optional per-object accounting
+### Phase 2 - Auto Reconcile + Matching Suggestions
+
+- Enable background reconcile for auto mode
+- Add quantity down-reconcile soft-cancel flow
+- Add matcher diagnostics and suggestion ranking
+- Add optional stats rollup table if query cost rises
+
+### Phase 3 - Controlled Automation Expansion
+
+- Level 2 auto-match on dispatch
+- Level 3 optimizer with reservations and optional pools
+- Add webhook/API automation hooks for external systems
+- Evaluate canonical artifact model and optional object accounting
 
 ---
 
 ## J - Risks and Edge Cases
 
-- Concurrency: protect reconcile with transactions and revision checks.
-- Multi-user edits: optimistic locking + conflict handling.
-- Partial failures: rollback partial queue generation/cancellation.
-- Printer offline: preserve pending queue items with waiting reason.
-- Quantity reduction while jobs run: allow overrun only from already-running jobs.
-- Source metadata changes: explicit rebase flow, never implicit destructive changes.
-- Migration safety: additive migration only; backfill nullable fields carefully.
-- Assignment integrity: avoid hard-deleting users referenced by historical batches/runs.
-- Status mismatch: normalize `failed` + `aborted` together in batch failure metrics.
+- Concurrency: low operational risk; use pragmatic optimistic revision checks for destructive updates.
+- Multi-user edits: prefer last-write-wins with revision warning, not heavyweight locking.
+- Partial failures: use `failure_policy` and bounded auto-requeue.
+- External starts: auto-link only at high confidence; otherwise require confirmation.
+- Unplanned runs: default to manual review to prevent silent plan corruption.
+- Metadata drift: use file hash + plate fingerprint warnings, explicit rebase flow.
+- Color matching: exact hex is brittle across vendors; keep fuzzy categories/tolerance extensible.
+- Farm-scale performance: pre-plan indexes; introduce rollups when needed.
+- Explainability: pending reasons and matcher diagnostics are required, not optional.
 
 ---
 
 ## Recommended Default Implementation Path
 
-Start with MID implementation including user assignment and slot-based configuration mapping. Keep queue and archive as operational truth. Add high-end automation incrementally behind explicit policy toggles after core reconciliation and accounting are stable.
+Implement MID as planning-first and queue-authoritative:
+- batch defines required outcomes
+- queue/scheduler decide hardware assignment
+- manual correction path ensures operational robustness
+
+Then grow automation in controlled levels (suggestions -> auto-match -> optimizer) to avoid fragile jumps in complexity.
