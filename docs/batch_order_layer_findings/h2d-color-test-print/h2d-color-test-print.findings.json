@@ -1,0 +1,998 @@
+{
+  "ingestion": {
+    "library_upload_route": "backend/app/api/routes/library.py:746",
+    "zip_extract_upload_route": "backend/app/api/routes/library.py:990",
+    "parser": "backend/app/services/archive.py:22 (ThreeMFParser)",
+    "metadata_column": "backend/app/models/library.py:76 (library_files.file_metadata)"
+  },
+  "db_comparison": {
+    "library_file_record": {
+      "id": 37,
+      "filename": "H2D Pro color test print.gcode.3mf",
+      "file_path": "archive/library/files/ee09b211999b4eb091dd73ea7269783a.3mf",
+      "file_type": "3mf",
+      "file_hash": "8279e2607ae08f4cc9166a8c5537905e3d0d629f5922c1391aeb17fc3483e187",
+      "file_metadata": {
+        "sliced_for_model": "H2D Pro",
+        "print_time_seconds": 6036,
+        "filament_used_grams": 22.99,
+        "printable_objects": {
+          "114": "4 color pixel test print"
+        },
+        "filament_slots": [
+          {
+            "slot_id": 1,
+            "used_g": 2.59,
+            "type": "PLA",
+            "color": "#C12E1F"
+          },
+          {
+            "slot_id": 2,
+            "used_g": 6.54,
+            "type": "PLA",
+            "color": "#00AE42"
+          },
+          {
+            "slot_id": 3,
+            "used_g": 6.61,
+            "type": "PLA",
+            "color": "#FEC600"
+          },
+          {
+            "slot_id": 4,
+            "used_g": 7.25,
+            "type": "PLA",
+            "color": "#00B1B7"
+          },
+          {
+            "slot_id": 5,
+            "used_g": 3.25,
+            "type": "ABS",
+            "color": "#FFFF00"
+          },
+          {
+            "slot_id": 6,
+            "used_g": 2.53,
+            "type": "ABS",
+            "color": "#0C2340"
+          },
+          {
+            "slot_id": 7,
+            "used_g": 12.6,
+            "type": "ABS",
+            "color": "#0000FF"
+          },
+          {
+            "slot_id": 8,
+            "used_g": 28.14,
+            "type": "ABS",
+            "color": "#00FFFF"
+          },
+          {
+            "slot_id": 9,
+            "used_g": 36.68,
+            "type": "ABS",
+            "color": "#C0C0C0"
+          }
+        ],
+        "filament_type": "PLA, ABS",
+        "filament_color": "#C12E1F,#00AE42,#FEC600,#00B1B7,#FFFF00,#0C2340,#0000FF,#00FFFF,#C0C0C0",
+        "layer_height": 0.2,
+        "nozzle_diameter": 0.4,
+        "nozzle_temperature": 220,
+        "total_layers": 52,
+        "designer": "Multicolor Brothers",
+        "print_name": "H2D color Test Print"
+      }
+    },
+    "parser_output_clean": {
+      "sliced_for_model": "H2D Pro",
+      "print_time_seconds": 6036,
+      "filament_used_grams": 22.99,
+      "printable_objects": {
+        "114": "4 color pixel test print"
+      },
+      "filament_slots": [
+        {
+          "slot_id": 1,
+          "used_g": 2.59,
+          "type": "PLA",
+          "color": "#C12E1F"
+        },
+        {
+          "slot_id": 2,
+          "used_g": 6.54,
+          "type": "PLA",
+          "color": "#00AE42"
+        },
+        {
+          "slot_id": 3,
+          "used_g": 6.61,
+          "type": "PLA",
+          "color": "#FEC600"
+        },
+        {
+          "slot_id": 4,
+          "used_g": 7.25,
+          "type": "PLA",
+          "color": "#00B1B7"
+        },
+        {
+          "slot_id": 5,
+          "used_g": 3.25,
+          "type": "ABS",
+          "color": "#FFFF00"
+        },
+        {
+          "slot_id": 6,
+          "used_g": 2.53,
+          "type": "ABS",
+          "color": "#0C2340"
+        },
+        {
+          "slot_id": 7,
+          "used_g": 12.6,
+          "type": "ABS",
+          "color": "#0000FF"
+        },
+        {
+          "slot_id": 8,
+          "used_g": 28.14,
+          "type": "ABS",
+          "color": "#00FFFF"
+        },
+        {
+          "slot_id": 9,
+          "used_g": 36.68,
+          "type": "ABS",
+          "color": "#C0C0C0"
+        }
+      ],
+      "filament_type": "PLA, ABS",
+      "filament_color": "#C12E1F,#00AE42,#FEC600,#00B1B7,#FFFF00,#0C2340,#0000FF,#00FFFF,#C0C0C0",
+      "layer_height": 0.2,
+      "nozzle_diameter": 0.4,
+      "nozzle_temperature": 220,
+      "total_layers": 52,
+      "designer": "Multicolor Brothers",
+      "print_name": "H2D color Test Print"
+    },
+    "note": "DB and parser match for this file except printable_objects keys become JSON strings in DB."
+  },
+  "archive_inventory": [
+    {
+      "path": "[Content_Types].xml",
+      "size_bytes": 432,
+      "compress_size_bytes": 221,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_1.png",
+      "size_bytes": 2058,
+      "compress_size_bytes": 2058,
+      "used_by_library_extractor": true
+    },
+    {
+      "path": "Metadata/plate_1_small.png",
+      "size_bytes": 969,
+      "compress_size_bytes": 969,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_2.png",
+      "size_bytes": 4313,
+      "compress_size_bytes": 4313,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_2_small.png",
+      "size_bytes": 2001,
+      "compress_size_bytes": 2001,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_3.png",
+      "size_bytes": 11289,
+      "compress_size_bytes": 11289,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_3_small.png",
+      "size_bytes": 2320,
+      "compress_size_bytes": 2320,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_no_light_1.png",
+      "size_bytes": 1937,
+      "compress_size_bytes": 1937,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_no_light_2.png",
+      "size_bytes": 3013,
+      "compress_size_bytes": 3013,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_no_light_3.png",
+      "size_bytes": 2378,
+      "compress_size_bytes": 2378,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/top_1.png",
+      "size_bytes": 1997,
+      "compress_size_bytes": 1997,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/pick_1.png",
+      "size_bytes": 1335,
+      "compress_size_bytes": 1335,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/top_2.png",
+      "size_bytes": 1325,
+      "compress_size_bytes": 1325,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/pick_2.png",
+      "size_bytes": 1198,
+      "compress_size_bytes": 1198,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/top_3.png",
+      "size_bytes": 8011,
+      "compress_size_bytes": 8011,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/pick_3.png",
+      "size_bytes": 1572,
+      "compress_size_bytes": 1572,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_1.json",
+      "size_bytes": 623,
+      "compress_size_bytes": 314,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_2.json",
+      "size_bytes": 775,
+      "compress_size_bytes": 352,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_3.json",
+      "size_bytes": 962,
+      "compress_size_bytes": 447,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "3D/3dmodel.model",
+      "size_bytes": 1703,
+      "compress_size_bytes": 585,
+      "used_by_library_extractor": true
+    },
+    {
+      "path": "Metadata/project_settings.config",
+      "size_bytes": 86711,
+      "compress_size_bytes": 12779,
+      "used_by_library_extractor": true
+    },
+    {
+      "path": "Metadata/plate_1.gcode.md5",
+      "size_bytes": 32,
+      "compress_size_bytes": 37,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_2.gcode.md5",
+      "size_bytes": 32,
+      "compress_size_bytes": 37,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_3.gcode.md5",
+      "size_bytes": 32,
+      "compress_size_bytes": 37,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_2.gcode",
+      "size_bytes": 547362,
+      "compress_size_bytes": 56352,
+      "used_by_library_extractor": true
+    },
+    {
+      "path": "Metadata/plate_1.gcode",
+      "size_bytes": 1051052,
+      "compress_size_bytes": 167085,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/plate_3.gcode",
+      "size_bytes": 2679811,
+      "compress_size_bytes": 463441,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/_rels/model_settings.config.rels",
+      "size_bytes": 485,
+      "compress_size_bytes": 191,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/model_settings.config",
+      "size_bytes": 2293,
+      "compress_size_bytes": 318,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/cut_information.xml",
+      "size_bytes": 539,
+      "compress_size_bytes": 128,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Metadata/slice_info.config",
+      "size_bytes": 5231,
+      "compress_size_bytes": 927,
+      "used_by_library_extractor": true
+    },
+    {
+      "path": "Metadata/filament_sequence.json",
+      "size_bytes": 822,
+      "compress_size_bytes": 84,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Auxiliaries/.thumbnails/thumbnail_3mf.png",
+      "size_bytes": 94762,
+      "compress_size_bytes": 94762,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Auxiliaries/.thumbnails/thumbnail_middle.png",
+      "size_bytes": 764762,
+      "compress_size_bytes": 764762,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Auxiliaries/.thumbnails/thumbnail_small.png",
+      "size_bytes": 104100,
+      "compress_size_bytes": 104100,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Auxiliaries/Model Pictures/IMG_9566.webp",
+      "size_bytes": 645718,
+      "compress_size_bytes": 645823,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "Auxiliaries/Profile Pictures/IMG_9564.webp",
+      "size_bytes": 232264,
+      "compress_size_bytes": 232304,
+      "used_by_library_extractor": false
+    },
+    {
+      "path": "_rels/.rels",
+      "size_bytes": 736,
+      "compress_size_bytes": 276,
+      "used_by_library_extractor": false
+    }
+  ],
+  "normalized_contract": {
+    "artifact": {
+      "filename": "H2D Pro color test print.gcode.3mf",
+      "relative_path": "docs/batch_order_layer_findings/h2d-color-test-print/H2D Pro color test print.gcode.3mf",
+      "sha256": "8279e2607ae08f4cc9166a8c5537905e3d0d629f5922c1391aeb17fc3483e187",
+      "size_bytes": 2596650,
+      "plate_count": 3
+    },
+    "slicer": {
+      "application": "BambuStudio-02.05.00.66",
+      "client_type": "slicer",
+      "client_version": "02.05.00.66",
+      "print_settings_id": "0.20mm Standard @BBL H2DP",
+      "printer_settings_id": "PSI H2D Pro 0.4 nozzle",
+      "curr_bed_type": "Textured PEI Plate",
+      "printer_model": "Bambu Lab H2D Pro"
+    },
+    "nozzle": {
+      "diameters_mm": [
+        "0.4",
+        "0.4"
+      ],
+      "physical_extruder_map": [
+        "1",
+        "0"
+      ],
+      "nozzle_mapping_by_slot": {
+        "1": 1,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 1,
+        "6": 0,
+        "7": 1,
+        "8": 0,
+        "9": 0
+      }
+    },
+    "plates": [
+      {
+        "plate_index": 1,
+        "name": "4 color pixel test print",
+        "estimated_duration_sec": 6036,
+        "estimated_filament_grams": 22.99,
+        "object_count": 1,
+        "objects": [
+          {
+            "identify_id": 114,
+            "name": "4 color pixel test print",
+            "skipped": "false"
+          }
+        ],
+        "filament_map": [
+          {
+            "slot_id": 1,
+            "material_type": "PLA",
+            "color_hex": "#C12E1F",
+            "tray_info_idx": "GFA00",
+            "used_g": 2.59,
+            "used_m": 0.86,
+            "group_id": 0,
+            "nozzle_id": 1
+          },
+          {
+            "slot_id": 2,
+            "material_type": "PLA",
+            "color_hex": "#00AE42",
+            "tray_info_idx": "GFA00",
+            "used_g": 6.54,
+            "used_m": 2.16,
+            "group_id": 1,
+            "nozzle_id": 0
+          },
+          {
+            "slot_id": 3,
+            "material_type": "PLA",
+            "color_hex": "#FEC600",
+            "tray_info_idx": "GFA00",
+            "used_g": 6.61,
+            "used_m": 2.18,
+            "group_id": 1,
+            "nozzle_id": 0
+          },
+          {
+            "slot_id": 4,
+            "material_type": "PLA",
+            "color_hex": "#00B1B7",
+            "tray_info_idx": "GFA00",
+            "used_g": 7.25,
+            "used_m": 2.39,
+            "group_id": 1,
+            "nozzle_id": 0
+          }
+        ],
+        "layer_filament_lists": [
+          {
+            "filament_list": "0 1 2 3",
+            "layer_ranges": "0 23"
+          }
+        ],
+        "gcode_ref": {
+          "path": "Metadata/plate_1.gcode",
+          "md5_path": "Metadata/plate_1.gcode.md5",
+          "md5": "4DB284E5238AD5A81AAABE2D9108842B"
+        },
+        "fingerprint": {
+          "algo": "sha256",
+          "value": "e12090db02f391425cd4984aa3bf56ca3584ace36c812da0dba591eefc4c9cf2",
+          "inputs": {
+            "plate_index": 1,
+            "objects": [
+              {
+                "identify_id": 114,
+                "name": "4 color pixel test print"
+              }
+            ],
+            "filament_map": [
+              {
+                "slot_id": 1,
+                "material_type": "PLA",
+                "color_hex": "#C12E1F",
+                "tray_info_idx": "GFA00",
+                "group_id": 0,
+                "used_g": 2.59
+              },
+              {
+                "slot_id": 2,
+                "material_type": "PLA",
+                "color_hex": "#00AE42",
+                "tray_info_idx": "GFA00",
+                "group_id": 1,
+                "used_g": 6.54
+              },
+              {
+                "slot_id": 3,
+                "material_type": "PLA",
+                "color_hex": "#FEC600",
+                "tray_info_idx": "GFA00",
+                "group_id": 1,
+                "used_g": 6.61
+              },
+              {
+                "slot_id": 4,
+                "material_type": "PLA",
+                "color_hex": "#00B1B7",
+                "tray_info_idx": "GFA00",
+                "group_id": 1,
+                "used_g": 7.25
+              }
+            ],
+            "key_settings": {
+              "print_settings_id": "0.20mm Standard @BBL H2DP",
+              "printer_settings_id": "PSI H2D Pro 0.4 nozzle",
+              "printer_model": "Bambu Lab H2D Pro",
+              "layer_height": "0.2",
+              "nozzle_diameter": [
+                "0.4",
+                "0.4"
+              ],
+              "print_sequence": "by layer",
+              "curr_bed_type": "Textured PEI Plate",
+              "filament_map_mode": "Auto For Flush",
+              "plate_filament_maps": "1 2 2 2 1 1 1 1 1",
+              "gcode_md5": "4DB284E5238AD5A81AAABE2D9108842B"
+            }
+          }
+        }
+      },
+      {
+        "plate_index": 2,
+        "name": "Cube",
+        "estimated_duration_sec": 2588,
+        "estimated_filament_grams": 5.78,
+        "object_count": 2,
+        "objects": [
+          {
+            "identify_id": 233,
+            "name": "Cube",
+            "skipped": "false"
+          },
+          {
+            "identify_id": 269,
+            "name": "Cylinder",
+            "skipped": "false"
+          }
+        ],
+        "filament_map": [
+          {
+            "slot_id": 5,
+            "material_type": "ABS",
+            "color_hex": "#FFFF00",
+            "tray_info_idx": "GFB00",
+            "used_g": 3.25,
+            "used_m": 1.3,
+            "group_id": 0,
+            "nozzle_id": 1
+          },
+          {
+            "slot_id": 6,
+            "material_type": "ABS",
+            "color_hex": "#0C2340",
+            "tray_info_idx": "GFB00",
+            "used_g": 2.53,
+            "used_m": 1.01,
+            "group_id": 1,
+            "nozzle_id": 0
+          }
+        ],
+        "layer_filament_lists": [
+          {
+            "filament_list": "4 5",
+            "layer_ranges": "0 51"
+          }
+        ],
+        "gcode_ref": {
+          "path": "Metadata/plate_2.gcode",
+          "md5_path": "Metadata/plate_2.gcode.md5",
+          "md5": "5DFB3C828F9C8036E5BCD42B77BD0C65"
+        },
+        "fingerprint": {
+          "algo": "sha256",
+          "value": "a4a6a4ab79a78972f318c7a573c5d73d1d9dab50519b65815992f27a601c9eb9",
+          "inputs": {
+            "plate_index": 2,
+            "objects": [
+              {
+                "identify_id": 233,
+                "name": "Cube"
+              },
+              {
+                "identify_id": 269,
+                "name": "Cylinder"
+              }
+            ],
+            "filament_map": [
+              {
+                "slot_id": 5,
+                "material_type": "ABS",
+                "color_hex": "#FFFF00",
+                "tray_info_idx": "GFB00",
+                "group_id": 0,
+                "used_g": 3.25
+              },
+              {
+                "slot_id": 6,
+                "material_type": "ABS",
+                "color_hex": "#0C2340",
+                "tray_info_idx": "GFB00",
+                "group_id": 1,
+                "used_g": 2.53
+              }
+            ],
+            "key_settings": {
+              "print_settings_id": "0.20mm Standard @BBL H2DP",
+              "printer_settings_id": "PSI H2D Pro 0.4 nozzle",
+              "printer_model": "Bambu Lab H2D Pro",
+              "layer_height": "0.2",
+              "nozzle_diameter": [
+                "0.4",
+                "0.4"
+              ],
+              "print_sequence": "by layer",
+              "curr_bed_type": "Textured PEI Plate",
+              "filament_map_mode": "Auto For Flush",
+              "plate_filament_maps": "1 1 1 1 1 2 1 1 1",
+              "gcode_md5": "5DFB3C828F9C8036E5BCD42B77BD0C65"
+            }
+          }
+        }
+      },
+      {
+        "plate_index": 3,
+        "name": "Sphere",
+        "estimated_duration_sec": 18597,
+        "estimated_filament_grams": 77.43,
+        "object_count": 3,
+        "objects": [
+          {
+            "identify_id": 311,
+            "name": "Sphere",
+            "skipped": "false"
+          },
+          {
+            "identify_id": 347,
+            "name": "Cone",
+            "skipped": "false"
+          },
+          {
+            "identify_id": 400,
+            "name": "Cone",
+            "skipped": "false"
+          }
+        ],
+        "filament_map": [
+          {
+            "slot_id": 7,
+            "material_type": "ABS",
+            "color_hex": "#0000FF",
+            "tray_info_idx": "GFB00",
+            "used_g": 12.6,
+            "used_m": 5.04,
+            "group_id": 0,
+            "nozzle_id": 1
+          },
+          {
+            "slot_id": 8,
+            "material_type": "ABS",
+            "color_hex": "#00FFFF",
+            "tray_info_idx": "GFB00",
+            "used_g": 28.14,
+            "used_m": 11.25,
+            "group_id": 1,
+            "nozzle_id": 0
+          },
+          {
+            "slot_id": 9,
+            "material_type": "ABS",
+            "color_hex": "#C0C0C0",
+            "tray_info_idx": "GFB00",
+            "used_g": 36.68,
+            "used_m": 14.67,
+            "group_id": 1,
+            "nozzle_id": 0
+          }
+        ],
+        "layer_filament_lists": [
+          {
+            "filament_list": "6 7 8",
+            "layer_ranges": "0 122"
+          },
+          {
+            "filament_list": "6",
+            "layer_ranges": "123 174"
+          }
+        ],
+        "gcode_ref": {
+          "path": "Metadata/plate_3.gcode",
+          "md5_path": "Metadata/plate_3.gcode.md5",
+          "md5": "FF8030DF8DB9ABB5B33E426C218AD23E"
+        },
+        "fingerprint": {
+          "algo": "sha256",
+          "value": "15f2173836f619a195dbc8ca3fb81ef25032e7f3a5ced60c4e787a02d6111dd6",
+          "inputs": {
+            "plate_index": 3,
+            "objects": [
+              {
+                "identify_id": 311,
+                "name": "Sphere"
+              },
+              {
+                "identify_id": 347,
+                "name": "Cone"
+              },
+              {
+                "identify_id": 400,
+                "name": "Cone"
+              }
+            ],
+            "filament_map": [
+              {
+                "slot_id": 7,
+                "material_type": "ABS",
+                "color_hex": "#0000FF",
+                "tray_info_idx": "GFB00",
+                "group_id": 0,
+                "used_g": 12.6
+              },
+              {
+                "slot_id": 8,
+                "material_type": "ABS",
+                "color_hex": "#00FFFF",
+                "tray_info_idx": "GFB00",
+                "group_id": 1,
+                "used_g": 28.14
+              },
+              {
+                "slot_id": 9,
+                "material_type": "ABS",
+                "color_hex": "#C0C0C0",
+                "tray_info_idx": "GFB00",
+                "group_id": 1,
+                "used_g": 36.68
+              }
+            ],
+            "key_settings": {
+              "print_settings_id": "0.20mm Standard @BBL H2DP",
+              "printer_settings_id": "PSI H2D Pro 0.4 nozzle",
+              "printer_model": "Bambu Lab H2D Pro",
+              "layer_height": "0.2",
+              "nozzle_diameter": [
+                "0.4",
+                "0.4"
+              ],
+              "print_sequence": "by layer",
+              "curr_bed_type": "Textured PEI Plate",
+              "filament_map_mode": "Auto For Flush",
+              "plate_filament_maps": "1 1 1 1 1 1 1 2 2",
+              "gcode_md5": "FF8030DF8DB9ABB5B33E426C218AD23E"
+            }
+          }
+        }
+      }
+    ],
+    "filaments": [
+      {
+        "slot_id": 1,
+        "material_type": "PLA",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu PLA Basic @BBL H2DP",
+        "filament_id": "GFA00",
+        "color_hex": "#C12E1F",
+        "color_rgb": [
+          193,
+          46,
+          31
+        ],
+        "color_family": "red",
+        "tray_info_idx": "GFA00",
+        "nozzle_id": 1,
+        "ams_tray": null,
+        "plates": [
+          1
+        ],
+        "used_g_total": 2.59
+      },
+      {
+        "slot_id": 2,
+        "material_type": "PLA",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu PLA Basic @BBL H2DP",
+        "filament_id": "GFA00",
+        "color_hex": "#00AE42",
+        "color_rgb": [
+          0,
+          174,
+          66
+        ],
+        "color_family": "green",
+        "tray_info_idx": "GFA00",
+        "nozzle_id": 0,
+        "ams_tray": null,
+        "plates": [
+          1
+        ],
+        "used_g_total": 6.54
+      },
+      {
+        "slot_id": 3,
+        "material_type": "PLA",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu PLA Basic @BBL H2DP",
+        "filament_id": "GFA00",
+        "color_hex": "#FEC600",
+        "color_rgb": [
+          254,
+          198,
+          0
+        ],
+        "color_family": "yellow",
+        "tray_info_idx": "GFA00",
+        "nozzle_id": 0,
+        "ams_tray": null,
+        "plates": [
+          1
+        ],
+        "used_g_total": 6.61
+      },
+      {
+        "slot_id": 4,
+        "material_type": "PLA",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu PLA Basic @BBL H2DP",
+        "filament_id": "GFA00",
+        "color_hex": "#00B1B7",
+        "color_rgb": [
+          0,
+          177,
+          183
+        ],
+        "color_family": "cyan",
+        "tray_info_idx": "GFA00",
+        "nozzle_id": 0,
+        "ams_tray": null,
+        "plates": [
+          1
+        ],
+        "used_g_total": 7.25
+      },
+      {
+        "slot_id": 5,
+        "material_type": "ABS",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu ABS @BBL H2DP",
+        "filament_id": "GFB00",
+        "color_hex": "#FFFF00",
+        "color_rgb": [
+          255,
+          255,
+          0
+        ],
+        "color_family": "yellow",
+        "tray_info_idx": "GFB00",
+        "nozzle_id": 1,
+        "ams_tray": null,
+        "plates": [
+          2
+        ],
+        "used_g_total": 3.25
+      },
+      {
+        "slot_id": 6,
+        "material_type": "ABS",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu ABS @BBL H2DP",
+        "filament_id": "GFB00",
+        "color_hex": "#0C2340",
+        "color_rgb": [
+          12,
+          35,
+          64
+        ],
+        "color_family": "blue",
+        "tray_info_idx": "GFB00",
+        "nozzle_id": 0,
+        "ams_tray": null,
+        "plates": [
+          2
+        ],
+        "used_g_total": 2.53
+      },
+      {
+        "slot_id": 7,
+        "material_type": "ABS",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu ABS @BBL H2DP",
+        "filament_id": "GFB00",
+        "color_hex": "#0000FF",
+        "color_rgb": [
+          0,
+          0,
+          255
+        ],
+        "color_family": "blue",
+        "tray_info_idx": "GFB00",
+        "nozzle_id": 1,
+        "ams_tray": null,
+        "plates": [
+          3
+        ],
+        "used_g_total": 12.6
+      },
+      {
+        "slot_id": 8,
+        "material_type": "ABS",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu ABS @BBL H2DP",
+        "filament_id": "GFB00",
+        "color_hex": "#00FFFF",
+        "color_rgb": [
+          0,
+          255,
+          255
+        ],
+        "color_family": "cyan",
+        "tray_info_idx": "GFB00",
+        "nozzle_id": 0,
+        "ams_tray": null,
+        "plates": [
+          3
+        ],
+        "used_g_total": 28.14
+      },
+      {
+        "slot_id": 9,
+        "material_type": "ABS",
+        "brand": "Bambu Lab",
+        "preset_name": "Bambu ABS @BBL H2DP",
+        "filament_id": "GFB00",
+        "color_hex": "#C0C0C0",
+        "color_rgb": [
+          192,
+          192,
+          192
+        ],
+        "color_family": "gray",
+        "tray_info_idx": "GFB00",
+        "nozzle_id": 0,
+        "ams_tray": null,
+        "plates": [
+          3
+        ],
+        "used_g_total": 36.68
+      }
+    ]
+  },
+  "qa": {
+    "why_plate_2_no_filament_map": {
+      "answer": "It was a presentation/truncation issue. Plate 2 does have filament_map in the normalized extract; all three plates have it.",
+      "plate_filament_map_lengths": {
+        "1": 4,
+        "2": 2,
+        "3": 3
+      }
+    }
+  }
+}
