@@ -187,8 +187,8 @@ Constraints/indexes:
 | `required_nozzle_diameter_mm` | REAL | Yes | NULL | Optional nozzle diameter |
 | `required_tool_position` | TEXT | Yes | NULL | Optional tool/side identifier |
 | `required_nozzle_count` | INTEGER | Yes | NULL | Optional minimum nozzle count |
-| `color_match_mode` | TEXT | No | `exact` | CHECK: `exact/category/tolerance` |
-| `color_tolerance` | REAL | Yes | NULL | Optional fuzzy threshold |
+| `default_color_match_tolerance` | TEXT | No | `exact` | CHECK: `exact/family/close` |
+| `default_color_distance_threshold` | REAL | Yes | NULL | Optional fuzzy threshold for future color distance logic |
 | `estimate_strategy` | TEXT | No | `slicer_metadata` | CHECK: `slicer_metadata/historical_avg/manual_override` |
 | `estimate_unit_cost_override` | REAL | Yes | NULL | CHECK >= 0 |
 | `estimate_unit_duration_sec_override` | INTEGER | Yes | NULL | CHECK >= 0 |
@@ -217,9 +217,12 @@ This replaces slot-based mapping at the Batch level.
 | `batch_plate_config_id` | INTEGER | No |  | FK -> `print_batch_plate_configs.id` ON DELETE CASCADE |
 | `requirement_order` | INTEGER | No | `1` | CHECK >= 1 |
 | `material_type` | TEXT | Yes | NULL | PLA/PETG/etc |
-| `color_value` | TEXT | Yes | NULL | Raw color token (hex/name) |
-| `color_family` | TEXT | Yes | NULL | Normalized category (red/blue/black/...) |
-| `match_mode_override` | TEXT | Yes | NULL | CHECK: `exact/category/tolerance` |
+| `filament_id` | INTEGER | Yes | NULL | Optional FK -> `filaments.id` ON DELETE SET NULL |
+| `color_hex` | TEXT | Yes | NULL | Optional exact color token (`#RRGGBB`) |
+| `color_family` | TEXT | Yes | NULL | Optional normalized bucket (`red/blue/black/...`) |
+| `color_ref_id` | INTEGER | Yes | NULL | Optional FK -> `color_catalog.id` ON DELETE SET NULL |
+| `match_tolerance` | TEXT | No | `exact` | CHECK: `exact/family/close` |
+| `color_distance_threshold` | REAL | Yes | NULL | Optional future numeric threshold for fuzzy color distance |
 | `is_required` | INTEGER | No | `1` | bool (0/1) |
 | `metadata_json` | TEXT (JSON) | Yes | NULL | Future extensibility |
 | `created_at` | DATETIME | No | CURRENT_TIMESTAMP |  |
@@ -229,6 +232,7 @@ Constraints/indexes:
 - UNIQUE `(batch_plate_config_id, requirement_order)`
 - `idx_batch_requirements_config (batch_plate_config_id)`
 - `idx_batch_requirements_material_color (material_type, color_family)`
+- `idx_batch_requirements_color_ref (color_ref_id, match_tolerance)`
 
 ### 5) `print_batch_run_links` (manual/external corrections)
 
@@ -266,6 +270,7 @@ Constraints/indexes:
 | `batch_plan_revision` | INTEGER | Yes | NULL | Revision at queue generation |
 | `batch_dispatch_seq` | INTEGER | Yes | NULL | Dispatch ordering |
 | `matching_requirements_json` | TEXT (JSON) | Yes | NULL | Generic queue matcher input for batch and non-batch jobs |
+| `execution_mapping_json` | TEXT (JSON) | Yes | NULL | Dispatch-time resolved mapping (tool/nozzle/slot/tray) produced by queue matcher |
 | `matching_diagnostics_json` | TEXT (JSON) | Yes | NULL | Why matched / why pending |
 | `batch_reconcile_state` | TEXT | Yes | NULL | CHECK: `normal/cancelled_by_reconcile/manual_override` |
 
@@ -289,11 +294,12 @@ This supports farm-scale dashboards without repeated heavy joins.
 Added:
 - `visibility_scope`, `external_mapping_policy`, `unplanned_run_policy` on `print_batches`
 - `print_batch_run_links`
-- queue matching diagnostics hooks
+- queue matcher hooks (`matching_requirements_json`, `execution_mapping_json`, diagnostics)
 
 Modified:
 - `print_batch_config_material_maps` -> `print_batch_config_requirements` (no slot columns)
 - `print_batch_plate_configs` extended for nozzle/tool/failure/cost strategy controls
+- color matching fields changed to support future fuzzy matching (`color_family`, tolerance, optional `color_ref_id`)
 
 Removed from MID:
 - `print_batch_assignments`
@@ -390,17 +396,30 @@ If queue item already has a reserved printer:
 - release reservation on soft-cancel
 - keep run immutable if already printing
 
+### Priority ownership (plan vs dispatch)
+
+- `print_batch_plate_configs.priority` is planning priority (demand ordering during reconcile).
+- Queue remains dispatch authority via queue ordering (`position`) and scheduler rules.
+- At dispatch generation time, config priority seeds insertion order; later queue reordering does not mutate batch plan priority.
+
 ### File revision handling
 
 - Batch remains tied to original snapshot by default (`rebase_policy=locked`).
 - Manual "Rebase to latest file revision" workflow computes drift and requires confirmation.
 - Plate fingerprint mismatch creates warning and blocks silent rebases.
 
+Rebase UX flow:
+1. User clicks `Rebase File Revision`.
+2. System shows diff: added/removed/reordered/changed plates and estimated impact on configs.
+3. User chooses `keep old snapshot` or `migrate to new revision`.
+4. If migrating, system creates a new plan revision and marks unmatched configs for manual review.
+
 ### External / unplanned run handling
 
 External starts:
 - Default: suggestion-only matching with confidence score.
 - Auto-link only when policy allows and confidence is high.
+- All unmatched external runs go into an `Unmapped Runs` bucket for operator review.
 
 Unplanned runs (plate/config not in plan):
 - Default: manual review + suggested actions.
@@ -418,11 +437,26 @@ All actions recorded in `print_batch_run_links`.
 
 ---
 
-## F - Printer Compatibility & Farm Automation (High-End)
+## F - Queue Matching / Auto-assignment Engine (High-End)
 
 ### Design principle
 
 Printer matching is a generic queue capability, not batch-specific logic.
+Batch never assigns printers. Batch only contributes requirements.
+
+### Matcher interface (queue-level)
+
+Input:
+- queue item requirements (from batch config requirements or direct single-job metadata)
+- printer capability snapshot (model/type/nozzle/tool availability)
+- current loaded filament state (spools/slots/tools)
+- policy toggles (strictness, substitution, color tolerance behavior)
+- optional pool constraint (HIGH only)
+
+Output:
+- assignment proposal (`printer_id`, execution mapping)
+- explainability bundle (`matched_on`, `rejected_by`, `waiting_reason`)
+- reservation token (to prevent race conditions before start)
 
 ### Matching dimensions
 
@@ -472,6 +506,10 @@ Batch is treated as workflow mode with three focused surfaces:
 - `Batch Planner` (plate/config editing and quantity planning)
 - `Batch Execution` (dispatch, queue state, exception handling)
 
+Batch detail layout should visibly separate:
+- `Plan` panel (configs, quantities, requirements, estimates)
+- `Dispatch/Queue` panel (filtered queue view, assignment state, waiting reasons, matcher diagnostics)
+
 ### Visual flow (explicit)
 
 `Planning -> Dispatch -> Queue -> Printer -> Archive -> Batch Progress Update`
@@ -512,6 +550,11 @@ Shows:
 - pending reasons + matcher diagnostics
 - quick actions: dispatch now, cancel pending excess, retry failed
 
+Dispatch/Queue panel specifics:
+- default filtered queue table for current batch
+- columns: queue status, printer assignment state, waiting reason, matcher score/diagnostics summary
+- action drawer: manual printer override (if allowed), cancel pending, open archive link
+
 ### 4) Batch Dashboard Page
 
 Shows:
@@ -531,7 +574,7 @@ Each queue row shows:
 ### 6) Manual Mapping / Corrections UI
 
 Dedicated panel:
-- suggested external runs with confidence
+- `Unmapped Runs` bucket with confidence-ranked suggestions
 - attach/detach/remap actions
 - recompute preview before confirm
 
@@ -591,7 +634,7 @@ Scope:
 - optional per-object accounting
 
 Data model additions:
-- pool/reservation/audit tables
+- queue matcher pool/reservation/audit tables
 - `print_batch_config_stats`
 - optional artifact/object tables
 
