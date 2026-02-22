@@ -1,0 +1,212 @@
+{
+  "artifact": {
+    "path": "docs/batch_order_layer_findings/h2d-color-test-print/H2D Pro color test print.gcode.3mf",
+    "hash_sha256": "8279e2607ae08f4cc9166a8c5537905e3d0d629f5922c1391aeb17fc3483e187"
+  },
+  "pipeline_steps": [
+    {
+      "order": 1,
+      "function": "open_3mf_container",
+      "collect_from": ["*.gcode.3mf zip container"],
+      "extracts": ["archive entries", "entry sizes", "readability"]
+    },
+    {
+      "order": 2,
+      "function": "extract_global_context",
+      "collect_from": [
+        "3D/3dmodel.model",
+        "Metadata/slice_info.config (header)",
+        "Metadata/project_settings.config"
+      ],
+      "extracts": [
+        "slicer application/version",
+        "printer model/profile ids",
+        "bed/nozzle defaults",
+        "physical_extruder_map"
+      ]
+    },
+    {
+      "order": 3,
+      "function": "extract_plate_registry",
+      "collect_from": [
+        "Metadata/model_settings.config",
+        "Metadata/_rels/model_settings.config.rels"
+      ],
+      "extracts": [
+        "plater_id",
+        "gcode_file",
+        "thumbnail_file",
+        "pattern_bbox_file",
+        "filament_map_mode",
+        "filament_maps"
+      ]
+    },
+    {
+      "order": 4,
+      "function": "extract_plate_slice_data",
+      "collect_from": ["Metadata/slice_info.config"],
+      "extracts": [
+        "plate index",
+        "prediction",
+        "weight",
+        "objects (identify_id/name/skipped)",
+        "filament usage records",
+        "layer_filament_lists"
+      ]
+    },
+    {
+      "order": 5,
+      "function": "extract_plate_geometry_data",
+      "collect_from": ["Metadata/plate_{index}.json"],
+      "extracts": ["bbox_all", "bbox_objects", "first_layer_time", "first_extruder"]
+    },
+    {
+      "order": 6,
+      "function": "extract_plate_gcode_refs",
+      "collect_from": [
+        "Metadata/plate_{index}.gcode",
+        "Metadata/plate_{index}.gcode.md5"
+      ],
+      "extracts": [
+        "gcode path",
+        "gcode md5",
+        "header fallback values (optional)"
+      ]
+    },
+    {
+      "order": 7,
+      "function": "extract_nozzle_mapping",
+      "collect_from": [
+        "Metadata/slice_info.config filament group_id",
+        "Metadata/project_settings.config physical_extruder_map"
+      ],
+      "extracts": ["slot_id -> nozzle_id mapping"]
+    },
+    {
+      "order": 8,
+      "function": "normalize_filaments",
+      "collect_from": [
+        "per-plate filament usage",
+        "project_settings filament arrays"
+      ],
+      "extracts": [
+        "material_type",
+        "color_hex",
+        "color_family",
+        "brand",
+        "preset_name",
+        "tray_info_idx",
+        "nozzle_id",
+        "cross-plate totals"
+      ]
+    },
+    {
+      "order": 9,
+      "function": "build_plate_snapshot",
+      "collect_from": ["steps 3-8 outputs"],
+      "extracts": [
+        "plate_index",
+        "name",
+        "estimated_duration_sec",
+        "estimated_filament_grams",
+        "object_count",
+        "objects",
+        "filament_map",
+        "gcode_ref",
+        "layer_filament_lists"
+      ]
+    },
+    {
+      "order": 10,
+      "function": "build_plate_fingerprint",
+      "collect_from": ["plate snapshot"],
+      "extracts": [
+        "sha256 over canonical object list + filament map + key settings + plate gcode md5"
+      ]
+    },
+    {
+      "order": 11,
+      "function": "build_default_plate_config",
+      "collect_from": ["plate snapshot", "global context"],
+      "extracts": [
+        "config_code A",
+        "required_printer_model",
+        "required_nozzle_diameter_mm",
+        "required_nozzle_count",
+        "estimate_strategy=slicer_metadata"
+      ]
+    },
+    {
+      "order": 12,
+      "function": "build_config_requirements",
+      "collect_from": ["plate snapshot filament_map"],
+      "extracts": [
+        "material_type",
+        "color_hex",
+        "color_family",
+        "metadata_json(slot_id/tray_info_idx/nozzle_id/used)"
+      ]
+    },
+    {
+      "order": 13,
+      "function": "persist_batch_snapshots",
+      "collect_from": ["batch + plate/config/requirements outputs"],
+      "extracts": [
+        "source snapshot",
+        "plate snapshot/fingerprint",
+        "config rows",
+        "requirement rows"
+      ]
+    }
+  ],
+  "batch_model_mapping": {
+    "print_batch_plates": {
+      "plate_index": "slice_info plate metadata index",
+      "plate_name": "model_settings plater_name else first non-skipped object name",
+      "object_count": "count of non-skipped objects",
+      "estimated_duration_sec": "slice_info metadata prediction",
+      "estimated_filament_grams": "slice_info metadata weight",
+      "plate_fingerprint": "build_plate_fingerprint output",
+      "plate_metadata_snapshot": "build_plate_snapshot output JSON"
+    },
+    "print_batch_plate_configs": {
+      "default_config": "one per plate with config_code=A",
+      "required_printer_model": "normalized project_settings.printer_model",
+      "required_nozzle_diameter_mm": "nozzle context (artifact default 0.4)",
+      "required_nozzle_count": "len(nozzle_diameters)",
+      "estimate_strategy": "slicer_metadata",
+      "stable_config_identity_inputs": [
+        "plate_fingerprint",
+        "config constraint fields",
+        "requirements fingerprint"
+      ]
+    },
+    "print_batch_config_requirements": {
+      "rows": "one per sorted slot_id in plate filament_map",
+      "material_type": "filament.type",
+      "color_hex": "filament.color",
+      "color_family": "derived deterministic bucket",
+      "metadata_json": [
+        "slot_id",
+        "tray_info_idx",
+        "nozzle_id",
+        "used_g",
+        "used_m"
+      ]
+    }
+  },
+  "artifact_specific_summary": {
+    "plate_count": 3,
+    "plate_to_filament_slots": {
+      "1": [1, 2, 3, 4],
+      "2": [5, 6],
+      "3": [7, 8, 9]
+    },
+    "note": "All plates include filament_map; if one appears missing, that is output truncation."
+  },
+  "not_available_in_artifact": [
+    "live AMS tray assignment at print time",
+    "explicit object->material mapping table",
+    "explicit vendor color names"
+  ]
+}
