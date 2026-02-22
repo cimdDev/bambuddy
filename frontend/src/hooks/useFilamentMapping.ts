@@ -222,6 +222,11 @@ export interface FilamentRequirement {
   tray_info_idx?: string;
   /** Target nozzle for dual-nozzle printers (0=right, 1=left) */
   nozzle_id?: number;
+  /** Queue/order override metadata for UI display */
+  override_applied?: boolean;
+  base_type?: string;
+  base_color?: string;
+  override_label?: string;
 }
 
 /**

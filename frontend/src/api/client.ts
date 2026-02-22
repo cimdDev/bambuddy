@@ -1220,6 +1220,7 @@ export interface PrintQueueItem {
   auto_off_after: boolean;
   manual_start: boolean;  // Requires manual trigger to start (staged)
   ams_mapping: number[] | null;  // AMS slot mapping for multi-color prints
+  override_material_map?: Record<string, unknown> | null;  // Order/batch color/material overrides by slot/material index
   plate_id: number | null;  // Plate ID for multi-plate 3MF files
   // Print options
   bed_levelling: boolean;
@@ -1257,6 +1258,7 @@ export interface PrintQueueItemCreate {
   auto_off_after?: boolean;
   manual_start?: boolean;  // Requires manual trigger to start (staged)
   ams_mapping?: number[] | null;  // AMS slot mapping for multi-color prints
+  override_material_map?: Record<string, unknown> | null;
   plate_id?: number | null;  // Plate ID for multi-plate 3MF files
   // Print options
   bed_levelling?: boolean;
@@ -1277,6 +1279,7 @@ export interface PrintQueueItemUpdate {
   auto_off_after?: boolean;
   manual_start?: boolean;
   ams_mapping?: number[];
+  override_material_map?: Record<string, unknown> | null;
   plate_id?: number | null;  // Plate ID for multi-plate 3MF files
   // Print options
   bed_levelling?: boolean;
@@ -2153,6 +2156,167 @@ export interface SetupResponse {
 export interface AuthStatus {
   auth_enabled: boolean;
   requires_setup: boolean;
+}
+
+// OrderBatch / PrintBatch (planning layer MVP)
+export interface OrderBatchConfigSlot {
+  id: number;
+  slot_index: number;
+  material_type: string | null;
+  color_hex: string | null;
+  color_family: string | null;
+  brand_name?: string | null;
+  filament_name?: string | null;
+  nozzle_assignment?: string | null;
+  metadata_json?: Record<string, unknown> | null;
+}
+
+export interface OrderBatchConfigProgress {
+  queued_runs: number;
+  printing_runs: number;
+  completed_runs: number;
+  failed_runs: number;
+  cancelled_runs: number;
+  dispatched_non_cancelled: number;
+  remaining_to_dispatch: number;
+  remaining_to_complete: number;
+}
+
+export interface OrderBatchPlateConfig {
+  id: number;
+  batch_plate_id: number;
+  config_code: string;
+  name: string | null;
+  quantity_target: number;
+  priority: number;
+  status: string;
+  notes: string | null;
+  required_printer_type?: string | null;
+  required_printer_model?: string | null;
+  required_nozzle_diameter_mm?: number | null;
+  required_tool_position?: string | null;
+  required_nozzle_count?: number | null;
+  slots: OrderBatchConfigSlot[];
+  progress: OrderBatchConfigProgress;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderBatchPlate {
+  id: number;
+  plate_index: number;
+  plate_name: string | null;
+  plate_fingerprint: string | null;
+  object_count: number;
+  estimated_duration_sec: number | null;
+  estimated_filament_grams: number | null;
+  plate_metadata_snapshot: Record<string, unknown>;
+  configs: OrderBatchPlateConfig[];
+}
+
+export interface OrderBatchDetail {
+  id: number;
+  name: string;
+  source_library_file_id: number | null;
+  source_file_name: string;
+  source_file_hash: string | null;
+  source_metadata_snapshot: Record<string, unknown>;
+  status: string;
+  dispatch_mode: string;
+  priority: number;
+  plan_revision: number;
+  due_date: string | null;
+  notes: string | null;
+  project_id: number | null;
+  customer_label: string | null;
+  created_at: string;
+  updated_at: string;
+  plates: OrderBatchPlate[];
+  progress_summary: Record<string, number>;
+}
+
+export interface OrderBatchListItem {
+  id: number;
+  name: string;
+  source_library_file_id: number | null;
+  source_file_name: string;
+  status: string;
+  priority: number;
+  due_date: string | null;
+  project_id: number | null;
+  customer_label: string | null;
+  created_at: string;
+  updated_at: string;
+  plate_count: number;
+  config_count: number;
+  total_quantity_target: number;
+  total_remaining_to_dispatch: number;
+  total_completed_runs: number;
+}
+
+export interface OrderBatchCreate {
+  library_file_id: number;
+  name: string;
+  due_date?: string | null;
+  notes?: string | null;
+  project_id?: number | null;
+  customer_label?: string | null;
+  priority?: number;
+}
+
+export interface OrderBatchUpdate {
+  name?: string;
+  due_date?: string | null;
+  notes?: string | null;
+  project_id?: number | null;
+  customer_label?: string | null;
+  priority?: number;
+  status?: string;
+}
+
+export interface OrderBatchConfigCreate {
+  plate_index: number;
+  config_code?: string | null;
+  name?: string | null;
+  quantity_target: number;
+  priority?: number;
+  notes?: string | null;
+  required_printer_type?: string | null;
+  required_printer_model?: string | null;
+  required_nozzle_diameter_mm?: number | null;
+  required_tool_position?: string | null;
+  required_nozzle_count?: number | null;
+  seed_slots_from_plate?: boolean;
+}
+
+export interface OrderBatchConfigUpdate {
+  name?: string | null;
+  quantity_target?: number;
+  priority?: number;
+  notes?: string | null;
+  status?: 'active' | 'paused' | 'completed' | 'cancelled';
+  required_printer_type?: string | null;
+  required_printer_model?: string | null;
+  required_nozzle_diameter_mm?: number | null;
+  required_tool_position?: string | null;
+  required_nozzle_count?: number | null;
+}
+
+export interface OrderBatchConfigSlotInput {
+  slot_index: number;
+  material_type?: string | null;
+  color_hex?: string | null;
+  color_family?: string | null;
+  brand_name?: string | null;
+  filament_name?: string | null;
+  nozzle_assignment?: string | null;
+  metadata_json?: Record<string, unknown> | null;
+}
+
+export interface OrderBatchDispatchResponse {
+  created_queue_item_ids: number[];
+  created_count: number;
+  remaining_to_dispatch: number;
 }
 
 // API functions
@@ -3719,6 +3883,54 @@ export const api = {
     request<{ message: string }>(`/projects/${projectId}/add-queue`, {
       method: 'POST',
       body: JSON.stringify({ queue_item_ids: queueItemIds }),
+    }),
+
+  // Orders / Batch Planning (MVP)
+  getOrders: () => request<OrderBatchListItem[]>('/orders/'),
+  getOrder: (id: number) => request<OrderBatchDetail>(`/orders/${id}`),
+  createOrder: (data: OrderBatchCreate) =>
+    request<OrderBatchDetail>('/orders/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateOrder: (id: number, data: OrderBatchUpdate) =>
+    request<OrderBatchDetail>(`/orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteOrder: (id: number) =>
+    request<{ message: string }>(`/orders/${id}`, {
+      method: 'DELETE',
+    }),
+  createOrderConfig: (orderId: number, data: OrderBatchConfigCreate) =>
+    request<OrderBatchPlateConfig>(`/orders/${orderId}/configs`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateOrderConfig: (configId: number, data: OrderBatchConfigUpdate) =>
+    request<OrderBatchPlateConfig>(`/orders/configs/${configId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  replaceOrderConfigSlots: (configId: number, slots: OrderBatchConfigSlotInput[]) =>
+    request<OrderBatchPlateConfig>(`/orders/configs/${configId}/slots`, {
+      method: 'PUT',
+      body: JSON.stringify({ slots }),
+    }),
+  dispatchOrderConfig: (configId: number, limit?: number) =>
+    request<OrderBatchDispatchResponse>(`/orders/configs/${configId}/dispatch`, {
+      method: 'POST',
+      body: JSON.stringify({ limit: limit ?? null }),
+    }),
+  dispatchOrderRemaining: (orderId: number, limit?: number) =>
+    request<OrderBatchDispatchResponse>(`/orders/${orderId}/dispatch`, {
+      method: 'POST',
+      body: JSON.stringify({ limit: limit ?? null }),
+    }),
+  dispatchOrderPlate: (orderId: number, plateIndex: number, limit?: number) =>
+    request<OrderBatchDispatchResponse>(`/orders/${orderId}/plates/${plateIndex}/dispatch`, {
+      method: 'POST',
+      body: JSON.stringify({ limit: limit ?? null }),
     }),
 
   // Project Attachments

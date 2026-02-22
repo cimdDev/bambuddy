@@ -48,6 +48,7 @@ import {
   User,
   Pause,
   Weight,
+  Palette,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { type TimeFormat, formatETA, formatDuration, formatRelativeTime } from '../utils/date';
@@ -504,6 +505,14 @@ function SortableQueueItem({
 
           {/* Options badges */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2">
+            {!!item.override_material_map &&
+              typeof item.override_material_map === 'object' &&
+              Object.keys(item.override_material_map).length > 0 && (
+                <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-bambu-green/10 text-bambu-green rounded-full border border-bambu-green/20 flex items-center gap-1">
+                  <Palette className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  {t('queue.badges.hasOverrides', { count: Object.keys(item.override_material_map).length, defaultValue: 'Overrides: {{count}}' })}
+                </span>
+              )}
             {item.manual_start && (
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-full border border-purple-500/20 flex items-center gap-1">
                 <Hand className="w-2.5 h-2.5 sm:w-3 sm:h-3" />

@@ -230,6 +230,51 @@ export function PrintModal({
 
   // Combine filament requirements from either source
   const effectiveFilamentReqs = isLibraryFile ? libraryFilamentReqs : archiveFilamentReqs;
+  const effectiveFilamentReqsWithOverrides = useMemo(() => {
+    if (mode !== 'edit-queue-item' || !queueItem?.override_material_map || !effectiveFilamentReqs?.filaments) {
+      return effectiveFilamentReqs;
+    }
+    const overrideMap = queueItem.override_material_map;
+    if (!overrideMap || typeof overrideMap !== 'object') return effectiveFilamentReqs;
+
+    return {
+      ...effectiveFilamentReqs,
+      filaments: effectiveFilamentReqs.filaments.map((req) => {
+        const raw = (overrideMap as Record<string, unknown>)[String(req.slot_id)];
+        if (!raw || typeof raw !== 'object') return req;
+        const ov = raw as Record<string, unknown>;
+        const nextType =
+          typeof ov.material_type === 'string' && ov.material_type.trim() ? ov.material_type : req.type;
+        const nextColor =
+          typeof ov.color_hex === 'string' && ov.color_hex.trim() ? ov.color_hex : req.color;
+        const nextTrayInfo =
+          (typeof ov.slicer_filament_id === 'string' && ov.slicer_filament_id.trim() && ov.slicer_filament_id) ||
+          (typeof ov.filament_id === 'string' && ov.filament_id.trim() && ov.filament_id) ||
+          req.tray_info_idx;
+
+        const changed = nextType !== req.type || nextColor !== req.color || nextTrayInfo !== req.tray_info_idx;
+        if (!changed) return req;
+
+        const colorCatalogSnap =
+          ov.selected_color_catalog_snapshot && typeof ov.selected_color_catalog_snapshot === 'object'
+            ? (ov.selected_color_catalog_snapshot as Record<string, unknown>)
+            : null;
+
+        return {
+          ...req,
+          type: nextType,
+          color: nextColor,
+          tray_info_idx: nextTrayInfo,
+          override_applied: true,
+          base_type: req.type,
+          base_color: req.color,
+          override_label:
+            (typeof colorCatalogSnap?.color_name === 'string' && colorCatalogSnap.color_name) ||
+            (typeof ov.color_hex === 'string' ? ov.color_hex : undefined),
+        };
+      }),
+    };
+  }, [mode, queueItem?.override_material_map, effectiveFilamentReqs]);
 
   // Only fetch printer status when single printer selected (for filament mapping)
   const { data: printerStatus } = useQuery({
@@ -239,13 +284,13 @@ export function PrintModal({
   });
 
   // Get AMS mapping from hook (only when single printer selected)
-  const { amsMapping } = useFilamentMapping(effectiveFilamentReqs, printerStatus, manualMappings);
+  const { amsMapping } = useFilamentMapping(effectiveFilamentReqsWithOverrides, printerStatus, manualMappings);
 
   // Multi-printer filament mapping (for per-printer configuration)
   const multiPrinterMapping = useMultiPrinterFilamentMapping(
     selectedPrinters,
     printers,
-    effectiveFilamentReqs,
+    effectiveFilamentReqsWithOverrides,
     manualMappings,
     perPrinterConfigs,
     setPerPrinterConfigs
@@ -641,7 +686,7 @@ export function PrintModal({
               allowMultiple={true}
               showInactive={mode === 'edit-queue-item'}
               printerMappingResults={multiPrinterMapping.printerResults}
-              filamentReqs={effectiveFilamentReqs}
+              filamentReqs={effectiveFilamentReqsWithOverrides}
               onAutoConfigurePrinter={multiPrinterMapping.autoConfigurePrinter}
               onUpdatePrinterConfig={multiPrinterMapping.updatePrinterConfig}
               assignmentMode={mode === 'reprint' ? 'printer' : assignmentMode}
@@ -683,7 +728,7 @@ export function PrintModal({
             {showFilamentMapping && !archiveDataMissing && selectedPrinters.length === 1 && (
               <FilamentMapping
                 printerId={effectivePrinterId!}
-                filamentReqs={effectiveFilamentReqs}
+                filamentReqs={effectiveFilamentReqsWithOverrides}
                 manualMappings={manualMappings}
                 onManualMappingChange={setManualMappings}
                 defaultExpanded={settings?.per_printer_mapping_expanded ?? false}

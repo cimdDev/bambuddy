@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect, type DragEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -39,6 +39,7 @@ import {
   Image,
   User,
   Box,
+  Layers,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type {
@@ -884,6 +885,12 @@ function isSlicedFilename(filename: string): boolean {
   return lower.endsWith('.gcode') || lower.includes('.gcode.');
 }
 
+function isBatchOrder3mfSource(file: Pick<LibraryFileListItem, 'filename' | 'file_type'>): boolean {
+  const type = (file.file_type || '').toLowerCase();
+  const name = file.filename.toLowerCase();
+  return type === '3mf' || name.endsWith('.3mf');
+}
+
 // File Card
 interface FileCardProps {
   file: LibraryFileListItem;
@@ -893,6 +900,7 @@ interface FileCardProps {
   onDelete: (id: number) => void;
   onDownload: (id: number) => void;
   onAddToQueue?: (id: number) => void;
+  onCreateBatchOrder?: (file: LibraryFileListItem) => void;
   onPrint?: (file: LibraryFileListItem) => void;
   onPreview3d?: (file: LibraryFileListItem) => void;
   onRename?: (file: LibraryFileListItem) => void;
@@ -904,7 +912,7 @@ interface FileCardProps {
   t: TFunction;
 }
 
-function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, t }: FileCardProps) {
+function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onCreateBatchOrder, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
 
   return (
@@ -1009,6 +1017,19 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
                   {t('fileManager.schedulePrint')}
                 </button>
               )}
+              {onCreateBatchOrder && isBatchOrder3mfSource(file) && (
+                <button
+                  className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 ${
+                    hasPermission('queue:create') ? 'text-white hover:bg-bambu-dark' : 'text-bambu-gray cursor-not-allowed'
+                  }`}
+                  onClick={() => { if (hasPermission('queue:create')) { onCreateBatchOrder(file); setShowActions(false); } }}
+                  disabled={!hasPermission('queue:create')}
+                  title={!hasPermission('queue:create') ? t('fileManager.noPermissionCreateOrder') : undefined}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  {t('fileManager.createBatchOrder')}
+                </button>
+              )}
               {onPreview3d && (file.file_type === '3mf' || file.file_type === 'gcode' || file.file_type === 'stl') && (
                 <button
                   className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 ${
@@ -1089,6 +1110,7 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
 
 export function FileManagerPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { hasPermission, hasAnyPermission, canModify, authEnabled } = useAuth();
@@ -1450,6 +1472,25 @@ export function FileManagerPage() {
     onError: (error: Error) => showToast(error.message, 'error'),
   });
 
+  const createBatchOrderMutation = useMutation({
+    mutationFn: async (file: LibraryFileListItem) => {
+      const baseName = (file.print_name || file.filename)
+        .replace(/\.gcode\.3mf$/i, '')
+        .replace(/\.3mf$/i, '')
+        .trim();
+      return api.createOrder({
+        library_file_id: file.id,
+        name: baseName || `Order ${file.id}`,
+      });
+    },
+    onSuccess: (order) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      showToast(t('fileManager.toast.batchOrderCreated'), 'success');
+      navigate(`/orders/${order.id}`);
+    },
+    onError: (error: Error) => showToast(error.message, 'error'),
+  });
+
   // Helper to check if a file is sliced (printable)
   const isSlicedFile = useCallback((filename: string) => {
     const lower = filename.toLowerCase();
@@ -1490,6 +1531,14 @@ export function FileManagerPage() {
     api.downloadLibraryFile(id).catch((err) => {
       console.error('Library file download failed:', err);
     });
+  };
+
+  const handleCreateBatchOrder = (file: LibraryFileListItem) => {
+    if (!isBatchOrder3mfSource(file)) {
+      showToast(t('fileManager.only3mfForOrders'), 'error');
+      return;
+    }
+    createBatchOrderMutation.mutate(file);
   };
 
   const handleDeleteConfirm = () => {
@@ -1994,6 +2043,7 @@ export function FileManagerPage() {
                       const file = files?.find(f => f.id === id);
                       if (file) setScheduleFile(file);
                     }}
+                    onCreateBatchOrder={handleCreateBatchOrder}
                     onPrint={setPrintFile}
                     onPreview3d={setViewerFile}
                     onRename={(f) => setRenameItem({ type: 'file', id: f.id, name: f.filename })}
@@ -2130,6 +2180,28 @@ export function FileManagerPage() {
                             <Clock className="w-4 h-4" />
                           </button>
                         </>
+                      )}
+                      {isBatchOrder3mfSource(file) && (
+                        <button
+                          onClick={() => {
+                            if (hasPermission('queue:create')) {
+                              handleCreateBatchOrder(file);
+                            }
+                          }}
+                          className={`p-1.5 rounded transition-colors ${
+                            hasPermission('queue:create')
+                              ? 'hover:bg-bambu-dark text-bambu-gray hover:text-white'
+                              : 'text-bambu-gray/50 cursor-not-allowed'
+                          }`}
+                          title={hasPermission('queue:create') ? t('fileManager.createBatchOrder') : t('fileManager.noPermissionCreateOrder')}
+                          disabled={!hasPermission('queue:create') || createBatchOrderMutation.isPending}
+                        >
+                          {createBatchOrderMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Layers className="w-4 h-4" />
+                          )}
+                        </button>
                       )}
                       {(file.file_type === '3mf' || file.file_type === 'gcode' || file.file_type === 'stl') && (
                         <button

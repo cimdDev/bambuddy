@@ -159,6 +159,11 @@ export interface FilamentReqsData {
     used_grams: number;
     used_meters: number;
     nozzle_id?: number;
+    tray_info_idx?: string;
+    override_applied?: boolean;
+    base_type?: string;
+    base_color?: string;
+    override_label?: string;
   }>;
 }
 

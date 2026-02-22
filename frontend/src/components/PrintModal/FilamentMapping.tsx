@@ -35,6 +35,7 @@ export function FilamentMapping({
 
   const hasFilamentReqs = filamentReqs?.filaments && filamentReqs.filaments.length > 0;
   const isDualNozzle = filamentReqs?.filaments?.some((f) => f.nozzle_id != null) ?? false;
+  const hasOverrides = filamentComparison.some((f) => f.override_applied);
 
   // Don't render if no filament requirements
   if (!hasFilamentReqs) {
@@ -98,6 +99,9 @@ export function FilamentMapping({
         ) : (
           <span className="text-xs text-bambu-green">(Ready)</span>
         )}
+        {hasOverrides && (
+          <span className="text-xs text-blue-300">(Override)</span>
+        )}
         {isExpanded ? (
           <ChevronUp className="w-4 h-4 ml-auto" />
         ) : (
@@ -108,7 +112,14 @@ export function FilamentMapping({
       {isExpanded && (
         <div className="mt-2 bg-bambu-dark rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-bambu-gray">Click to change slot assignment</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-bambu-gray">Click to change slot assignment</span>
+              {hasOverrides && (
+                <span className="px-2 py-0.5 rounded-full border border-blue-400/20 bg-blue-500/10 text-[10px] text-blue-300">
+                  Queue override applied
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleRefresh}
@@ -178,6 +189,23 @@ export function FilamentMapping({
                 <span title="Filament type not loaded">
                   <AlertTriangle className="w-3 h-3 text-orange-400" />
                 </span>
+              )}
+              {item.override_applied && (
+                <div className="col-span-full ml-6 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded border border-blue-400/20 bg-blue-500/10 text-blue-300">
+                      Override
+                    </span>
+                    {(item.base_type || item.base_color) && (
+                      <span className="text-bambu-gray">
+                        Base {item.base_type || ''} {item.base_color || ''}
+                      </span>
+                    )}
+                    {item.override_label && (
+                      <span className="text-white">{item.override_label}</span>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           ))}
