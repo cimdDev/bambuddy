@@ -2240,6 +2240,7 @@ class BambuMQTTClient:
         filename: str,
         plate_id: int = 1,
         ams_mapping: list[int] | None = None,
+        override_material_map: dict | None = None,
         bed_levelling: bool = True,
         flow_cali: bool = False,
         vibration_cali: bool = True,
@@ -2264,6 +2265,15 @@ class BambuMQTTClient:
             use_ams: Use AMS for automatic filament changes
         """
         if self._client and self.state.connected:
+            if override_material_map:
+                # Queue batch/order overrides are consumed by queue matching/AMS selection logic.
+                # We log the effective override payload here so the execution path preserves intent
+                # without changing the existing project_file command shape.
+                logger.info(
+                    "[%s] Applying queue override_material_map for print start: %s",
+                    self.serial_number,
+                    json.dumps(override_material_map, separators=(",", ":"), sort_keys=True),
+                )
             # Bambu print command format - matches Bambu Studio's format
             # Build ams_mapping2 from ams_mapping (detailed format with ams_id/slot_id)
             ams_mapping2 = []

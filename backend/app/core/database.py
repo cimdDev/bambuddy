@@ -89,6 +89,7 @@ async def init_db():
         notification_template,
         orca_base_cache,
         pending_upload,
+        print_batch,
         print_log,
         print_queue,
         printer,
@@ -1286,6 +1287,76 @@ async def run_migrations(conn):
                 )
     except OperationalError:
         pass  # Table may not exist yet on first run
+
+    # Migration: Add batch/order linkage fields to print_queue (OrderBatch MVP)
+    try:
+        await conn.execute(
+            text("ALTER TABLE print_queue ADD COLUMN batch_id INTEGER REFERENCES print_batches(id) ON DELETE SET NULL")
+        )
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(
+            text(
+                "ALTER TABLE print_queue ADD COLUMN batch_plate_id INTEGER "
+                "REFERENCES print_batch_plates(id) ON DELETE SET NULL"
+            )
+        )
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(
+            text(
+                "ALTER TABLE print_queue ADD COLUMN batch_plate_config_id INTEGER "
+                "REFERENCES print_batch_plate_configs(id) ON DELETE SET NULL"
+            )
+        )
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN batch_plan_revision INTEGER"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN batch_dispatch_seq INTEGER"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN matching_requirements_json TEXT"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN execution_mapping_json TEXT"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN override_material_map TEXT"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN batch_reconcile_state VARCHAR(40)"))
+    except OperationalError:
+        pass  # Already applied
+
+    # Migration: Queue indexes for batch/order rollups and dispatch queries
+    try:
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_queue_batch_status_created "
+                "ON print_queue (batch_id, status, created_at)"
+            )
+        )
+    except OperationalError:
+        pass
+    try:
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_queue_batch_config_status_created "
+                "ON print_queue (batch_plate_config_id, status, created_at)"
+            )
+        )
+    except OperationalError:
+        pass
 
 
 async def seed_notification_templates():

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, PlainSerializer
 
@@ -30,6 +30,8 @@ class PrintQueueItemCreate(BaseModel):
     # AMS mapping: list of global tray IDs for each filament slot
     # Format: [5, -1, 2, -1] where position = slot_id-1, value = global tray ID (-1 = unused)
     ams_mapping: list[int] | None = None
+    # Optional batch/order color/material overrides keyed by source slot/material index
+    override_material_map: dict[str, Any] | None = None
     # Plate ID for multi-plate 3MF files (1-indexed, None = auto-detect/plate 1)
     plate_id: int | None = None
     # Print options
@@ -51,6 +53,7 @@ class PrintQueueItemUpdate(BaseModel):
     auto_off_after: bool | None = None
     manual_start: bool | None = None
     ams_mapping: list[int] | None = None
+    override_material_map: dict[str, Any] | None = None
     plate_id: int | None = None
     # Print options
     bed_levelling: bool | None = None
@@ -76,6 +79,7 @@ class PrintQueueItemResponse(BaseModel):
     auto_off_after: bool
     manual_start: bool
     ams_mapping: list[int] | None = None
+    override_material_map: dict[str, Any] | None = None
     plate_id: int | None = None  # Plate ID for multi-plate 3MF files
     # Print options
     bed_levelling: bool = True

@@ -33,6 +33,20 @@ class PrintQueueItem(Base):
         ForeignKey("library_files.id", ondelete="CASCADE"), nullable=True
     )
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("print_batches.id", ondelete="SET NULL"), nullable=True)
+    batch_plate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("print_batch_plates.id", ondelete="SET NULL"), nullable=True
+    )
+    batch_plate_config_id: Mapped[int | None] = mapped_column(
+        ForeignKey("print_batch_plate_configs.id", ondelete="SET NULL"), nullable=True
+    )
+    batch_plan_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    batch_dispatch_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    matching_requirements_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_mapping_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Batch/order-driven material/color overrides keyed by source material/slot index
+    override_material_map: Mapped[str | None] = mapped_column(Text, nullable=True)
+    batch_reconcile_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     # Scheduling
     position: Mapped[int] = mapped_column(Integer, default=0)  # Queue order

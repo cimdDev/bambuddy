@@ -13,6 +13,7 @@ from backend.app.models.notification import NotificationLog
 from backend.app.models.notification_template import NotificationTemplate
 from backend.app.models.orca_base_cache import OrcaBaseProfile
 from backend.app.models.pending_upload import PendingUpload
+from backend.app.models.print_batch import PrintBatch, PrintBatchPlate, PrintBatchPlateConfig, PrintBatchPlateConfigSlot
 from backend.app.models.printer import Printer
 from backend.app.models.project import Project
 from backend.app.models.settings import Settings
@@ -40,6 +41,10 @@ __all__ = [
     "APIKey",
     "AMSSensorHistory",
     "PendingUpload",
+    "PrintBatch",
+    "PrintBatchPlate",
+    "PrintBatchPlateConfig",
+    "PrintBatchPlateConfigSlot",
     "LibraryFolder",
     "LibraryFile",
     "User",

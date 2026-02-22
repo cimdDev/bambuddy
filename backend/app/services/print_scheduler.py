@@ -493,7 +493,54 @@ class PrintScheduler:
             logger.warning("Failed to parse filament requirements: %s", e)
             return None
 
+        filaments = self._apply_override_material_map_to_requirements(item, filaments)
         return filaments if filaments else None
+
+    def _apply_override_material_map_to_requirements(self, item: PrintQueueItem, filaments: list[dict]) -> list[dict]:
+        """Overlay queue item material/color overrides onto slicer filament requirements.
+
+        This keeps the existing queue matching pipeline intact while allowing order-config
+        color overrides to influence AMS slot matching.
+        """
+        if not filaments or not item.override_material_map:
+            return filaments
+
+        try:
+            raw_overrides = json.loads(item.override_material_map)
+        except json.JSONDecodeError:
+            logger.warning("Queue item %s: Invalid override_material_map JSON in requirement extraction", item.id)
+            return filaments
+
+        if not isinstance(raw_overrides, dict):
+            return filaments
+
+        applied = 0
+        for filament in filaments:
+            slot_id = filament.get("slot_id")
+            if slot_id is None:
+                continue
+            override = raw_overrides.get(str(slot_id)) or raw_overrides.get(slot_id)
+            if not isinstance(override, dict):
+                continue
+
+            material_type = override.get("material_type")
+            if isinstance(material_type, str) and material_type.strip():
+                filament["type"] = material_type.strip()
+
+            color_hex = override.get("color_hex")
+            if isinstance(color_hex, str) and color_hex.strip():
+                filament["color"] = self._normalize_color(color_hex)
+
+            # Prefer slicer preset / filament ID when present to preserve tray_info_idx matching
+            slicer_filament_id = override.get("slicer_filament_id") or override.get("filament_id")
+            if isinstance(slicer_filament_id, str) and slicer_filament_id.strip():
+                filament["tray_info_idx"] = slicer_filament_id.strip()
+
+            applied += 1
+
+        if applied:
+            logger.info("Queue item %s: Applied %s material/color override(s) to filament matching", item.id, applied)
+        return filaments
 
     def _build_loaded_filaments(self, status) -> list[dict]:
         """Build list of loaded filaments from printer status.
@@ -918,6 +965,40 @@ class PrintScheduler:
                     original_filename=filename,
                 )
                 if archive:
+                    # Preserve OrderBatch lineage on the execution archive (MVP snapshots).
+                    # This keeps history explainable without creating a parallel archive system.
+                    if item.batch_id or item.batch_plate_id or item.batch_plate_config_id:
+                        extra_data = dict(archive.extra_data or {})
+                        batch_order_meta = dict(extra_data.get("batch_order") or {})
+                        batch_order_meta.update(
+                            {
+                                "order_id": item.batch_id,
+                                "batch_plate_id": item.batch_plate_id,
+                                "config_id": item.batch_plate_config_id,
+                                "plate_id": item.plate_id,
+                                "batch_plan_revision": item.batch_plan_revision,
+                                "batch_dispatch_seq": item.batch_dispatch_seq,
+                            }
+                        )
+                        # Snapshot queue-time mapping/requirements for historical comparison.
+                        if item.execution_mapping_json:
+                            try:
+                                batch_order_meta["mapping_snapshot"] = json.loads(item.execution_mapping_json)
+                            except Exception:
+                                batch_order_meta["mapping_snapshot_raw"] = item.execution_mapping_json
+                        if item.override_material_map:
+                            try:
+                                batch_order_meta["override_material_map"] = json.loads(item.override_material_map)
+                            except Exception:
+                                batch_order_meta["override_material_map_raw"] = item.override_material_map
+                        if item.matching_requirements_json:
+                            try:
+                                batch_order_meta["requirements_snapshot"] = json.loads(item.matching_requirements_json)
+                            except Exception:
+                                batch_order_meta["requirements_snapshot_raw"] = item.matching_requirements_json
+                        extra_data["batch_order"] = batch_order_meta
+                        archive.extra_data = extra_data
+
                     item.archive_id = archive.id
                     await db.flush()
                     logger.info(
@@ -1044,6 +1125,13 @@ class PrintScheduler:
             except json.JSONDecodeError:
                 logger.warning("Queue item %s: Invalid AMS mapping JSON, ignoring", item.id)
 
+        override_material_map = None
+        if item.override_material_map:
+            try:
+                override_material_map = json.loads(item.override_material_map)
+            except json.JSONDecodeError:
+                logger.warning("Queue item %s: Invalid override_material_map JSON, ignoring", item.id)
+
         # Register as expected print so we don't create a duplicate archive
         # Only applicable for archive-based prints
         if archive:
@@ -1071,6 +1159,7 @@ class PrintScheduler:
             remote_filename,
             plate_id=item.plate_id or 1,
             ams_mapping=ams_mapping,
+            override_material_map=override_material_map,
             bed_levelling=item.bed_levelling,
             flow_cali=item.flow_cali,
             vibration_cali=item.vibration_cali,

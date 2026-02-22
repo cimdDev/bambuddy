@@ -169,6 +169,14 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         except json.JSONDecodeError:
             required_filament_types_parsed = None
 
+    # Parse override_material_map from JSON string
+    override_material_map_parsed = None
+    if item.override_material_map:
+        try:
+            override_material_map_parsed = json.loads(item.override_material_map)
+        except json.JSONDecodeError:
+            override_material_map_parsed = None
+
     # Create response with parsed ams_mapping
     item_dict = {
         "id": item.id,
@@ -185,6 +193,7 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "auto_off_after": item.auto_off_after,
         "manual_start": item.manual_start,
         "ams_mapping": ams_mapping_parsed,
+        "override_material_map": override_material_map_parsed,
         "plate_id": item.plate_id,
         "bed_levelling": item.bed_levelling,
         "flow_cali": item.flow_cali,
@@ -392,6 +401,7 @@ async def add_to_queue(
         auto_off_after=data.auto_off_after,
         manual_start=data.manual_start,
         ams_mapping=json.dumps(data.ams_mapping) if data.ams_mapping else None,
+        override_material_map=json.dumps(data.override_material_map) if data.override_material_map else None,
         plate_id=data.plate_id,
         bed_levelling=data.bed_levelling,
         flow_cali=data.flow_cali,
@@ -601,6 +611,10 @@ async def update_queue_item(
     # Serialize ams_mapping to JSON for TEXT column storage
     if "ams_mapping" in update_data:
         update_data["ams_mapping"] = json.dumps(update_data["ams_mapping"]) if update_data["ams_mapping"] else None
+    if "override_material_map" in update_data:
+        update_data["override_material_map"] = (
+            json.dumps(update_data["override_material_map"]) if update_data["override_material_map"] else None
+        )
 
     for field, value in update_data.items():
         setattr(item, field, value)

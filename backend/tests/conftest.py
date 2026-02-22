@@ -70,6 +70,7 @@ async def test_engine():
         maintenance,
         notification,
         notification_template,
+        print_batch,
         print_queue,
         printer,
         project,
