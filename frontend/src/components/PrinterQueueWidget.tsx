@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User, FileText } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { formatRelativeTime } from '../utils/date';
 import { filterCompatibleQueueItems } from '../utils/printer';
+import { SlicerUserBadge } from './SlicerUserBadge';
 
 interface PrinterQueueWidgetProps {
   printerId: number;
@@ -94,11 +95,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                     {displayBambuUser}
                   </span>
                 )}
-                {displaySlicerUser && (
-                  <span className="inline-flex items-center gap-1" title={`Sliced by: ${displaySlicerUser}`}>
-                    <FileText className="w-3 h-3" />
-                    {displaySlicerUser}
-                  </span>
+                {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
                 )}
               </div>
             )}
@@ -154,10 +151,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                   </span>
                 )}
                 {nextSlicerUser && (
-                  <span className="inline-flex items-center gap-1" title={`Sliced by: ${nextSlicerUser}`}>
-                    <FileText className="w-3 h-3" />
-                    {nextSlicerUser}
-                  </span>
+                  <SlicerUserBadge user={nextSlicerUser} />
                 )}
               </div>
             )}

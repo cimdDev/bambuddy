@@ -46,7 +46,6 @@ import {
   CheckSquare,
   Square,
   User,
-  FileText,
   Pause,
   Weight,
   ChevronDown,
@@ -63,6 +62,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { PrintModal } from '../components/PrintModal';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
@@ -524,10 +524,7 @@ function SortableQueueItem({
               </span>
             )}
             {slicerUser && (
-              <span className="hidden sm:flex items-center gap-1.5" title={`Sliced by: ${slicerUser}`}>
-                <FileText className="w-3.5 h-3.5" />
-                {slicerUser}
-              </span>
+              <SlicerUserBadge user={slicerUser} className="hidden sm:inline-flex" />
             )}
             {isPending && !item.manual_start && (
               <span className="flex items-center gap-1.5">

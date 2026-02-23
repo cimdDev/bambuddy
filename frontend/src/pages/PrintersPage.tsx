@@ -44,7 +44,6 @@ import {
   CheckSquare,
   XCircle,
   User,
-  FileText,
   Home,
   Printer as PrinterIcon,
   Info,
@@ -87,6 +86,7 @@ import { getPrinterImage, getWifiStrength, filterCompatibleQueueItems } from '..
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 
 // Color names resolve via getColorName() which reads the backend color_catalog
 // (loaded once by ColorCatalogProvider). No hardcoded tables here — see #857.
@@ -2761,13 +2761,7 @@ function PrinterCard({
                                   </span>
                                 )}
                                 {currentSlicerUser && (
-                                  <span
-                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light"
-                                    title={`Sliced by: ${currentSlicerUser}`}
-                                  >
-                                    <FileText className="w-3 h-3" />
-                                    {currentSlicerUser}
-                                  </span>
+                                  <SlicerUserBadge user={currentSlicerUser} />
                                 )}
                               </div>
                             )}
@@ -2806,10 +2800,7 @@ function PrinterCard({
                               </span>
                             )}
                             {currentSlicerUser && (
-                              <span className="flex items-center gap-1" title={`Sliced by: ${currentSlicerUser}`}>
-                                <FileText className="w-3 h-3" />
-                                {currentSlicerUser}
-                              </span>
+                              <SlicerUserBadge user={currentSlicerUser} />
                             )}
                           </div>
                         </>

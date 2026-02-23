@@ -58,6 +58,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { PrintModal } from '../components/PrintModal';
 import { ModelViewerModal } from '../components/ModelViewerModal';
 import { FileUploadModal } from '../components/FileUploadModal';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { useToast } from '../contexts/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../contexts/AuthContext';
@@ -772,10 +773,7 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
               </span>
             )}
             {slicerUser && (
-              <span className="inline-flex items-center gap-1" title={`Sliced by: ${slicerUser}`}>
-                <FileText className="w-3 h-3" />
-                {slicerUser}
-              </span>
+              <SlicerUserBadge user={slicerUser} />
             )}
           </div>
         )}
@@ -2006,10 +2004,7 @@ export function FileManagerPage() {
                                 </span>
                               )}
                               {slicerUser && (
-                                <span className="inline-flex items-center gap-1 truncate" title={`Sliced by: ${slicerUser}`}>
-                                  <FileText className="w-3 h-3" />
-                                  <span className="truncate">{slicerUser}</span>
-                                </span>
+                                <SlicerUserBadge user={slicerUser} truncate />
                               )}
                             </div>
                           );

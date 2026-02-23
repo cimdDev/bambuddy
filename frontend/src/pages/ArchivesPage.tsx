@@ -77,6 +77,7 @@ import { ProjectPageModal } from '../components/ProjectPageModal';
 import { TimelapseViewer } from '../components/TimelapseViewer';
 import { CompareArchivesModal } from '../components/CompareArchivesModal';
 import { PendingUploadsPanel } from '../components/PendingUploadsPanel';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { TagManagementModal } from '../components/TagManagementModal';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -1050,13 +1051,7 @@ function ArchiveCard({
           <div className="flex items-center gap-2">
             {/* Slicer user (Custom Feature) */}
             {(archive.slicer_user || archive.slicer_user_email) && (
-              <span
-                className="flex items-center gap-1"
-                title={`Sliced by: ${archive.slicer_user || archive.slicer_user_email}`}
-              >
-                <FileText className="w-3 h-3" />
-                {archive.slicer_user || archive.slicer_user_email}
-              </span>
+              <SlicerUserBadge user={archive.slicer_user || archive.slicer_user_email || ''} />
             )}
             {authEnabled && archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
@@ -1990,13 +1985,10 @@ function ArchiveListRow({
         <div className="col-span-2 text-sm text-bambu-gray">
           <div>{formatDateOnly(archive.created_at)}</div>
             {(archive.slicer_user || archive.slicer_user_email) && (
-              <div
-                className="flex items-center gap-1 text-xs opacity-75"
-                title={`Sliced by: ${archive.slicer_user || archive.slicer_user_email}`}
-              >
-                <FileText className="w-3 h-3" />
-                {archive.slicer_user || archive.slicer_user_email}
-              </div>
+              <SlicerUserBadge
+                user={archive.slicer_user || archive.slicer_user_email || ''}
+                className="opacity-100"
+              />
             )}
           {authEnabled && archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
