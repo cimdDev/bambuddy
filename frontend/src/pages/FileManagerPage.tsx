@@ -1046,8 +1046,14 @@ export function FileManagerPage() {
       const query = searchQuery.toLowerCase();
       result = result.filter(
         (f) =>
-          f.filename.toLowerCase().includes(query) ||
-          (f.print_name && f.print_name.toLowerCase().includes(query))
+          [
+            f.filename,
+            f.print_name,
+            f.slicer_user,
+            f.slicer_user_email,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .some((value) => value.toLowerCase().includes(query))
       );
     }
 

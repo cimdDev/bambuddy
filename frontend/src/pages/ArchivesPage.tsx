@@ -2690,7 +2690,15 @@ export function ArchivesPage() {
       }
 
       // Search filter
-      const matchesSearch = (a.print_name || a.filename).toLowerCase().includes(search.toLowerCase());
+      const searchLower = search.toLowerCase();
+      const matchesSearch = [
+        a.print_name,
+        a.filename,
+        a.slicer_user,
+        a.slicer_user_email,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(searchLower));
 
       // Material filter
       const matchesMaterial = !filterMaterial ||
