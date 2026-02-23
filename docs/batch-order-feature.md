@@ -1,3 +1,4 @@
+
 # Batch Order From 3MF + Plate Configuration Matrix (Technical Documentation)
 
 ## 1. Feature Overview
@@ -17,14 +18,14 @@ It allows users to:
 
 ### Purpose of creating orders from 3MF files
 
-A Bambu-style `.gcode.3mf` file already contains:
+A Library `.gcode.3mf` file already contains:
 
 - plate definitions
 - per-plate filament/material usage
 - estimated time/weight
 - color/material metadata
 
-Creating an Order from the 3MF uses that metadata as the **source of truth** for plate planning, instead of manually recreating plate/material requirements.
+Creating an Order from the 3MF uses that metadata as the **source of truth** for plate planning.
 
 ### Plate Configurations
 
@@ -36,12 +37,11 @@ Each configuration is tied to one source plate and contains:
 
 - `quantity_target`
 - optional name/label
-- optional printer model requirement
 - per-slot material/color values (seeded from the original 3MF plate mapping)
 
 ### Color Overrides
 
-Overrides are primarily **color changes** (material type usually remains unchanged).
+Overrides are primarily **color changes** (material type remains unchanged).
 
 Example:
 
@@ -63,16 +63,16 @@ The queue architecture is reused as-is.
 
 ## 2. Workflow Description
 
-### 1. Create a Batch Order from a 3MF file
+### 1. Create a Batch Order from a .gcode.3mf file
 
 User flow:
 
-- From File Manager, user selects **Create Batch Order** on a 3MF file.
+- From File Manager, user selects **Create Batch Order** on a .gcode.3mf file.
 - System calls `POST /orders`.
 
 Internal behavior:
 
-- Backend validates the source is a `.3mf` library file.
+- Backend validates the source is a `.gcode.3mf` library file.
 - Source metadata is loaded from `LibraryFile.file_metadata`.
 - If normalized `plates[]` is missing, backend extracts plate snapshots directly from the 3MF archive.
 - A `PrintBatch` row is created and per-plate `PrintBatchPlate` rows are snapshotted.
@@ -85,6 +85,7 @@ User can edit:
 - customer label
 - due date
 - notes
+- ...
 
 Internal behavior:
 
@@ -140,7 +141,7 @@ Dispatch entry points:
 
 Internal behavior:
 
-- Batch service inserts queue items only
+- Batch service inserts queue items only to "Any _of type x_ printer"
 - Existing scheduler/queue picks them up normally
 - On execution archive creation, batch lineage and overrides are snapshotted into `archive.extra_data["batch_order"]`
 
@@ -148,7 +149,7 @@ Internal behavior:
 
 ## 3. Data Model and Architecture Changes
 
-### New planning tables (existing MVP layer, reused)
+### New planning tables
 
 - `print_batches` (order header)
 - `print_batch_plates` (source plate snapshot)
@@ -261,8 +262,8 @@ It only passes override intent forward via queue item metadata.
 
 Two entry paths exist:
 
-- Orders page (manual create by Library File ID, existing MVP flow)
-- File Manager action: **Create Batch Order** for 3MF files (new preferred flow)
+- File Manager action: **Create Batch Order** for 3MF files (preferred flow)
+- Orders page (manual create by Library File ID flow)
 
 ### Order detail layout
 
@@ -301,8 +302,10 @@ Per config column:
 
 - config name
 - quantity
-- optional printer model
-- per-row color override inputs
+- per-row color override inputs:
+  - based on Color Catalog
+  - filtered by material
+  - optionally filtered by "available in inventory"
 - dispatch action
 - save action
 - remove (implemented as cancel/hide)
@@ -344,48 +347,7 @@ Order Detail
 
 ---
 
-## 6. What Changed From Previous Version
-
-### Previously (MVP behavior)
-
-- Orders existed as a planning layer with per-plate configs
-- UI was config-card based (stacked editors), not matrix-based
-- Queue linkage existed (`batch_id`, `batch_plate_id`, `batch_plate_config_id`)
-- Dispatch existed at config and order levels
-- Config edits updated pending queue items for matching/execution snapshots
-
-### What was missing
-
-- Queue item override field for explicit material/color override payloads
-- Plate-level dispatch endpoint
-- Matrix UI for side-by-side configuration comparison
-- File Manager “create order from 3MF” shortcut flow
-- Clear visual separation between original mapping and overrides
-- Plate preview + plate-centric progress workflow
-
-### What was improved
-
-- Color override workflow is now explicit and plate-centric
-- User can compare multiple config variants side-by-side
-- Dispatch can be controlled at order/plate/config level
-- Queue items now carry override deltas (`override_material_map`)
-
-### What was refactored
-
-- `OrderDetailPage` redesigned from config-card editor to plate matrix layout
-- Batch service now computes override deltas and syncs them to pending queue items
-- File Manager UI now includes a direct order creation entry point
-
-### What was added
-
-- `print_queue.override_material_map`
-- `POST /orders/{order_id}/plates/{plate_index}/dispatch`
-- File Manager 3MF action: Create Batch Order
-- Matrix-style plate configuration UI and plate dispatch controls
-
----
-
-## 7. Queue Integration Verification
+## 6. Queue Integration Verification
 
 ### How QueueItems now receive overrides
 
@@ -423,16 +385,13 @@ Extended only:
 
 ---
 
-## 8. Limitations and Future Extensions
+## 7. Limitations and Future Extensions
 
 ### Current limitations
 
-- Primary override expectation is **color**; material-type changes are not the main workflow
-- No inventory/filament picker in the matrix (no `filament_id` selection UI yet)
+- Primary override expectation is **color**; material-type changes are not supported
 - No automatic compensation/planning logic
-- No automatic cross-printer optimization
 - Config removal is implemented as cancel/hide for history safety (not hard delete)
-- Matrix rows depend on plate `filament_map`; if source metadata is incomplete, fallback is limited
 
 ### Future extensions
 
@@ -445,7 +404,7 @@ Extended only:
 
 ---
 
-## 9. Developer Notes
+## 8. Developer Notes
 
 ### Key design decisions
 
@@ -472,14 +431,3 @@ Extended only:
 - Add batch API endpoint for atomic config+slots update (single transaction over one request)
 - Introduce normalized requirement rows for future matching UI and reporting
 - Add stronger typing for `override_material_map` in frontend API types
-
----
-
-## 10. Format / Supporting Documents
-
-This documentation is stored in the repository as Markdown files:
-
-- `docs/batch-order-feature.md` (this file)
-- `docs/batch-order-feature-feature-request-comment.md`
-- `docs/batch-order-feature-pr-description.md`
-
