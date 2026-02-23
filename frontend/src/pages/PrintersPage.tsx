@@ -41,7 +41,6 @@ import {
   CheckCircle,
   XCircle,
   User,
-  FileText,
   Home,
 } from 'lucide-react';
 
@@ -65,6 +64,7 @@ import { ConfigureAmsSlotModal } from '../components/ConfigureAmsSlotModal';
 import { useToast } from '../contexts/ToastContext';
 import { ChamberLight } from '../components/icons/ChamberLight';
 import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModal';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { getGlobalTrayId } from '../utils/amsHelpers';
 
 // Complete Bambu Lab filament color mapping by tray_id_name
@@ -2458,13 +2458,7 @@ function PrinterCard({
                                   </span>
                                 )}
                                 {currentSlicerUser && (
-                                  <span
-                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light"
-                                    title={`Sliced by: ${currentSlicerUser}`}
-                                  >
-                                    <FileText className="w-3 h-3" />
-                                    {currentSlicerUser}
-                                  </span>
+                                  <SlicerUserBadge user={currentSlicerUser} />
                                 )}
                               </div>
                             )}
@@ -2503,10 +2497,7 @@ function PrinterCard({
                               </span>
                             )}
                             {currentSlicerUser && (
-                              <span className="flex items-center gap-1" title={`Sliced by: ${currentSlicerUser}`}>
-                                <FileText className="w-3 h-3" />
-                                {currentSlicerUser}
-                              </span>
+                              <SlicerUserBadge user={currentSlicerUser} />
                             )}
                           </div>
                         </>
