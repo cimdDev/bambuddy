@@ -64,6 +64,7 @@ import { ConfigureAmsSlotModal } from '../components/ConfigureAmsSlotModal';
 import { useToast } from '../contexts/ToastContext';
 import { ChamberLight } from '../components/icons/ChamberLight';
 import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModal';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { getGlobalTrayId } from '../utils/amsHelpers';
 
 // Complete Bambu Lab filament color mapping by tray_id_name
@@ -1437,7 +1438,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, authEnabled } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -1649,8 +1650,28 @@ function PrinterCard({
     enabled: status?.state === 'RUNNING',
   });
 
-  // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
+  // Combine both sources: queue item user takes precedence, then reprint user.
+  // Bambuddy user badges are auth-gated.
+  const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
+
+  const archiveId = (() => {
+    const raw = printingQueueItems?.[0]?.archive_id;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  })();
+
+  const printingArchiveQuery = useQuery({
+    queryKey: ['printingArchive', printer.id, archiveId],
+    queryFn: () => api.getArchive(archiveId!), // safe because enabled checks it
+    enabled: status?.state === 'RUNNING' && archiveId !== undefined,
+  });
+
+  const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? printingArchiveQuery.data?.slicer_user_email ?? null;
+
+  useEffect(() => {
+    console.log('RUNNING?', status?.state, 'archiveId', archiveId, 'raw', printingQueueItems?.[0]?.archive_id);
+    console.log('enabled', status?.state === 'RUNNING' && archiveId !== undefined);
+  }, [status?.state, archiveId, printingQueueItems]);
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -2404,9 +2425,28 @@ function PrinterCard({
                       {status.current_print && status.state === 'RUNNING' ? (
                         <>
                           <p className="text-sm text-bambu-gray mb-1">{status.stg_cur_name || 'Printing'}</p>
-                          <p className="text-white text-sm mb-2 truncate">
-                            {status.subtask_name || status.current_print}
-                          </p>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-white text-sm truncate min-w-0 flex-1">
+                              {status.subtask_name || status.current_print}
+                            </p>
+
+                            {(currentPrintUser || currentSlicerUser) && (
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {currentPrintUser && (
+                                  <span
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light"
+                                    title={`Started by ${currentPrintUser}`}
+                                  >
+                                    <User className="w-3 h-3" />
+                                    {currentPrintUser}
+                                  </span>
+                                )}
+                                {currentSlicerUser && (
+                                  <SlicerUserBadge user={currentSlicerUser} />
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
                               <div
@@ -2439,6 +2479,9 @@ function PrinterCard({
                                 <User className="w-3 h-3" />
                                 {currentPrintUser}
                               </span>
+                            )}
+                            {currentSlicerUser && (
+                              <SlicerUserBadge user={currentSlicerUser} />
                             )}
                           </div>
                         </>

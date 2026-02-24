@@ -126,6 +126,9 @@ class FileResponse(BaseModel):
     # User tracking (Issue #206)
     created_by_id: int | None = None
     created_by_username: str | None = None
+    # 3MF slicer user tracking (from file metadata)
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
     created_at: datetime
     updated_at: datetime
@@ -154,6 +157,9 @@ class FileListResponse(BaseModel):
     # User tracking (Issue #206)
     created_by_id: int | None = None
     created_by_username: str | None = None
+    # 3MF slicer user tracking (from file metadata)
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
     created_at: datetime
 
     # Key metadata fields for display

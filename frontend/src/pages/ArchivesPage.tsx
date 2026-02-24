@@ -73,6 +73,7 @@ import { ProjectPageModal } from '../components/ProjectPageModal';
 import { TimelapseViewer } from '../components/TimelapseViewer';
 import { CompareArchivesModal } from '../components/CompareArchivesModal';
 import { PendingUploadsPanel } from '../components/PendingUploadsPanel';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { TagManagementModal } from '../components/TagManagementModal';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -164,7 +165,7 @@ function ArchiveCard({
 
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission, canModify } = useAuth();
+  const { hasPermission, canModify, authEnabled } = useAuth();
   const isMobile = useIsMobile();
   const [showViewer, setShowViewer] = useState(false);
   const [showReprint, setShowReprint] = useState(false);
@@ -997,7 +998,11 @@ function ArchiveCard({
         <div className="flex items-center justify-between text-xs text-bambu-gray border-t border-bambu-dark-tertiary pt-3">
           <span>{formatDateTime(archive.created_at, timeFormat)}</span>
           <div className="flex items-center gap-2">
-            {archive.created_by_username && (
+            {/* Slicer user (Custom Feature) */}
+            {(archive.slicer_user || archive.slicer_user_email) && (
+              <SlicerUserBadge user={archive.slicer_user || archive.slicer_user_email || ''} />
+            )}
+            {authEnabled && archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
                 <User className="w-3 h-3" />
                 {archive.created_by_username}
@@ -1392,7 +1397,7 @@ function ArchiveListRow({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission, canModify } = useAuth();
+  const { hasPermission, canModify, authEnabled } = useAuth();
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReprint, setShowReprint] = useState(false);
@@ -1900,7 +1905,13 @@ function ArchiveListRow({
         </div>
         <div className="col-span-2 text-sm text-bambu-gray">
           <div>{formatDateOnly(archive.created_at)}</div>
-          {archive.created_by_username && (
+            {(archive.slicer_user || archive.slicer_user_email) && (
+              <SlicerUserBadge
+                user={archive.slicer_user || archive.slicer_user_email || ''}
+                className="opacity-100"
+              />
+            )}
+          {authEnabled && archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
               <User className="w-3 h-3" />
               {archive.created_by_username}
@@ -2564,7 +2575,15 @@ export function ArchivesPage() {
       }
 
       // Search filter
-      const matchesSearch = (a.print_name || a.filename).toLowerCase().includes(search.toLowerCase());
+      const searchLower = search.toLowerCase();
+      const matchesSearch = [
+        a.print_name,
+        a.filename,
+        a.slicer_user,
+        a.slicer_user_email,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(searchLower));
 
       // Material filter
       const matchesMaterial = !filterMaterial ||

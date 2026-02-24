@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, Loader2, CircleCheck } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { formatRelativeTime } from '../utils/date';
+import { SlicerUserBadge } from './SlicerUserBadge';
 
 interface PrinterQueueWidgetProps {
   printerId: number;
@@ -18,7 +19,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, authEnabled } = useAuth();
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
@@ -39,6 +40,8 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
 
   const nextItem = queue?.[0];
   const totalPending = queue?.length || 0;
+  const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
+  const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
 
   if (totalPending === 0) {
     return null;
@@ -56,6 +59,19 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {(nextBambuUser || nextSlicerUser) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                {nextBambuUser && (
+                  <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
+                    <User className="w-3 h-3" />
+                    {nextBambuUser}
+                  </span>
+                )}
+                {nextSlicerUser && (
+                  <SlicerUserBadge user={nextSlicerUser} />
+                )}
+              </div>
+            )}
           </div>
           {totalPending > 1 && (
             <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded flex-shrink-0">
@@ -99,6 +115,19 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {(nextBambuUser || nextSlicerUser) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                {nextBambuUser && (
+                  <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
+                    <User className="w-3 h-3" />
+                    {nextBambuUser}
+                  </span>
+                )}
+                {nextSlicerUser && (
+                  <SlicerUserBadge user={nextSlicerUser} />
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
