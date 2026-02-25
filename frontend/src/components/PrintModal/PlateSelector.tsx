@@ -1,6 +1,7 @@
 import { Layers, Check, AlertTriangle } from 'lucide-react';
 import type { PlateSelectorProps } from './types';
 import { formatDuration } from '../../utils/date';
+import { estimatePrintCost, formatCurrencyAmount } from '../../utils/printCost';
 
 /**
  * Plate selection grid for multi-plate 3MF files.
@@ -11,6 +12,8 @@ export function PlateSelector({
   isMultiPlate,
   selectedPlate,
   onSelect,
+  currencySymbol,
+  defaultCostPerKg,
 }: PlateSelectorProps) {
   // Only show for multi-plate files with multiple plates
   if (!isMultiPlate || plates.length <= 1) {
@@ -62,6 +65,11 @@ export function PlateSelector({
                     (plate.objects.length > 3 ? '...' : '')
                   : `${plate.filaments.length} filament${plate.filaments.length !== 1 ? 's' : ''}`}
                 {plate.print_time_seconds != null ? ` • ${formatDuration(plate.print_time_seconds)}` : ''}
+                {(() => {
+                  const plateCost = estimatePrintCost(plate.filament_used_grams, defaultCostPerKg);
+                  const formatted = formatCurrencyAmount(plateCost, currencySymbol);
+                  return formatted ? ` • ${formatted}` : '';
+                })()}
               </p>
             </div>
             {selectedPlate === plate.index && (

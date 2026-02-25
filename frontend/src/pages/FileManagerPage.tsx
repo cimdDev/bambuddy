@@ -14,6 +14,7 @@ import {
   FolderPlus,
   FileBox,
   Clock,
+  Layers,
   HardDrive,
   File,
   FileText,
@@ -40,6 +41,7 @@ import {
   Image,
   User,
   Box,
+  Coins,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type {
@@ -61,6 +63,8 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDuration, parseUTCDate } from '../utils/date';
 import { formatFileSize } from '../utils/file';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 
 type SortField = 'name' | 'date' | 'size' | 'type' | 'prints';
 type SortDirection = 'asc' | 'desc';
@@ -903,12 +907,28 @@ interface FileCardProps {
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
   authEnabled: boolean;
+  currencySymbol: string;
+  defaultCostPerKg: number;
   t: TFunction;
 }
 
-function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, t }: FileCardProps) {
+function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, currencySymbol, defaultCostPerKg, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
   const slicerUser = file.slicer_user || file.slicer_user_email;
+  const { data: platesData } = useQuery({
+    queryKey: ['library-file-plates', file.id],
+    queryFn: () => api.getLibraryFilePlates(file.id),
+    enabled: file.file_type === '3mf',
+    staleTime: 10 * 60 * 1000,
+  });
+  const plateCount = file.file_type === '3mf' ? (platesData?.plates?.length ?? null) : null;
+  const totalFilamentGrams = useMemo(() => {
+    if (platesData?.plates?.length) {
+      return platesData.plates.reduce((sum, plate) => sum + (plate.filament_used_grams ?? 0), 0);
+    }
+    return file.filament_used_grams;
+  }, [platesData, file.filament_used_grams]);
+  const totalCost = estimatePrintCost(totalFilamentGrams, defaultCostPerKg);
 
   return (
     <div
@@ -955,6 +975,22 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
             </span>
           )}
         </div>
+        {(plateCount != null || totalCost != null) && (
+          <div className="mt-1 text-xs text-bambu-gray flex flex-wrap items-center gap-x-3 gap-y-1">
+            {plateCount != null && (
+              <span className="flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                {t(plateCount === 1 ? 'fileManager.plate' : 'fileManager.plates', { count: plateCount })}
+              </span>
+            )}
+            {totalCost != null && (
+              <span className="flex items-center gap-1">
+                <Coins className="w-3 h-3" />
+                {formatCurrencyAmount(totalCost, currencySymbol)}
+              </span>
+            )}
+          </div>
+        )}
         {file.sliced_for_model && (
           <div className="mt-1 text-xs text-bambu-gray flex items-center gap-1">
             <Printer className="w-3 h-3" />
@@ -1225,6 +1261,8 @@ export function FileManagerPage() {
     queryKey: ['users'],
     queryFn: () => api.getUsers(),
   });
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
 
   // Get unique file types for filter dropdown
   const fileTypes = useMemo(() => {
@@ -2019,6 +2057,8 @@ export function FileManagerPage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     authEnabled={authEnabled}
+                    currencySymbol={currencySymbol}
+                    defaultCostPerKg={defaultCostPerKg}
                   />
                 ))}
               </div>

@@ -49,9 +49,12 @@ import {
   Pause,
   Weight,
   MessageSquare,
+  Coins,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { type TimeFormat, formatETA, formatDuration, formatRelativeTime, parseUTCDate } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -410,6 +413,8 @@ function SortableQueueItem({
   onStart,
   onUpdateComment,
   timeFormat = 'system',
+  currencySymbol,
+  defaultCostPerKg,
   isSelected = false,
   onToggleSelect,
   hasPermission,
@@ -428,6 +433,8 @@ function SortableQueueItem({
   onStart: () => void;
   onUpdateComment: (comment: string) => Promise<void>;
   timeFormat?: TimeFormat;
+  currencySymbol: string;
+  defaultCostPerKg: number;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
@@ -485,6 +492,7 @@ function SortableQueueItem({
   const bambuUser = authEnabled ? item.created_by_username : null;
   const slicerUser = item.slicer_user || item.slicer_user_email;
   const canEditComment = canModify('queue', 'update', item.created_by_id);
+  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
   const [isCommentExpanded, setIsCommentExpanded] = useState(Boolean(item.comment?.trim()));
   const [isRemovingComment, setIsRemovingComment] = useState(false);
   const hasComment = Boolean(item.comment?.trim());
@@ -631,6 +639,12 @@ function SortableQueueItem({
               <span className="flex items-center gap-1 sm:gap-1.5">
                 <Weight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 {formatWeight(item.filament_used_grams)}
+              </span>
+            )}
+            {itemCost != null && (
+              <span className="flex items-center gap-1 sm:gap-1.5">
+                <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                {formatCurrencyAmount(itemCost, currencySymbol)}
               </span>
             )}
             {bambuUser && (
@@ -913,6 +927,8 @@ export function QueuePage() {
   });
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -1367,6 +1383,8 @@ export function QueuePage() {
                     onStart={() => {}}
                     onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                     timeFormat={timeFormat}
+                    currencySymbol={currencySymbol}
+                    defaultCostPerKg={defaultCostPerKg}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     canModify={canModify}
@@ -1485,6 +1503,8 @@ export function QueuePage() {
                         onStart={() => startMutation.mutate(item.id)}
                         onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                         timeFormat={timeFormat}
+                        currencySymbol={currencySymbol}
+                        defaultCostPerKg={defaultCostPerKg}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
@@ -1545,6 +1565,8 @@ export function QueuePage() {
                     onStart={() => {}}
                     onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                     timeFormat={timeFormat}
+                    currencySymbol={currencySymbol}
+                    defaultCostPerKg={defaultCostPerKg}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     canModify={canModify}

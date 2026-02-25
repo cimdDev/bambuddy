@@ -42,6 +42,7 @@ import {
   XCircle,
   User,
   Home,
+  Coins,
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
@@ -66,6 +67,8 @@ import { ChamberLight } from '../components/icons/ChamberLight';
 import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModal';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { getGlobalTrayId } from '../utils/amsHelpers';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 
 // Complete Bambu Lab filament color mapping by tray_id_name
 // Source: https://github.com/queengooborg/Bambu-Lab-RFID-Library
@@ -1410,6 +1413,8 @@ function PrinterCard({
   cameraViewMode = 'window',
   onOpenEmbeddedCamera,
   checkPrinterFirmware = true,
+  currencySymbol = '$',
+  defaultCostPerKg = 0,
 }: {
   printer: Printer;
   hideIfDisconnected?: boolean;
@@ -1433,6 +1438,8 @@ function PrinterCard({
   cameraViewMode?: 'window' | 'embedded';
   onOpenEmbeddedCamera?: (printerId: number, printerName: string) => void;
   checkPrinterFirmware?: boolean;
+  currencySymbol?: string;
+  defaultCostPerKg?: number;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -1670,6 +1677,10 @@ function PrinterCard({
   // Bambuddy user badges are auth-gated.
   const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
   const currentQueueComment = printingQueueItems?.[0]?.comment?.trim() || null;
+  const currentQueueCost = estimatePrintCost(
+    printingQueueItems?.[0]?.filament_used_grams,
+    defaultCostPerKg,
+  );
 
   const archiveId = (() => {
     const raw = printingQueueItems?.[0]?.archive_id;
@@ -2447,7 +2458,7 @@ function PrinterCard({
                               {status.subtask_name || status.current_print}
                             </p>
 
-                            {(currentPrintUser || currentSlicerUser) && (
+                            {(currentPrintUser || currentSlicerUser || currentQueueCost != null) && (
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 {currentPrintUser && (
                                   <span
@@ -2460,6 +2471,12 @@ function PrinterCard({
                                 )}
                                 {currentSlicerUser && (
                                   <SlicerUserBadge user={currentSlicerUser} />
+                                )}
+                                {currentQueueCost != null && (
+                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                                    <Coins className="w-3 h-3" />
+                                    {formatCurrencyAmount(currentQueueCost, currencySymbol)}
+                                  </span>
                                 )}
                               </div>
                             )}
@@ -5410,6 +5427,8 @@ export function PrintersPage() {
                     cameraViewMode={settings?.camera_view_mode || 'window'}
                     onOpenEmbeddedCamera={(id, name) => setEmbeddedCameraPrinters(prev => new Map(prev).set(id, { id, name }))}
                     checkPrinterFirmware={settings?.check_printer_firmware !== false}
+                    currencySymbol={getCurrencySymbol(settings?.currency || 'USD')}
+                    defaultCostPerKg={settings?.default_filament_cost ?? 0}
                   />
                 ))}
               </div>
@@ -5443,6 +5462,8 @@ export function PrintersPage() {
               cameraViewMode={settings?.camera_view_mode || 'window'}
               onOpenEmbeddedCamera={(id, name) => setEmbeddedCameraPrinters(prev => new Map(prev).set(id, { id, name }))}
               checkPrinterFirmware={settings?.check_printer_firmware !== false}
+              currencySymbol={getCurrencySymbol(settings?.currency || 'USD')}
+              defaultCostPerKg={settings?.default_filament_cost ?? 0}
             />
           ))}
         </div>
