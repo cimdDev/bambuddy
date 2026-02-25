@@ -146,6 +146,8 @@ export interface PlateSelectorProps {
   isMultiPlate: boolean;
   selectedPlate: number | null;
   onSelect: (plateIndex: number) => void;
+  currencySymbol: string;
+  defaultCostPerKg: number;
 }
 
 /**

@@ -693,6 +693,8 @@ export function PrintModal({
               isMultiPlate={isMultiPlate}
               selectedPlate={selectedPlate}
               onSelect={setSelectedPlate}
+              currencySymbol={currencySymbol}
+              defaultCostPerKg={defaultCostPerKg}
             />
 
             {/* Printer selection with per-printer mapping */}
