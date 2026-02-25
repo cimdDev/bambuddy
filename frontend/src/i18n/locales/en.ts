@@ -903,6 +903,7 @@ export default {
       tooltip: 'Shortest Job First — scheduler prioritizes shorter prints',
     },
     addedBy: 'Added by {{name}}',
+    commentPlaceholder: 'Add a comment here',
     nextInQueue: 'Next in queue',
     clearPlate: 'Clear Plate & Start Next',
     clearPlateSuccess: 'Plate cleared — ready for next print',

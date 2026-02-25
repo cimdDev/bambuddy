@@ -896,6 +896,7 @@ export default {
       tooltip: 'Trabalho mais curto primeiro — o agendador prioriza impressões mais curtas',
     },
     addedBy: 'Adicionado por {{name}}',
+    commentPlaceholder: 'Adicione um comentário aqui',
     nextInQueue: 'Próximo na fila',
     clearPlate: 'Limpar Placa e Iniciar Próximo',
     clearPlateSuccess: 'Placa limpa — pronta para a próxima impressão',

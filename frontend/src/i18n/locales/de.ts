@@ -903,6 +903,7 @@ export default {
       tooltip: 'Kürzester Auftrag zuerst — Scheduler bevorzugt kürzere Drucke',
     },
     addedBy: 'Hinzugefügt von {{name}}',
+    commentPlaceholder: 'Füge hier einen Kommentar hinzu',
     nextInQueue: 'Nächster in der Warteschlange',
     clearPlate: 'Druckplatte freigeben & Nächsten starten',
     clearPlateSuccess: 'Druckplatte freigegeben — bereit für nächsten Druck',

@@ -68,6 +68,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   const nextItem = compatibleQueue?.[0];
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
   const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
+  const nextComment = nextItem?.comment?.trim() || null;
   // Prompt "Clear Plate & Start Next" whenever the backend flags the printer as awaiting
   // acknowledgment. Don't gate on reported state: after Auto Off cycles the printer, it
   // boots into IDLE while still awaiting - the prompt must survive that (#961). The flag
@@ -78,6 +79,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
     const displayItem = nextAutoItem || nextItem;
     const displaySlicerUser = displayItem?.slicer_user || displayItem?.slicer_user_email || null;
     const displayBambuUser = authEnabled ? (displayItem?.created_by_username || null) : null;
+    const displayComment = displayItem?.comment?.trim() || null;
     return (
       <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
         <div className="flex items-center gap-3 mb-2">
@@ -87,6 +89,11 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
             <p className="text-sm text-white truncate">
               {displayItem?.archive_name || displayItem?.library_file_name || `File #${displayItem?.archive_id || displayItem?.library_file_id}`}
             </p>
+            {displayComment && (
+              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                {displayComment}
+              </p>
+            )}
             {(displayBambuUser || displaySlicerUser) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {displayBambuUser && (
@@ -96,7 +103,6 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                   </span>
                 )}
                 {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
-                )}
               </div>
             )}
           </div>
@@ -142,6 +148,11 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {nextComment && (
+              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                {nextComment}
+              </p>
+            )}
             {(nextBambuUser || nextSlicerUser) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (

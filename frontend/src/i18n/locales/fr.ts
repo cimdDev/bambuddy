@@ -896,6 +896,7 @@ export default {
       tooltip: 'Travail le plus court en premier — le planificateur priorise les impressions plus courtes',
     },
     addedBy: 'Ajouté par {{name}}',
+    commentPlaceholder: 'Ajoutez un commentaire ici',
     nextInQueue: 'Prochain en file',
     clearPlate: 'Vider plateau & lancer suivant',
     clearPlateSuccess: 'Plateau vidé — prêt pour l\'impression suivante',

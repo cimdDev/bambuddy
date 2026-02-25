@@ -900,6 +900,7 @@ export default {
     clearPlate: 'Libera piatto e avvia il prossimo',
     clearPlateSuccess: 'Piatto liberato — pronto per la prossima stampa',
     plateReady: 'Piatto liberato — pronto per la prossima stampa',
+    commentPlaceholder: 'Aggiungi un commento qui',
     plateNumber: 'Piatto {{index}}',
     // Batch / quantity
     quantity: 'Quantità',
