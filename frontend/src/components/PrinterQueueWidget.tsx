@@ -104,6 +104,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
               </p>
             )}
             {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
+            {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
                 {displayMissingSlicerUser && (
@@ -173,6 +174,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {nextComment}
               </p>
             )}
+            {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
             {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextSlicerUser && (

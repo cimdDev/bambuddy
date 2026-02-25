@@ -1646,6 +1646,7 @@ function PrinterCard({
   // Combine both sources: queue item user takes precedence, then reprint user.
   // Bambuddy user badges are auth-gated.
   const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
+  const currentQueueComment = printingQueueItems?.[0]?.comment?.trim() || null;
 
   const archiveId = (() => {
     const raw = printingQueueItems?.[0]?.archive_id;
@@ -2773,6 +2774,11 @@ function PrinterCard({
                               </div>
                             )}
                           </div>
+                          {currentQueueComment && (
+                            <p className="text-xs text-bambu-gray-light mb-2 break-words">
+                              {currentQueueComment}
+                            </p>
+                          )}
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
                               <div

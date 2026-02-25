@@ -903,6 +903,7 @@ export default {
       tooltip: '短いジョブ優先 — スケジューラーが短い印刷を優先します',
     },
     addedBy: '{{username}}が追加',
+    commentPlaceholder: 'ここにコメントを追加',
     nextInQueue: '次のキュー',
     clearPlateSuccess: 'プレートをクリアしました — 次の印刷の準備完了',
     plateNumber: 'プレート {{index}}',
