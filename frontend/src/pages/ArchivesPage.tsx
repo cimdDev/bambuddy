@@ -78,6 +78,7 @@ import { TagManagementModal } from '../components/TagManagementModal';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { formatFileSize } from '../utils/file';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 
 type TFunction = (key: string, options?: Record<string, unknown>) => string;
 
@@ -144,6 +145,7 @@ function ArchiveCard({
   timeFormat = 'system',
   preferredSlicer = 'bambu_studio',
   currency,
+  defaultCostPerKg,
   t,
 }: {
   archive: Archive;
@@ -156,6 +158,7 @@ function ArchiveCard({
   timeFormat?: TimeFormat;
   preferredSlicer?: SlicerType;
   currency: string;
+  defaultCostPerKg: number;
   t: TFunction;
 }) {
   // Debug: log when card is highlighted
@@ -199,6 +202,8 @@ function ArchiveCard({
   const plates = platesData?.plates ?? [];
   const isMultiPlate = platesData?.is_multi_plate ?? false;
   const displayPlateIndex = currentPlateIndex ?? 0;
+  const displayPlate = plates[displayPlateIndex];
+  const displayPlateCost = estimatePrintCost(displayPlate?.filament_used_grams, defaultCostPerKg);
 
   const timelapseDeleteMutation = useMutation({
     mutationFn: () => api.deleteArchiveTimelapse(archive.id),
@@ -936,6 +941,22 @@ function ArchiveCard({
               {archive.total_layers && <span>{archive.total_layers === 1 ? t('archives.card.layer', { count: archive.total_layers }) : t('archives.card.layers', { count: archive.total_layers })}</span>}
               {archive.total_layers && archive.layer_height && <span className="text-bambu-gray/50">·</span>}
               {archive.layer_height && <span>{archive.layer_height}mm</span>}
+            </div>
+          )}
+          {isMultiPlate && plates.length > 0 && (
+            <div
+              className="flex items-center gap-1.5 text-bambu-gray"
+              title={t(plates.length === 1 ? 'archives.card.plate' : 'archives.card.plates', { count: plates.length })}
+            >
+              <Layers className="w-3 h-3" />
+              {t(plates.length === 1 ? 'archives.card.plate' : 'archives.card.plates', { count: plates.length })}
+            </div>
+          )}
+          {archive.cost == null && displayPlateCost != null && (
+            <div className="flex items-center gap-1.5 text-bambu-gray" title={displayPlate?.name || undefined}>
+              <Coins className="w-3 h-3" />
+              {formatCurrencyAmount(displayPlateCost, currency)}
+              {isMultiPlate && <span className="text-bambu-gray/60">({displayPlate?.name || `Plate ${displayPlate?.index}`})</span>}
             </div>
           )}
           {archive.object_count != null && archive.object_count > 0 && (
@@ -3226,6 +3247,7 @@ export function ArchivesPage() {
               timeFormat={timeFormat}
               preferredSlicer={preferredSlicer}
               currency={currency}
+              defaultCostPerKg={settings?.default_filament_cost ?? 0}
               t={t}
             />
           ))}

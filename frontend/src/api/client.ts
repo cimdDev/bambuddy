@@ -1238,6 +1238,7 @@ export interface PrintQueueItem {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  comment?: string | null;
   created_at: string;
   archive_name?: string | null;
   archive_thumbnail?: string | null;
@@ -1262,6 +1263,7 @@ export interface PrintQueueItemCreate {
   // Either archive_id OR library_file_id must be provided
   archive_id?: number | null;
   library_file_id?: number | null;
+  comment?: string | null;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
@@ -1283,6 +1285,7 @@ export interface PrintQueueItemUpdate {
   target_location?: string | null;  // Target location filter (only used with target_model)
   filament_overrides?: Array<{ slot_id: number; type: string; color: string }> | null;
   position?: number;
+  comment?: string | null;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;

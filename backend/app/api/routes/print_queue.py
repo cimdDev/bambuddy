@@ -205,6 +205,7 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "started_at": item.started_at,
         "completed_at": item.completed_at,
         "error_message": item.error_message,
+        "comment": item.comment,
         "created_at": item.created_at,
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
@@ -431,6 +432,7 @@ async def add_to_queue(
         filament_overrides=filament_overrides_json,
         archive_id=data.archive_id,
         library_file_id=data.library_file_id,
+        comment=(data.comment or "").strip() or None,
         scheduled_time=data.scheduled_time,
         require_previous_success=data.require_previous_success,
         auto_off_after=data.auto_off_after,
@@ -609,10 +611,16 @@ async def update_queue_item(
         if item.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own queue items")
 
-    if item.status != "pending":
-        raise HTTPException(400, "Can only update pending items")
-
     update_data = data.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(400, "No fields to update")
+
+    if "comment" in update_data:
+        update_data["comment"] = (update_data["comment"] or "").strip() or None
+
+    non_comment_fields = set(update_data) - {"comment"}
+    if item.status != "pending" and (non_comment_fields or "comment" not in update_data):
+        raise HTTPException(400, "Can only update comment for non-pending items")
 
     # Normalize target_model if being updated
     if "target_model" in update_data and update_data["target_model"]:

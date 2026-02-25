@@ -48,9 +48,13 @@ import {
   User,
   Pause,
   Weight,
+  MessageSquare,
+  Coins,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { type TimeFormat, formatETA, formatDuration, formatRelativeTime, parseUTCDate } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -102,6 +106,130 @@ function StatusBadge({ status, waitingReason, printerState, t }: { status: Print
       <Icon className="w-3.5 h-3.5" />
       {label}
     </span>
+  );
+}
+
+function QueueItemCommentToggle({
+  canEdit,
+  isVisible,
+  hasComment,
+  isSaving,
+  onToggle,
+  onRemove,
+  t,
+}: {
+  canEdit: boolean;
+  isVisible: boolean;
+  hasComment: boolean;
+  isSaving: boolean;
+  onToggle: () => void;
+  onRemove: () => Promise<void>;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  if (!canEdit && !hasComment) return null;
+
+  const showRemove = canEdit && isVisible && hasComment;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (showRemove) {
+          void onRemove();
+          return;
+        }
+        onToggle();
+      }}
+      disabled={isSaving}
+      title={showRemove ? t('common.remove') : t('common.add')}
+      className={`inline-flex items-center justify-center p-1.5 sm:p-2 rounded transition-colors disabled:opacity-60 ${
+        showRemove
+          ? 'text-bambu-gray hover:text-red-300 hover:bg-red-500/10'
+          : 'text-bambu-gray hover:text-bambu-green hover:bg-bambu-green/10'
+      }`}
+    >
+      {showRemove ? <X className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+    </button>
+  );
+}
+
+function QueueItemCommentField({
+  item,
+  canEdit,
+  isExpanded,
+  onExpandedChange,
+  onSaveComment,
+  t,
+}: {
+  item: PrintQueueItem;
+  canEdit: boolean;
+  isExpanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  onSaveComment: (comment: string) => Promise<void>;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const [draft, setDraft] = useState(item.comment ?? '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(item.comment ?? '');
+  }, [item.comment, item.id]);
+
+  const hasSavedComment = Boolean(item.comment?.trim());
+  const isVisible = isExpanded || hasSavedComment;
+
+  const saveIfChanged = async () => {
+    const nextComment = draft.trim();
+    const currentComment = (item.comment ?? '').trim();
+    if (nextComment === currentComment) {
+      if (!nextComment) onExpandedChange(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSaveComment(nextComment);
+      setDraft(nextComment);
+      if (!nextComment) onExpandedChange(false);
+    } catch {
+      setDraft(item.comment ?? '');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!canEdit && !hasSavedComment) return null;
+
+  if (!isVisible) return null;
+
+  return canEdit ? (
+    <textarea
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void saveIfChanged()}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setDraft(item.comment ?? '');
+          onExpandedChange(Boolean(item.comment?.trim()));
+          e.currentTarget.blur();
+        }
+      }}
+      placeholder={t('queue.commentPlaceholder')}
+      rows={2}
+      disabled={isSaving}
+      className="w-full max-w-full rounded-md border border-bambu-dark-tertiary bg-black/20 px-2 py-1.5 text-xs sm:text-sm text-bambu-gray-light placeholder:text-bambu-gray focus:border-bambu-green/40 focus:outline-none resize-y disabled:opacity-70"
+    />
+  ) : (
+    <div className="w-full rounded-md border border-bambu-dark-tertiary bg-black/20 px-2 py-1.5 text-xs sm:text-sm text-bambu-gray-light break-words whitespace-pre-wrap">
+      {item.comment}
+    </div>
   );
 }
 
@@ -283,7 +411,10 @@ function SortableQueueItem({
   onStop,
   onRequeue,
   onStart,
+  onUpdateComment,
   timeFormat = 'system',
+  currencySymbol,
+  defaultCostPerKg,
   isSelected = false,
   onToggleSelect,
   hasPermission,
@@ -300,7 +431,10 @@ function SortableQueueItem({
   onStop: () => void;
   onRequeue: () => void;
   onStart: () => void;
+  onUpdateComment: (comment: string) => Promise<void>;
   timeFormat?: TimeFormat;
+  currencySymbol: string;
+  defaultCostPerKg: number;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
@@ -357,6 +491,15 @@ function SortableQueueItem({
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
   const bambuUser = authEnabled ? item.created_by_username : null;
   const slicerUser = item.slicer_user || item.slicer_user_email;
+  const canEditComment = canModify('queue', 'update', item.created_by_id);
+  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
+  const [isCommentExpanded, setIsCommentExpanded] = useState(Boolean(item.comment?.trim()));
+  const [isRemovingComment, setIsRemovingComment] = useState(false);
+  const hasComment = Boolean(item.comment?.trim());
+
+  useEffect(() => {
+    setIsCommentExpanded(Boolean(item.comment?.trim()));
+  }, [item.comment, item.id]);
 
   const isMobileSelectable = isPending && onToggleSelect;
 
@@ -454,23 +597,25 @@ function SortableQueueItem({
               {item.archive_name || item.library_file_name || `File #${item.archive_id || item.library_file_id}`}
               {(platesData?.is_multi_plate ?? false) && item.plate_id !== undefined && item.plate_id !== null && ` • ${plates.find(plate => plate.index === item.plate_id)?.name || t('queue.plateNumber', { index: item.plate_id })}`}
             </p>
-            {item.archive_id ? (
-              <Link
-                to={`/archives?highlight=${item.archive_id}`}
-                className="text-bambu-gray hover:text-bambu-green transition-colors flex-shrink-0"
-                title={t('queue.viewArchive')}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-            ) : item.library_file_id ? (
-              <Link
-                to={`/library?highlight=${item.library_file_id}`}
-                className="text-bambu-gray hover:text-bambu-green transition-colors flex-shrink-0"
-                title={t('queue.viewInFileManager')}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-            ) : null}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {item.archive_id ? (
+                <Link
+                  to={`/archives?highlight=${item.archive_id}`}
+                  className="text-bambu-gray hover:text-bambu-green transition-colors"
+                  title={t('queue.viewArchive')}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              ) : item.library_file_id ? (
+                <Link
+                  to={`/library?highlight=${item.library_file_id}`}
+                  className="text-bambu-gray hover:text-bambu-green transition-colors"
+                  title={t('queue.viewInFileManager')}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-bambu-gray">
@@ -494,6 +639,12 @@ function SortableQueueItem({
               <span className="flex items-center gap-1 sm:gap-1.5">
                 <Weight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 {formatWeight(item.filament_used_grams)}
+              </span>
+            )}
+            {itemCost != null && (
+              <span className="flex items-center gap-1 sm:gap-1.5">
+                <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                {formatCurrencyAmount(itemCost, currencySymbol)}
               </span>
             )}
             {bambuUser && (
@@ -587,10 +738,50 @@ function SortableQueueItem({
               {item.error_message}
             </p>
           )}
+
+          <div className="md:hidden mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <QueueItemCommentField
+              item={item}
+              canEdit={canEditComment}
+              isExpanded={isCommentExpanded}
+              onExpandedChange={setIsCommentExpanded}
+              onSaveComment={onUpdateComment}
+              t={t}
+            />
+          </div>
+        </div>
+
+        <div className="hidden md:block flex-1 min-w-0 max-w-[42%]" onClick={(e) => e.stopPropagation()}>
+          <QueueItemCommentField
+            item={item}
+            canEdit={canEditComment}
+            isExpanded={isCommentExpanded}
+            onExpandedChange={setIsCommentExpanded}
+            onSaveComment={onUpdateComment}
+            t={t}
+          />
         </div>
 
         {/* Status badge + Actions */}
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-end gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-1">
+          <QueueItemCommentToggle
+            canEdit={canEditComment}
+            isVisible={isCommentExpanded || hasComment}
+            hasComment={hasComment}
+            isSaving={isRemovingComment}
+            onToggle={() => setIsCommentExpanded(prev => !prev)}
+            onRemove={async () => {
+              setIsRemovingComment(true);
+              try {
+                await onUpdateComment('');
+                setIsCommentExpanded(false);
+              } finally {
+                setIsRemovingComment(false);
+              }
+            }}
+            t={t}
+          />
           <StatusBadge status={item.status} waitingReason={item.waiting_reason} printerState={printerState} t={t} />
 
           <div className="flex items-center gap-0.5 sm:gap-1">
@@ -667,6 +858,7 @@ function SortableQueueItem({
               </>
             )}
           </div>
+          </div>
         </div>
       </div>
     </div>
@@ -735,6 +927,8 @@ export function QueuePage() {
   });
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -781,6 +975,14 @@ export function QueuePage() {
       showToast(t('queue.toast.released'));
     },
     onError: () => showToast(t('queue.toast.startFailed'), 'error'),
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: number; comment: string }) => api.updateQueueItem(id, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('queue.toast.updateFailed'), 'error'),
   });
 
   const reorderMutation = useMutation({
@@ -839,6 +1041,10 @@ export function QueuePage() {
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
+
+  const handleUpdateComment = useCallback(async (id: number, comment: string) => {
+    await updateCommentMutation.mutateAsync({ id, comment });
+  }, [updateCommentMutation]);
 
   // Get unique locations from printers for the filter dropdown
   const uniqueLocations = useMemo(() => {
@@ -1175,7 +1381,10 @@ export function QueuePage() {
                     onStop={() => setConfirmAction({ type: 'stop', item })}
                     onRequeue={() => {}}
                     onStart={() => {}}
+                    onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                     timeFormat={timeFormat}
+                    currencySymbol={currencySymbol}
+                    defaultCostPerKg={defaultCostPerKg}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     canModify={canModify}
@@ -1292,7 +1501,10 @@ export function QueuePage() {
                         onStop={() => {}}
                         onRequeue={() => {}}
                         onStart={() => startMutation.mutate(item.id)}
+                        onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                         timeFormat={timeFormat}
+                        currencySymbol={currencySymbol}
+                        defaultCostPerKg={defaultCostPerKg}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
@@ -1351,7 +1563,10 @@ export function QueuePage() {
                     onStop={() => {}}
                     onRequeue={() => setRequeueItem(item)}
                     onStart={() => {}}
+                    onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                     timeFormat={timeFormat}
+                    currencySymbol={currencySymbol}
+                    defaultCostPerKg={defaultCostPerKg}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     canModify={canModify}

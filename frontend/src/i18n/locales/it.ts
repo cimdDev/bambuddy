@@ -600,6 +600,8 @@ export default {
       filament: '{{weight}}g',
       layer: '{{count}} strato',
       layers: '{{count}} strati',
+      plate: '{{count}} piatto',
+      plates: '{{count}} piatti',
       object: '{{count}} oggetto',
       objects: '{{count}} oggetti',
       slicedFor: 'Sliced per {{model}}',
@@ -730,6 +732,7 @@ export default {
     dragToReorder: 'Trascina per riordinare (solo ASAP)',
     reorderHint: 'La posizione influisce solo sugli elementi ASAP. Quelli programmati partono all\'orario.',
     addedBy: 'Aggiunto da {{name}}',
+    commentPlaceholder: 'Aggiungi un commento qui',
     plateNumber: 'Piatto {{index}}',
     // Sections
     sections: {
@@ -2045,6 +2048,8 @@ export default {
     noMatchingFilesDescription: 'Nessun file corrisponde ai criteri di ricerca o filtro.',
     clearFilters: 'Pulisci filtri',
     printedCount: 'Stampato {{count}}x',
+    plate: '{{count}} piatto',
+    plates: '{{count}} piatti',
     uploadedBy: 'Caricato da',
     deleteFolder: 'Elimina cartella',
     deleteFile: 'Elimina file',

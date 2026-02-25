@@ -1425,6 +1425,12 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Already applied
 
+    # Migration: Add comment column to print_queue for user notes on queue items
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN comment TEXT"))
+    except OperationalError:
+        pass  # Already applied
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""
