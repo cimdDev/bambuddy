@@ -730,6 +730,7 @@ export default {
     dragToReorder: 'Trascina per riordinare (solo ASAP)',
     reorderHint: 'La posizione influisce solo sugli elementi ASAP. Quelli programmati partono all\'orario.',
     addedBy: 'Aggiunto da {{name}}',
+    commentPlaceholder: 'Aggiungi un commento qui',
     plateNumber: 'Piatto {{index}}',
     // Sections
     sections: {

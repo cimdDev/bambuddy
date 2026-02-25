@@ -747,6 +747,7 @@ export default {
     dragToReorder: 'Drag to reorder (ASAP only)',
     reorderHint: 'Position only affects ASAP items. Scheduled items run at their set time.',
     addedBy: 'Added by {{name}}',
+    commentPlaceholder: 'Add a comment here',
     nextInQueue: 'Next in queue',
     clearPlate: 'Clear Plate & Start Next',
     clearPlateSuccess: 'Plate cleared — ready for next print',

@@ -739,6 +739,7 @@ export default {
     dragToReorder: 'Glisser pour réordonner (ASAP uniquement)',
     reorderHint: 'La position n\'affecte que les éléments ASAP.',
     addedBy: 'Ajouté par {{name}}',
+    commentPlaceholder: 'Ajoutez un commentaire ici',
     nextInQueue: 'Prochain en file',
     clearPlate: 'Vider plateau & lancer suivant',
     clearPlateSuccess: 'Plateau vidé — prêt pour l\'impression suivante',

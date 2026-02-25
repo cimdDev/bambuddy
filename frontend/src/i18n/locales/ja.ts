@@ -817,6 +817,7 @@ export default {
     itemCount: '{{count}}件',
     dragToReorder: 'ドラッグして並べ替え（ASAPのみ）',
     addedBy: '{{username}}が追加',
+    commentPlaceholder: 'ここにコメントを追加',
     nextInQueue: '次のキュー',
     clearPlate: 'プレートをクリアして次を開始',
     clearPlateSuccess: 'プレートをクリアしました — 次の印刷の準備完了',
