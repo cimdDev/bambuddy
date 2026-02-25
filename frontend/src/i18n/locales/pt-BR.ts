@@ -747,6 +747,7 @@ export default {
     dragToReorder: 'Arraste para reordenar (apenas ASAP)',
     reorderHint: 'A posição afeta apenas itens ASAP. Itens agendados são executados no horário definido.',
     addedBy: 'Adicionado por {{name}}',
+    commentPlaceholder: 'Adicione um comentário aqui',
     nextInQueue: 'Próximo na fila',
     clearPlate: 'Limpar Placa e Iniciar Próximo',
     clearPlateSuccess: 'Placa limpa — pronta para a próxima impressão',

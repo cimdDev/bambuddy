@@ -24,6 +24,7 @@ class PrintQueueItemCreate(BaseModel):
     # Either archive_id OR library_file_id must be provided
     archive_id: int | None = None
     library_file_id: int | None = None
+    comment: str | None = None
     scheduled_time: datetime | None = None  # None = ASAP (next when idle)
     require_previous_success: bool = False
     auto_off_after: bool = False  # Power off printer after print completes
@@ -48,6 +49,7 @@ class PrintQueueItemUpdate(BaseModel):
     target_location: str | None = None  # Target location filter (only used with target_model)
     filament_overrides: list[dict] | None = None  # Filament overrides for model-based assignment
     position: int | None = None
+    comment: str | None = None
     scheduled_time: datetime | None = None
     require_previous_success: bool | None = None
     auto_off_after: bool | None = None
@@ -91,6 +93,7 @@ class PrintQueueItemResponse(BaseModel):
     started_at: UTCDatetime
     completed_at: UTCDatetime
     error_message: str | None
+    comment: str | None = None
     created_at: UTCDatetime
 
     # Nested info for UI (populated in route)

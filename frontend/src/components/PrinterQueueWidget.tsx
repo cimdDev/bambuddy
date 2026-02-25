@@ -50,6 +50,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
   const totalPending = compatibleQueue?.length || 0;
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
   const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
+  const nextComment = nextItem?.comment?.trim() || null;
 
   if (totalPending === 0) {
     return null;
@@ -67,6 +68,11 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {nextComment && (
+              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                {nextComment}
+              </p>
+            )}
             {(nextBambuUser || nextSlicerUser) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (
@@ -123,6 +129,11 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {nextComment && (
+              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                {nextComment}
+              </p>
+            )}
             {(nextBambuUser || nextSlicerUser) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (
