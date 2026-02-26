@@ -206,6 +206,9 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "completed_at": item.completed_at,
         "error_message": item.error_message,
         "comment": item.comment,
+        "private_job": item.private_job,
+        "private_material": item.private_material,
+        "material_cost_paid": item.material_cost_paid,
         "created_at": item.created_at,
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
@@ -433,6 +436,9 @@ async def add_to_queue(
         archive_id=data.archive_id,
         library_file_id=data.library_file_id,
         comment=(data.comment or "").strip() or None,
+        private_job=data.private_job,
+        private_material=data.private_material,
+        material_cost_paid=data.material_cost_paid,
         scheduled_time=data.scheduled_time,
         require_previous_success=data.require_previous_success,
         auto_off_after=data.auto_off_after,
@@ -617,10 +623,16 @@ async def update_queue_item(
 
     if "comment" in update_data:
         update_data["comment"] = (update_data["comment"] or "").strip() or None
+    if update_data.get("private_material"):
+        update_data["material_cost_paid"] = False
 
-    non_comment_fields = set(update_data) - {"comment"}
-    if item.status != "pending" and (non_comment_fields or "comment" not in update_data):
-        raise HTTPException(400, "Can only update comment for non-pending items")
+    accounting_fields = {"private_job", "private_material", "material_cost_paid"}
+    allowed_non_pending_fields = {"comment"} | accounting_fields
+    non_allowed_fields = set(update_data) - allowed_non_pending_fields
+    if item.status != "pending" and non_allowed_fields:
+        raise HTTPException(400, "Can only update comment/accounting fields for non-pending items")
+    if item.status != "pending" and not set(update_data).intersection(allowed_non_pending_fields):
+        raise HTTPException(400, "Can only update comment/accounting fields for non-pending items")
 
     # Normalize target_model if being updated
     if "target_model" in update_data and update_data["target_model"]:

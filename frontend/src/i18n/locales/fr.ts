@@ -613,6 +613,11 @@ export default {
       plates: '{{count}} plateaux',
       object: '{{count}} objet',
       objects: '{{count}} objets',
+      privateJob: 'Travail privé',
+      privateMaterial: 'Matériau privé',
+      paid: 'Payé',
+      unpaid: 'Non payé',
+      reimbursementDue: 'À rembourser : {{amount}}',
       slicedFor: 'Découpé pour {{model}}',
       uploadedBy: 'Téléversé par',
       noPermissionReprint: 'Pas d\'autorisation de réimpression',
@@ -795,6 +800,13 @@ export default {
       staged: 'Préparé',
       requiresPrevious: 'Nécessite succès précédent',
       autoPowerOff: 'Extinction auto',
+    },
+    accounting: {
+      privateJob: 'Travail privé',
+      privateMaterial: 'Matériau privé',
+      paid: 'Payé',
+      unpaid: 'Non payé',
+      reimbursementDue: 'À rembourser : {{amount}}',
     },
     // Empty state
     empty: {
@@ -2842,6 +2854,12 @@ export default {
     photos: 'Photos du résultat',
     photosHelp: 'Cliquez sur + pour ajouter des photos',
     printResult: 'Résultat d\'impression',
+    accounting: {
+      title: 'Comptabilité',
+      privateJob: 'Travail privé (coût matière à rembourser)',
+      privateMaterial: 'Imprimé avec matériau privé (pas de remboursement)',
+      materialCostPaid: 'Coût matière payé',
+    },
     saving: 'Enregistrement...',
     // Failure reasons
     failureReasons: {

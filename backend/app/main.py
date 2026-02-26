@@ -2190,6 +2190,8 @@ async def on_print_complete(printer_id: int, data: dict):
 
     log_timing("SD card cleanup")
 
+    queue_accounting_flags: dict | None = None
+
     # Update queue item status early — must run before the archive_id early-return
     # so queue items don't get stuck in "printing" when archive lookup fails.
     try:
@@ -2213,6 +2215,11 @@ async def on_print_complete(printer_id: int, data: dict):
                 queue_status = data.get("status", "completed")
                 queue_item.status = queue_status
                 queue_item.completed_at = datetime.now(timezone.utc)
+                queue_accounting_flags = {
+                    "private_job": bool(queue_item.private_job),
+                    "private_material": bool(queue_item.private_material),
+                    "material_cost_paid": bool(queue_item.material_cost_paid),
+                }
                 await db.commit()
                 logger.info("Updated queue item %s status to %s", queue_item.id, queue_status)
 
@@ -2411,6 +2418,15 @@ async def on_print_complete(printer_id: int, data: dict):
                 completed_at=datetime.now(timezone.utc) if status in ("completed", "failed", "aborted") else None,
                 failure_reason=failure_reason,
             )
+            if queue_accounting_flags:
+                archive = await service.get_archive(archive_id)
+                if archive:
+                    archive.private_job = bool(queue_accounting_flags.get("private_job", False))
+                    archive.private_material = bool(queue_accounting_flags.get("private_material", False))
+                    archive.material_cost_paid = (
+                        bool(queue_accounting_flags.get("material_cost_paid", False)) and not archive.private_material
+                    )
+                    await db.commit()
             logger.info(
                 "[ARCHIVE] Archive %s status updated to %s, failure_reason=%s", archive_id, status, failure_reason
             )

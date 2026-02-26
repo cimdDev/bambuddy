@@ -1430,6 +1430,32 @@ async def run_migrations(conn):
         await conn.execute(text("ALTER TABLE print_queue ADD COLUMN comment TEXT"))
     except OperationalError:
         pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN private_job BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN private_material BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_queue ADD COLUMN material_cost_paid BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+
+    # Migration: Add accounting flags to print_archives for reimbursement tracking
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN private_job BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN private_material BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN material_cost_paid BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
 
 
 async def seed_notification_templates():

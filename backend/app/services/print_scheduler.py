@@ -1006,6 +1006,9 @@ class PrintScheduler:
                     original_filename=filename,
                 )
                 if archive:
+                    archive.private_job = item.private_job
+                    archive.private_material = item.private_material
+                    archive.material_cost_paid = item.material_cost_paid and not item.private_material
                     item.archive_id = archive.id
                     await db.flush()
                     logger.info(
