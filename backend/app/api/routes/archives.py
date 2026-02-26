@@ -100,6 +100,9 @@ def archive_to_response(
         "tags": archive.tags,
         "notes": archive.notes,
         "cost": archive.cost,
+        "private_job": archive.private_job,
+        "private_material": archive.private_material,
+        "material_cost_paid": archive.material_cost_paid,
         "photos": archive.photos,
         "failure_reason": archive.failure_reason,
         "quantity": archive.quantity,
@@ -787,7 +790,10 @@ async def update_archive(
         if archive.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own archives")
 
-    for field, value in update_data.model_dump(exclude_unset=True).items():
+    updates = update_data.model_dump(exclude_unset=True)
+    if updates.get("private_material"):
+        updates["material_cost_paid"] = False
+    for field, value in updates.items():
         setattr(archive, field, value)
 
     await db.commit()

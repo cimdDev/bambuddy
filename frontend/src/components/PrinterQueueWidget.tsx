@@ -81,7 +81,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
                 {nextComment}
               </p>
             )}
-            {(nextBambuUser || nextSlicerUser || nextCost != null) && (
+            {(nextBambuUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (
                   <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
@@ -91,6 +91,11 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
                 )}
                 {nextSlicerUser && (
                   <SlicerUserBadge user={nextSlicerUser} />
+                )}
+                {nextItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
                 )}
                 {nextCost != null && (
                   <span className="inline-flex items-center gap-1" title={t('common.cost', 'Cost')}>
@@ -148,7 +153,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
                 {nextComment}
               </p>
             )}
-            {(nextBambuUser || nextSlicerUser || nextCost != null) && (
+            {(nextBambuUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (
                   <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
@@ -158,6 +163,11 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
                 )}
                 {nextSlicerUser && (
                   <SlicerUserBadge user={nextSlicerUser} />
+                )}
+                {nextItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
                 )}
                 {nextCost != null && (
                   <span className="inline-flex items-center gap-1" title={t('common.cost', 'Cost')}>

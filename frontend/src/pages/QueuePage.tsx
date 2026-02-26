@@ -64,6 +64,12 @@ import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 
+type QueueAccountingPatch = {
+  private_job?: boolean;
+  private_material?: boolean;
+  material_cost_paid?: boolean;
+};
+
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
   return `${Math.round(g)}g`;
@@ -412,6 +418,7 @@ function SortableQueueItem({
   onRequeue,
   onStart,
   onUpdateComment,
+  onUpdateAccounting,
   timeFormat = 'system',
   currencySymbol,
   defaultCostPerKg,
@@ -432,6 +439,7 @@ function SortableQueueItem({
   onRequeue: () => void;
   onStart: () => void;
   onUpdateComment: (comment: string) => Promise<void>;
+  onUpdateAccounting: (patch: QueueAccountingPatch) => Promise<void>;
   timeFormat?: TimeFormat;
   currencySymbol: string;
   defaultCostPerKg: number;
@@ -492,6 +500,7 @@ function SortableQueueItem({
   const bambuUser = authEnabled ? item.created_by_username : null;
   const slicerUser = item.slicer_user || item.slicer_user_email;
   const canEditComment = canModify('queue', 'update', item.created_by_id);
+  const canEditAccounting = canModify('queue', 'update', item.created_by_id);
   const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
   const [isCommentExpanded, setIsCommentExpanded] = useState(Boolean(item.comment?.trim()));
   const [isRemovingComment, setIsRemovingComment] = useState(false);
@@ -685,6 +694,74 @@ function SortableQueueItem({
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20 flex items-center gap-1">
                 <Power className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 {t('queue.badges.autoPowerOff')}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!canEditAccounting) return;
+                void onUpdateAccounting({ private_job: !item.private_job });
+              }}
+              disabled={!canEditAccounting}
+              className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                item.private_job
+                  ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                  : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+              } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
+              title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.privateJob')}
+            >
+              {t('queue.accounting.privateJob')}
+            </button>
+            {item.private_job && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canEditAccounting) return;
+                  void onUpdateAccounting({
+                    private_job: true,
+                    private_material: !item.private_material,
+                    material_cost_paid: false,
+                  });
+                }}
+                disabled={!canEditAccounting}
+                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                  item.private_material
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
+                title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.privateMaterial')}
+              >
+                {t('queue.accounting.privateMaterial')}
+              </button>
+            )}
+            {item.private_job && !item.private_material && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canEditAccounting) return;
+                  void onUpdateAccounting({
+                    private_job: true,
+                    private_material: false,
+                    material_cost_paid: !item.material_cost_paid,
+                  });
+                }}
+                disabled={!canEditAccounting}
+                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                  item.material_cost_paid
+                    ? 'bg-green-500/10 text-green-300 border-green-500/20'
+                    : 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20'
+                } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
+                title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.paid')}
+              >
+                {item.material_cost_paid ? t('queue.accounting.paid') : t('queue.accounting.unpaid')}
+              </button>
+            )}
+            {item.private_job && !item.private_material && !item.material_cost_paid && itemCost != null && (
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-red-500/10 text-red-300 border-red-500/20">
+                {t('queue.accounting.reimbursementDue', { amount: formatCurrencyAmount(itemCost, currencySymbol) })}
               </span>
             )}
           </div>
@@ -977,8 +1054,8 @@ export function QueuePage() {
     onError: () => showToast(t('queue.toast.startFailed'), 'error'),
   });
 
-  const updateCommentMutation = useMutation({
-    mutationFn: ({ id, comment }: { id: number; comment: string }) => api.updateQueueItem(id, { comment }),
+  const updateQueueItemMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) => api.updateQueueItem(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
@@ -1043,8 +1120,12 @@ export function QueuePage() {
   };
 
   const handleUpdateComment = useCallback(async (id: number, comment: string) => {
-    await updateCommentMutation.mutateAsync({ id, comment });
-  }, [updateCommentMutation]);
+    await updateQueueItemMutation.mutateAsync({ id, data: { comment } });
+  }, [updateQueueItemMutation]);
+
+  const handleUpdateAccounting = useCallback(async (id: number, patch: QueueAccountingPatch) => {
+    await updateQueueItemMutation.mutateAsync({ id, data: patch as Record<string, unknown> });
+  }, [updateQueueItemMutation]);
 
   // Get unique locations from printers for the filter dropdown
   const uniqueLocations = useMemo(() => {
@@ -1382,6 +1463,7 @@ export function QueuePage() {
                     onRequeue={() => {}}
                     onStart={() => {}}
                     onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
+                    onUpdateAccounting={(patch) => handleUpdateAccounting(item.id, patch)}
                     timeFormat={timeFormat}
                     currencySymbol={currencySymbol}
                     defaultCostPerKg={defaultCostPerKg}
@@ -1502,6 +1584,7 @@ export function QueuePage() {
                         onRequeue={() => {}}
                         onStart={() => startMutation.mutate(item.id)}
                         onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
+                        onUpdateAccounting={(patch) => handleUpdateAccounting(item.id, patch)}
                         timeFormat={timeFormat}
                         currencySymbol={currencySymbol}
                         defaultCostPerKg={defaultCostPerKg}
@@ -1564,6 +1647,7 @@ export function QueuePage() {
                     onRequeue={() => setRequeueItem(item)}
                     onStart={() => {}}
                     onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
+                    onUpdateAccounting={(patch) => handleUpdateAccounting(item.id, patch)}
                     timeFormat={timeFormat}
                     currencySymbol={currencySymbol}
                     defaultCostPerKg={defaultCostPerKg}

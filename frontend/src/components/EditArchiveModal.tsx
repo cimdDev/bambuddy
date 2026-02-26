@@ -50,6 +50,9 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
   const [failureReason, setFailureReason] = useState(archive.failure_reason || '');
   const [status, setStatus] = useState(archive.status);
   const [quantity, setQuantity] = useState(archive.quantity ?? 1);
+  const [privateJob, setPrivateJob] = useState(Boolean(archive.private_job));
+  const [privateMaterial, setPrivateMaterial] = useState(Boolean(archive.private_material));
+  const [materialCostPaid, setMaterialCostPaid] = useState(Boolean(archive.material_cost_paid));
   const [photos, setPhotos] = useState<string[]>(archive.photos || []);
   const [externalUrl, setExternalUrl] = useState(archive.external_url || '');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -175,6 +178,9 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
       notes: notes || undefined,
       tags: tags || undefined,
       quantity: quantity,
+      private_job: privateJob,
+      private_material: privateMaterial,
+      material_cost_paid: privateJob && !privateMaterial ? materialCostPaid : false,
       external_url: externalUrl || null,
     };
 
@@ -263,6 +269,53 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Accounting flags */}
+          <div className="space-y-2">
+            <label className="block text-sm text-bambu-gray">{t('editArchive.accounting.title')}</label>
+            <label className="flex items-center gap-2 text-sm text-white">
+              <input
+                type="checkbox"
+                checked={privateJob}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setPrivateJob(checked);
+                  if (!checked) {
+                    setPrivateMaterial(false);
+                    setMaterialCostPaid(false);
+                  }
+                }}
+                className="rounded border-bambu-dark-tertiary bg-bambu-dark"
+              />
+              {t('editArchive.accounting.privateJob')}
+            </label>
+            {privateJob && (
+              <label className="flex items-center gap-2 text-sm text-white">
+                <input
+                  type="checkbox"
+                  checked={privateMaterial}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setPrivateMaterial(checked);
+                    if (checked) setMaterialCostPaid(false);
+                  }}
+                  className="rounded border-bambu-dark-tertiary bg-bambu-dark"
+                />
+                {t('editArchive.accounting.privateMaterial')}
+              </label>
+            )}
+            {privateJob && !privateMaterial && (
+              <label className="flex items-center gap-2 text-sm text-white">
+                <input
+                  type="checkbox"
+                  checked={materialCostPaid}
+                  onChange={(e) => setMaterialCostPaid(e.target.checked)}
+                  className="rounded border-bambu-dark-tertiary bg-bambu-dark"
+                />
+                {t('editArchive.accounting.materialCostPaid')}
+              </label>
+            )}
           </div>
 
           {/* Quantity - number of items printed */}
