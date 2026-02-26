@@ -764,6 +764,11 @@ export default {
       layers: '{{count}} layers',
       object: '{{count}} object',
       objects: '{{count}} objects',
+      privateJob: 'Private job',
+      privateMaterial: 'Private material',
+      paid: 'Paid',
+      unpaid: 'Unpaid',
+      reimbursementDue: 'Due: {{amount}}',
       slicedFor: 'Sliced for {{model}}',
       uploadedBy: 'Uploaded By',
       noPermissionReprint: 'You do not have permission to reprint',
@@ -968,6 +973,13 @@ export default {
       requiresPrevious: 'Requires previous success',
       autoPowerOff: 'Auto power off',
       gcodeInjection: 'G-code',
+    },
+    accounting: {
+      privateJob: 'Private job',
+      privateMaterial: 'Private material',
+      paid: 'Paid',
+      unpaid: 'Unpaid',
+      reimbursementDue: 'Due: {{amount}}',
     },
     // Empty state
     empty: {
@@ -3752,6 +3764,12 @@ export default {
     photos: 'Photos of Printed Result',
     photosHelp: 'Click + to add photos of your printed result',
     printResult: 'Print result',
+    accounting: {
+      title: 'Accounting',
+      privateJob: 'Private job (material cost may need reimbursement)',
+      privateMaterial: 'Printed with private material (no reimbursement needed)',
+      materialCostPaid: 'Material cost paid',
+    },
     saving: 'Saving...',
     // Failure reasons
     failureReasons: {

@@ -1650,6 +1650,16 @@ async def run_migrations(conn):
     # Migration: Add comment column to print_queue for user notes on queue items
     await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN comment TEXT")
 
+    # Migration: Add accounting flags to print_queue for reimbursement tracking
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN material_cost_paid BOOLEAN DEFAULT 0")
+
+    # Migration: Add accounting flags to print_archives for reimbursement tracking
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN material_cost_paid BOOLEAN DEFAULT 0")
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

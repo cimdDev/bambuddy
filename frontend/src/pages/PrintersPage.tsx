@@ -2750,7 +2750,7 @@ function PrinterCard({
                               {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t)}
                             </p>
 
-                            {(currentPrintUser || currentSlicerUser) && (
+                            {(currentPrintUser || currentSlicerUser || printingQueueItems?.[0]?.private_job) && (
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 {currentPrintUser && (
                                   <span
@@ -2763,6 +2763,11 @@ function PrinterCard({
                                 )}
                                 {currentSlicerUser && (
                                   <SlicerUserBadge user={currentSlicerUser} />
+                                )}
+                                {printingQueueItems?.[0]?.private_job && (
+                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                                    {t('queue.accounting.privateJob')}
+                                  </span>
                                 )}
                               </div>
                             )}

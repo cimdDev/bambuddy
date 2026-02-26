@@ -94,7 +94,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {displayComment}
               </p>
             )}
-            {(displayBambuUser || displaySlicerUser) && (
+            {(displayBambuUser || displaySlicerUser || displayItem?.private_job) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {displayBambuUser && (
                   <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: displayBambuUser })}>
@@ -103,6 +103,11 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                   </span>
                 )}
                 {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
+                {displayItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -153,7 +158,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {nextComment}
               </p>
             )}
-            {(nextBambuUser || nextSlicerUser) && (
+            {(nextBambuUser || nextSlicerUser || nextItem?.private_job) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (
                   <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
@@ -163,6 +168,11 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 )}
                 {nextSlicerUser && (
                   <SlicerUserBadge user={nextSlicerUser} />
+                )}
+                {nextItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
                 )}
               </div>
             )}
