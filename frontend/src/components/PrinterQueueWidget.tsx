@@ -32,6 +32,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
     queryKey: ['settings'],
     queryFn: api.getSettings,
   });
+  const hideBambuddyUsers = settings?.hide_bambuddy_users ?? false;
 
   const clearPlateMutation = useMutation({
     mutationFn: () => api.clearPlate(printerId),
@@ -55,7 +56,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
   const nextItem = compatibleQueue?.[0];
   const totalPending = compatibleQueue?.length || 0;
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
-  const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
+  const nextBambuUser = authEnabled && !hideBambuddyUsers ? (nextItem?.created_by_username || null) : null;
   const nextComment = nextItem?.comment?.trim() || null;
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);

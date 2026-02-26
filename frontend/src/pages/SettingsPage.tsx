@@ -732,6 +732,7 @@ export function SettingsPage() {
       Number(settings.library_disk_warning_gb ?? 5) !== Number(localSettings.library_disk_warning_gb ?? 5) ||
       (settings.camera_view_mode ?? 'window') !== (localSettings.camera_view_mode ?? 'window') ||
       (settings.preferred_slicer ?? 'bambu_studio') !== (localSettings.preferred_slicer ?? 'bambu_studio') ||
+      (settings.hide_bambuddy_users ?? false) !== (localSettings.hide_bambuddy_users ?? false) ||
       settings.prometheus_enabled !== localSettings.prometheus_enabled ||
       settings.prometheus_token !== localSettings.prometheus_token;
 
@@ -798,6 +799,7 @@ export function SettingsPage() {
         library_disk_warning_gb: localSettings.library_disk_warning_gb,
         camera_view_mode: localSettings.camera_view_mode,
         preferred_slicer: localSettings.preferred_slicer,
+        hide_bambuddy_users: localSettings.hide_bambuddy_users,
         prometheus_enabled: localSettings.prometheus_enabled,
         prometheus_token: localSettings.prometheus_token,
       };
@@ -1157,6 +1159,29 @@ export function SettingsPage() {
                 <p className="text-xs text-bambu-gray mt-1">
                   {t('settings.preferredSlicerDescription')}
                 </p>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-white">Hide BambuBuddy users in UI</p>
+                  <p className="text-sm text-bambu-gray">
+                    Show only slicer user names (from the sliced file metadata) in queues, archives, printers, and file lists.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateSetting('hide_bambuddy_users', !(localSettings.hide_bambuddy_users ?? false))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    (localSettings.hide_bambuddy_users ?? false) ? 'bg-bambu-green' : 'bg-bambu-dark-tertiary'
+                  }`}
+                  aria-pressed={localSettings.hide_bambuddy_users ?? false}
+                  title="Hide BambuBuddy users"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      (localSettings.hide_bambuddy_users ?? false) ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
               <div className="flex items-center justify-between">
                 <div>

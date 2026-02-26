@@ -426,6 +426,7 @@ function SortableQueueItem({
   onToggleSelect,
   hasPermission,
   authEnabled,
+  hideBambuddyUsers = false,
   canModify,
   printerState,
   t,
@@ -447,6 +448,7 @@ function SortableQueueItem({
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
   authEnabled: boolean;
+  hideBambuddyUsers?: boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
   printerState?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -497,7 +499,7 @@ function SortableQueueItem({
   const isPrinting = item.status === 'printing';
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
-  const bambuUser = authEnabled ? item.created_by_username : null;
+  const bambuUser = authEnabled && !hideBambuddyUsers ? item.created_by_username : null;
   const slicerUser = item.slicer_user || item.slicer_user_email;
   const canEditComment = canModify('queue', 'update', item.created_by_id);
   const canEditAccounting = canModify('queue', 'update', item.created_by_id);
@@ -1006,6 +1008,7 @@ export function QueuePage() {
   const timeFormat: TimeFormat = settings?.time_format || 'system';
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const defaultCostPerKg = settings?.default_filament_cost ?? 0;
+  const hideBambuddyUsers = settings?.hide_bambuddy_users ?? false;
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -1469,6 +1472,7 @@ export function QueuePage() {
                     defaultCostPerKg={defaultCostPerKg}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
+                    hideBambuddyUsers={hideBambuddyUsers}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
                     t={t}
@@ -1592,6 +1596,7 @@ export function QueuePage() {
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
                         authEnabled={authEnabled}
+                        hideBambuddyUsers={hideBambuddyUsers}
                         canModify={canModify}
                         t={t}
                       />
@@ -1653,6 +1658,7 @@ export function QueuePage() {
                     defaultCostPerKg={defaultCostPerKg}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
+                    hideBambuddyUsers={hideBambuddyUsers}
                     canModify={canModify}
                     t={t}
                   />
