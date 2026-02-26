@@ -9,6 +9,9 @@ class ArchiveBase(BaseModel):
     tags: str | None = None
     notes: str | None = None
     cost: float | None = None
+    private_job: bool | None = None
+    private_material: bool | None = None
+    material_cost_paid: bool | None = None
     failure_reason: str | None = None
     quantity: int | None = None  # Number of items printed
     # User-defined link (Printables, Thingiverse, etc.)
@@ -89,6 +92,9 @@ class ArchiveResponse(BaseModel):
     tags: str | None
     notes: str | None
     cost: float | None
+    private_job: bool = False
+    private_material: bool = False
+    material_cost_paid: bool = False
     photos: list | None
     failure_reason: str | None
     quantity: int = 1  # Number of items printed

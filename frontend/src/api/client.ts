@@ -410,6 +410,9 @@ export interface Archive {
   tags: string | null;
   notes: string | null;
   cost: number | null;
+  private_job?: boolean;
+  private_material?: boolean;
+  material_cost_paid?: boolean;
   photos: string[] | null;
   failure_reason: string | null;
   quantity: number;
@@ -1461,6 +1464,9 @@ export interface PrintQueueItemCreate {
   archive_id?: number | null;
   library_file_id?: number | null;
   comment?: string | null;
+  private_job?: boolean;
+  private_material?: boolean;
+  material_cost_paid?: boolean;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
@@ -1489,6 +1495,9 @@ export interface PrintQueueItemUpdate {
   filament_overrides?: Array<{ slot_id: number; type: string; color: string; color_name?: string; force_color_match?: boolean }> | null;
   position?: number;
   comment?: string | null;
+  private_job?: boolean | null;
+  private_material?: boolean | null;
+  material_cost_paid?: boolean | null;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
@@ -3066,6 +3075,9 @@ export const api = {
     tags?: string;
     notes?: string;
     cost?: number;
+    private_job?: boolean;
+    private_material?: boolean;
+    material_cost_paid?: boolean;
     failure_reason?: string | null;
     status?: string;
     quantity?: number;

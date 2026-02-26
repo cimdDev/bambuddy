@@ -765,6 +765,11 @@ export default {
       layers: '{{count}} strati',
       object: '{{count}} oggetto',
       objects: '{{count}} oggetti',
+      privateJob: 'Lavoro privato',
+      privateMaterial: 'Materiale privato',
+      paid: 'Pagato',
+      unpaid: 'Non pagato',
+      reimbursementDue: 'Da rimborsare: {{amount}}',
       slicedFor: 'Sliced per {{model}}',
       uploadedBy: 'Caricato da',
       noPermissionReprint: 'Non hai il permesso di ristampare',
@@ -968,6 +973,13 @@ export default {
       requiresPrevious: 'Richiede successo precedente',
       autoPowerOff: 'Spegnimento automatico',
       gcodeInjection: 'G-code',
+    },
+    accounting: {
+      privateJob: 'Lavoro privato',
+      privateMaterial: 'Materiale privato',
+      paid: 'Pagato',
+      unpaid: 'Non pagato',
+      reimbursementDue: 'Da rimborsare: {{amount}}',
     },
     // Empty state
     empty: {
@@ -3678,6 +3690,12 @@ export default {
     photos: 'Foto del risultato stampato',
     photosHelp: 'Clicca + per aggiungere foto del risultato stampato',
     printResult: 'Risultato stampa',
+    accounting: {
+      title: 'Contabilità',
+      privateJob: 'Lavoro privato (costo materiale da rimborsare)',
+      privateMaterial: 'Stampato con materiale privato (nessun rimborso)',
+      materialCostPaid: 'Costo materiale pagato',
+    },
     saving: 'Salvataggio...',
     // Failure reasons
     failureReasons: {

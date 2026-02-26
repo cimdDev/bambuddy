@@ -2634,6 +2634,8 @@ async def on_print_complete(printer_id: int, data: dict):
 
     log_timing("SD card cleanup")
 
+    queue_accounting_flags: dict | None = None
+
     # Update queue item status early — must run before the archive_id early-return
     # so queue items don't get stuck in "printing" when archive lookup fails.
     # Uses run_with_retry to handle SQLite "database is locked" errors (#897).
@@ -2645,7 +2647,7 @@ async def on_print_complete(printer_id: int, data: dict):
         from backend.app.models.print_queue import PrintQueueItem
 
         async def _update_queue_status(db):
-            nonlocal queue_item_id, queue_status, queue_auto_off
+            nonlocal queue_item_id, queue_status, queue_auto_off, queue_accounting_flags
             result = await db.execute(
                 select(PrintQueueItem)
                 .where(PrintQueueItem.printer_id == printer_id)
@@ -2673,6 +2675,11 @@ async def on_print_complete(printer_id: int, data: dict):
                 # files — #1008.
                 await _bump_library_file_usage_if_completed(db, item, queue_status)
 
+                queue_accounting_flags = {
+                    "private_job": bool(item.private_job),
+                    "private_material": bool(item.private_material),
+                    "material_cost_paid": bool(item.material_cost_paid),
+                }
                 await db.commit()
                 queue_item_id = item.id
                 queue_auto_off = item.auto_off_after
@@ -2983,6 +2990,15 @@ async def on_print_complete(printer_id: int, data: dict):
                 completed_at=datetime.now(timezone.utc) if status in ("completed", "failed", "aborted") else None,
                 failure_reason=failure_reason,
             )
+            if queue_accounting_flags:
+                archive = await service.get_archive(archive_id)
+                if archive:
+                    archive.private_job = bool(queue_accounting_flags.get("private_job", False))
+                    archive.private_material = bool(queue_accounting_flags.get("private_material", False))
+                    archive.material_cost_paid = (
+                        bool(queue_accounting_flags.get("material_cost_paid", False)) and not archive.private_material
+                    )
+                    await db.commit()
             logger.info(
                 "[ARCHIVE] Archive %s status updated to %s, failure_reason=%s", archive_id, status, failure_reason
             )
