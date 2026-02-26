@@ -142,6 +142,12 @@ class AppSettings(BaseModel):
         description="Preferred slicer: 'bambu_studio' or 'orcaslicer'",
     )
 
+    # User display preferences
+    hide_bambuddy_users: bool = Field(
+        default=False,
+        description="Hide Bambuddy usernames in UI displays and show slicer user names only when available",
+    )
+
     # Prometheus metrics endpoint
     prometheus_enabled: bool = Field(default=False, description="Enable Prometheus metrics endpoint at /metrics")
     prometheus_token: str = Field(
@@ -206,5 +212,6 @@ class AppSettingsUpdate(BaseModel):
     library_disk_warning_gb: float | None = None
     camera_view_mode: str | None = None
     preferred_slicer: str | None = None
+    hide_bambuddy_users: bool | None = None
     prometheus_enabled: bool | None = None
     prometheus_token: str | None = None

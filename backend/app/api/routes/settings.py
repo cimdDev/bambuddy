@@ -96,6 +96,7 @@ async def get_settings(
                 "mqtt_use_tls",
                 "ha_enabled",
                 "per_printer_mapping_expanded",
+                "hide_bambuddy_users",
                 "prometheus_enabled",
             ]:
                 settings_dict[setting.key] = setting.value.lower() == "true"

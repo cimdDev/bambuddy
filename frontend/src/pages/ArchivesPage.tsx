@@ -146,6 +146,7 @@ function ArchiveCard({
   preferredSlicer = 'bambu_studio',
   currency,
   defaultCostPerKg,
+  hideBambuddyUsers = false,
   t,
 }: {
   archive: Archive;
@@ -159,6 +160,7 @@ function ArchiveCard({
   preferredSlicer?: SlicerType;
   currency: string;
   defaultCostPerKg: number;
+  hideBambuddyUsers?: boolean;
   t: TFunction;
 }) {
   // Debug: log when card is highlighted
@@ -1047,7 +1049,7 @@ function ArchiveCard({
             {(archive.slicer_user || archive.slicer_user_email) && (
               <SlicerUserBadge user={archive.slicer_user || archive.slicer_user_email || ''} />
             )}
-            {authEnabled && archive.created_by_username && (
+            {authEnabled && !hideBambuddyUsers && archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
                 <User className="w-3 h-3" />
                 {archive.created_by_username}
@@ -1428,6 +1430,7 @@ function ArchiveListRow({
   projects,
   isHighlighted,
   preferredSlicer = 'bambu_studio',
+  hideBambuddyUsers = false,
   t,
 }: {
   archive: Archive;
@@ -1438,6 +1441,7 @@ function ArchiveListRow({
   projects: ProjectListItem[] | undefined;
   isHighlighted?: boolean;
   preferredSlicer?: SlicerType;
+  hideBambuddyUsers?: boolean;
   t: TFunction;
 }) {
   const queryClient = useQueryClient();
@@ -1956,7 +1960,7 @@ function ArchiveListRow({
                 className="opacity-100"
               />
             )}
-          {authEnabled && archive.created_by_username && (
+          {authEnabled && !hideBambuddyUsers && archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
               <User className="w-3 h-3" />
               {archive.created_by_username}
@@ -2425,6 +2429,7 @@ export function ArchivesPage() {
     queryKey: ['settings'],
     queryFn: api.getSettings,
   });
+  const hideBambuddyUsers = settings?.hide_bambuddy_users ?? false;
 
   const { data: users } = useQuery({
     queryKey: ['users'],
@@ -3272,6 +3277,7 @@ export function ArchivesPage() {
               preferredSlicer={preferredSlicer}
               currency={currency}
               defaultCostPerKg={settings?.default_filament_cost ?? 0}
+              hideBambuddyUsers={hideBambuddyUsers}
               t={t}
             />
           ))}
@@ -3300,6 +3306,7 @@ export function ArchivesPage() {
                 projects={projects}
                 isHighlighted={archive.id === highlightedArchiveId}
                 preferredSlicer={preferredSlicer}
+                hideBambuddyUsers={hideBambuddyUsers}
                 t={t}
               />
             ))}
@@ -3439,7 +3446,9 @@ export function ArchivesPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-bambu-gray-light">{entry.printer_name || '—'}</td>
-                          <td className="px-4 py-3 text-bambu-gray-light">{entry.created_by_username || '—'}</td>
+                          <td className="px-4 py-3 text-bambu-gray-light">
+                            {hideBambuddyUsers ? '—' : (entry.created_by_username || '—')}
+                          </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                               entry.status === 'completed' ? 'bg-green-500/20 text-green-400' :

@@ -1415,6 +1415,7 @@ function PrinterCard({
   checkPrinterFirmware = true,
   currencySymbol = '$',
   defaultCostPerKg = 0,
+  hideBambuddyUsers = false,
 }: {
   printer: Printer;
   hideIfDisconnected?: boolean;
@@ -1440,6 +1441,7 @@ function PrinterCard({
   checkPrinterFirmware?: boolean;
   currencySymbol?: string;
   defaultCostPerKg?: number;
+  hideBambuddyUsers?: boolean;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -1675,7 +1677,9 @@ function PrinterCard({
 
   // Combine both sources: queue item user takes precedence, then reprint user.
   // Bambuddy user badges are auth-gated.
-  const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
+  const currentPrintUser = authEnabled && !hideBambuddyUsers
+    ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username)
+    : null;
   const currentQueueComment = printingQueueItems?.[0]?.comment?.trim() || null;
   const currentQueueCost = estimatePrintCost(
     printingQueueItems?.[0]?.filament_used_grams,
@@ -5434,6 +5438,7 @@ export function PrintersPage() {
                     checkPrinterFirmware={settings?.check_printer_firmware !== false}
                     currencySymbol={getCurrencySymbol(settings?.currency || 'USD')}
                     defaultCostPerKg={settings?.default_filament_cost ?? 0}
+                    hideBambuddyUsers={settings?.hide_bambuddy_users ?? false}
                   />
                 ))}
               </div>
@@ -5469,6 +5474,7 @@ export function PrintersPage() {
               checkPrinterFirmware={settings?.check_printer_firmware !== false}
               currencySymbol={getCurrencySymbol(settings?.currency || 'USD')}
               defaultCostPerKg={settings?.default_filament_cost ?? 0}
+              hideBambuddyUsers={settings?.hide_bambuddy_users ?? false}
             />
           ))}
         </div>

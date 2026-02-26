@@ -821,6 +821,8 @@ export interface AppSettings {
   camera_view_mode: 'window' | 'embedded';
   // Preferred slicer
   preferred_slicer: 'bambu_studio' | 'orcaslicer';
+  // User display preferences
+  hide_bambuddy_users: boolean;
   // Prometheus metrics
   prometheus_enabled: boolean;
   prometheus_token: string;

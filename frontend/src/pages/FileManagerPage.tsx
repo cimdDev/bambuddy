@@ -907,14 +907,16 @@ interface FileCardProps {
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
   authEnabled: boolean;
+  hideBambuddyUsers: boolean;
   currencySymbol: string;
   defaultCostPerKg: number;
   t: TFunction;
 }
 
-function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, currencySymbol, defaultCostPerKg, t }: FileCardProps) {
+function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, hideBambuddyUsers, currencySymbol, defaultCostPerKg, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
   const slicerUser = file.slicer_user || file.slicer_user_email;
+  const bambuUser = authEnabled && !hideBambuddyUsers ? file.created_by_username : null;
   const { data: platesData } = useQuery({
     queryKey: ['library-file-plates', file.id],
     queryFn: () => api.getLibraryFilePlates(file.id),
@@ -1002,12 +1004,12 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
             {t('fileManager.printedCount', { count: file.print_count })}
           </div>
         )}
-        {(slicerUser || (authEnabled && file.created_by_username)) && (
+        {(slicerUser || bambuUser) && (
           <div className="mt-1 text-xs text-bambu-gray flex flex-wrap items-center gap-x-2 gap-y-1">
-            {authEnabled && file.created_by_username && (
+            {bambuUser && (
               <span className="inline-flex items-center gap-1" title={t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}>
                 <User className="w-3 h-3" />
-                {file.created_by_username}
+                {bambuUser}
               </span>
             )}
             {slicerUser && (
@@ -1241,6 +1243,7 @@ export function FileManagerPage() {
     queryKey: ['settings'],
     queryFn: () => api.getSettings() as Promise<AppSettings>,
   });
+  const hideBambuddyUsers = settings?.hide_bambuddy_users ?? false;
   const { data: folders, isLoading: foldersLoading } = useQuery({
     queryKey: ['library-folders'],
     queryFn: () => api.getLibraryFolders(),
@@ -2057,6 +2060,7 @@ export function FileManagerPage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     authEnabled={authEnabled}
+                    hideBambuddyUsers={hideBambuddyUsers}
                     currencySymbol={currencySymbol}
                     defaultCostPerKg={defaultCostPerKg}
                   />
@@ -2131,7 +2135,7 @@ export function FileManagerPage() {
                       <div className="text-sm text-bambu-gray flex items-center gap-1">
                         {(() => {
                           const slicerUser = file.slicer_user || file.slicer_user_email;
-                          const bambuUser = authEnabled ? file.created_by_username : null;
+                          const bambuUser = authEnabled && !hideBambuddyUsers ? file.created_by_username : null;
                           if (!bambuUser && !slicerUser) return '-';
                           return (
                             <div className="min-w-0 flex flex-col">
