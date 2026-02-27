@@ -118,6 +118,11 @@ describe('QueuePage', () => {
       http.get('/api/v1/printers/', () => {
         return HttpResponse.json(mockPrinters);
       }),
+      http.get('/api/v1/filament-catalog/', () => {
+        return HttpResponse.json([
+          { id: 1, name: 'PLA Generic', type: 'PLA', brand: null, color: null, color_hex: null, cost_per_kg: 30, spool_weight_g: 1000, currency: 'USD', density: null, print_temp_min: null, print_temp_max: null, bed_temp_min: null, bed_temp_max: null, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+        ]);
+      }),
       http.delete('/api/v1/queue/:id', () => {
         return HttpResponse.json({ success: true });
       }),
@@ -204,6 +209,29 @@ describe('QueuePage', () => {
       await waitFor(() => {
         // Queue items should be visible with status indicators
         expect(screen.getByText('Test Print 1')).toBeInTheDocument();
+      });
+    });
+
+    it('uses filament catalog cost for private reimbursement before default', async () => {
+      server.use(
+        http.get('/api/v1/queue/', () => {
+          return HttpResponse.json([
+            {
+              ...mockQueueItems[0],
+              private_job: true,
+              private_material: false,
+              material_cost_paid: false,
+              filament_used_grams: 200,
+              filament_type: 'PLA',
+            },
+          ]);
+        })
+      );
+
+      render(<QueuePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/\\$6\\.00/)).toBeInTheDocument();
       });
     });
 

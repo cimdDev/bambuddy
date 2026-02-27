@@ -422,6 +422,7 @@ function SortableQueueItem({
   timeFormat = 'system',
   currencySymbol,
   defaultCostPerKg,
+  filamentCostByType,
   isSelected = false,
   onToggleSelect,
   hasPermission,
@@ -444,6 +445,7 @@ function SortableQueueItem({
   timeFormat?: TimeFormat;
   currencySymbol: string;
   defaultCostPerKg: number;
+  filamentCostByType: Map<string, number>;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
@@ -503,7 +505,9 @@ function SortableQueueItem({
   const slicerUser = item.slicer_user || item.slicer_user_email;
   const canEditComment = canModify('queue', 'update', item.created_by_id);
   const canEditAccounting = canModify('queue', 'update', item.created_by_id);
-  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
+  const primaryFilamentType = item.filament_type?.split(',')[0]?.trim().toUpperCase() || null;
+  const filamentSpecificCostPerKg = primaryFilamentType ? filamentCostByType.get(primaryFilamentType) : undefined;
+  const itemCost = estimatePrintCost(item.filament_used_grams, filamentSpecificCostPerKg ?? defaultCostPerKg);
   const [isCommentExpanded, setIsCommentExpanded] = useState(Boolean(item.comment?.trim()));
   const [isRemovingComment, setIsRemovingComment] = useState(false);
   const hasComment = Boolean(item.comment?.trim());
@@ -1004,11 +1008,26 @@ export function QueuePage() {
     queryKey: ['settings'],
     queryFn: api.getSettings,
   });
+  const { data: filamentCatalog } = useQuery({
+    queryKey: ['filamentCatalog'],
+    queryFn: api.listFilaments,
+  });
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const defaultCostPerKg = settings?.default_filament_cost ?? 0;
   const hideBambuddyUsers = settings?.hide_bambuddy_users ?? false;
+  const filamentCostByType = useMemo(() => {
+    const costs = new Map<string, number>();
+    if (!filamentCatalog) return costs;
+
+    for (const filament of filamentCatalog) {
+      const typeKey = filament.type?.trim().toUpperCase();
+      if (!typeKey || costs.has(typeKey)) continue;
+      costs.set(typeKey, filament.cost_per_kg);
+    }
+    return costs;
+  }, [filamentCatalog]);
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -1470,6 +1489,7 @@ export function QueuePage() {
                     timeFormat={timeFormat}
                     currencySymbol={currencySymbol}
                     defaultCostPerKg={defaultCostPerKg}
+                    filamentCostByType={filamentCostByType}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     hideBambuddyUsers={hideBambuddyUsers}
@@ -1592,6 +1612,7 @@ export function QueuePage() {
                         timeFormat={timeFormat}
                         currencySymbol={currencySymbol}
                         defaultCostPerKg={defaultCostPerKg}
+                        filamentCostByType={filamentCostByType}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
@@ -1656,6 +1677,7 @@ export function QueuePage() {
                     timeFormat={timeFormat}
                     currencySymbol={currencySymbol}
                     defaultCostPerKg={defaultCostPerKg}
+                    filamentCostByType={filamentCostByType}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     hideBambuddyUsers={hideBambuddyUsers}

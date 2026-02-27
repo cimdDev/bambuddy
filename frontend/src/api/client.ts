@@ -1244,6 +1244,9 @@ export interface PrintQueueItem {
   completed_at: string | null;
   error_message: string | null;
   comment?: string | null;
+  private_job?: boolean;
+  private_material?: boolean;
+  material_cost_paid?: boolean;
   created_at: string;
   archive_name?: string | null;
   archive_thumbnail?: string | null;
@@ -1252,6 +1255,8 @@ export interface PrintQueueItem {
   printer_name?: string | null;
   print_time_seconds?: number | null;  // Estimated print time from archive or library file
   filament_used_grams?: number | null;  // Estimated print weight from archive or library file
+  filament_type?: string | null;  // e.g. "PLA", "PETG" (from archive/library file)
+  filament_color?: string | null;  // e.g. "#FFFFFF" (from archive/library file)
   // User tracking (Issue #206)
   created_by_id?: number | null;
   created_by_username?: string | null;
