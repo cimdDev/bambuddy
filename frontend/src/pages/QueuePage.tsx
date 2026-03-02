@@ -755,7 +755,7 @@ function SortableQueueItem({
                     ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
                     : privateMaterialUsage === 'private_partial'
                       ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                      : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
                 } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
                 title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.privateMaterial')}
               >
