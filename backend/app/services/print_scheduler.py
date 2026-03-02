@@ -80,8 +80,12 @@ class PrintScheduler:
 
             for item in items:
                 # Check scheduled time first (scheduled_time is stored in UTC from ISO string)
-                if item.scheduled_time and item.scheduled_time > datetime.now(timezone.utc):
-                    continue
+                if item.scheduled_time:
+                    sched = item.scheduled_time
+                    if sched.tzinfo is None:
+                        sched = sched.replace(tzinfo=timezone.utc)
+                    if sched > datetime.now(timezone.utc):
+                        continue
 
                 # Skip items that require manual start
                 if item.manual_start:
@@ -139,6 +143,16 @@ class PrintScheduler:
                                 db=db,
                             )
                             continue
+
+                    # Compute AMS mapping if not already set
+                    if not item.ams_mapping:
+                        computed_mapping = await self._compute_ams_mapping_for_printer(db, item.printer_id, item)
+                        if computed_mapping:
+                            item.ams_mapping = json.dumps(computed_mapping)
+                            logger.info(
+                                f"Queue item {item.id}: Computed AMS mapping for printer {item.printer_id}: {computed_mapping}"
+                            )
+                            await db.commit()
 
                     # Start the print
                     await self._start_print(db, item)
@@ -429,8 +443,8 @@ class PrintScheduler:
     ) -> list[int] | None:
         """Compute AMS mapping for a printer based on filament requirements.
 
-        This is called for model-based queue items after a printer is assigned,
-        to compute the correct AMS slot mapping for that specific printer's hardware.
+        Called when a queue item has no ams_mapping set — either for model-based
+        items after printer assignment, or printer-specific items (e.g. from VP).
 
         Args:
             db: Database session

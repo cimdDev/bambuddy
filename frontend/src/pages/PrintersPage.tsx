@@ -1363,6 +1363,7 @@ function mapModelCode(ssdpModel: string | null): string {
     'O1E': 'H2D Pro',
     'O2D': 'H2D Pro',
     'O1C': 'H2C',
+    'O1C2': 'H2C',
     'O1S': 'H2S',
     // X1 Series
     'BL-P001': 'X1C',
@@ -1556,6 +1557,29 @@ function PrinterCard({
     return types;
   }, [status?.ams, status?.vt_tray]);
 
+  // Collect loaded filament type+color pairs for queue widget override matching
+  // Format: "TYPE:rrggbb" (e.g., "PETG:ffffff") — mirrors backend _count_override_color_matches()
+  const loadedFilaments = useMemo(() => {
+    const filaments = new Set<string>();
+    if (status?.ams) {
+      for (const ams of status.ams) {
+        for (const tray of ams.tray || []) {
+          if (tray.tray_type && tray.tray_color) {
+            const color = tray.tray_color.replace('#', '').toLowerCase().slice(0, 6);
+            filaments.add(`${tray.tray_type.toUpperCase()}:${color}`);
+          }
+        }
+      }
+    }
+    for (const vt of status?.vt_tray ?? []) {
+      if (vt.tray_type && vt.tray_color) {
+        const color = vt.tray_color.replace('#', '').toLowerCase().slice(0, 6);
+        filaments.add(`${vt.tray_type.toUpperCase()}:${color}`);
+      }
+    }
+    return filaments;
+  }, [status?.ams, status?.vt_tray]);
+
   // Fetch cloud filament info for tooltips (name includes color, also has K value)
   const { data: filamentInfo } = useQuery({
     queryKey: ['filamentInfo', trayInfoIds],
@@ -1649,7 +1673,27 @@ function PrinterCard({
     queryKey: ['queue', printer.id, 'pending'],
     queryFn: () => api.getQueue(printer.id, 'pending'),
   });
-  const queueCount = queueItems?.length || 0;
+  // Filter queue items by filament compatibility (same logic as PrinterQueueWidget)
+  // so the badge only shows on printers that can actually run the queued jobs.
+  const queueCount = useMemo(() => {
+    if (!queueItems?.length) return 0;
+    return queueItems.filter(item => {
+      if (item.required_filament_types?.length && loadedFilamentTypes?.size) {
+        if (!item.required_filament_types.every((t: string) => loadedFilamentTypes.has(t.toUpperCase()))) {
+          return false;
+        }
+      }
+      if (item.filament_overrides?.length && loadedFilaments?.size) {
+        const hasColorMatch = item.filament_overrides.some((o: { type?: string; color?: string }) => {
+          const oType = (o.type || '').toUpperCase();
+          const oColor = (o.color || '').replace('#', '').toLowerCase().slice(0, 6);
+          return loadedFilaments.has(`${oType}:${oColor}`);
+        });
+        if (!hasColorMatch) return false;
+      }
+      return true;
+    }).length;
+  }, [queueItems, loadedFilamentTypes, loadedFilaments]);
 
   // Fetch currently printing queue item to show who started it (Issue #206)
   const { data: printingQueueItems } = useQuery({
@@ -2489,7 +2533,7 @@ function PrinterCard({
                 </div>
 
                 {/* Queue Widget - always visible when there are pending items */}
-                <PrinterQueueWidget printerId={printer.id} printerModel={printer.model} printerState={status.state} plateCleared={status.plate_cleared} loadedFilamentTypes={loadedFilamentTypes} />
+                <PrinterQueueWidget printerId={printer.id} printerModel={printer.model} printerState={status.state} plateCleared={status.plate_cleared} loadedFilamentTypes={loadedFilamentTypes} loadedFilaments={loadedFilaments} />
               </>
             )}
 
@@ -3566,8 +3610,8 @@ function PrinterCard({
                     window.open(`/camera/${printer.id}`, `camera-${printer.id}`, features);
                   }
                 }}
-                disabled={!status?.connected}
-                title={cameraViewMode === 'embedded' ? t('printers.openCameraOverlay') : t('printers.openCameraWindow')}
+                disabled={!status?.connected || !hasPermission('camera:view')}
+                title={!hasPermission('camera:view') ? t('printers.permission.noCamera') : (cameraViewMode === 'embedded' ? t('printers.openCameraOverlay') : t('printers.openCameraWindow'))}
               >
                 <Video className="w-4 h-4" />
               </Button>

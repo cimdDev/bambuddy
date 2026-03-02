@@ -41,6 +41,7 @@ VIRTUAL_PRINTER_MODELS = {
     # H2 Series
     "O1D": "H2D",  # H2D
     "O1C": "H2C",  # H2C
+    "O1C2": "H2C",  # H2C (dual nozzle variant)
     "O1S": "H2S",  # H2S
 }
 
@@ -68,6 +69,7 @@ MODEL_SERIAL_PREFIXES = {
     # H2 Series
     "O1D": "09400A",  # H2D
     "O1C": "09400A",  # H2C
+    "O1C2": "09400A",  # H2C (dual nozzle variant)
     "O1S": "09400A",  # H2S
 }
 
@@ -342,7 +344,7 @@ class VirtualPrinterInstance:
             with zipfile.ZipFile(file_path, "r") as zf:
                 if "Metadata/slice_info.config" in zf.namelist():
                     content = zf.read("Metadata/slice_info.config").decode()
-                    root = ET.fromstring(content)  # noqa: S314
+                    root = ET.fromstring(content)  # noqa: S314  # nosec B314
                     plate = root.find(".//plate")
                     if plate is not None:
                         for meta in plate.findall("metadata"):
