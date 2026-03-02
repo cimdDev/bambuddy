@@ -231,7 +231,7 @@ describe('QueuePage', () => {
       render(<QueuePage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/\\$6\\.00/)).toBeInTheDocument();
+        expect(screen.getByText(/Kosten:\s*\$6\.00/)).toBeInTheDocument();
       });
     });
 
