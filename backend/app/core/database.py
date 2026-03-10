@@ -74,8 +74,10 @@ async def init_db():
     from backend.app.models import (  # noqa: F401
         active_print_spoolman,
         ams_history,
+        ams_label,
         api_key,
         archive,
+        bug_report,
         color_catalog,
         external_link,
         filament,
@@ -1343,6 +1345,16 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Already applied
 
+    # Migration: Add SpoolBuddy scale weight tracking columns to spool table
+    try:
+        await conn.execute(text("ALTER TABLE spool ADD COLUMN last_scale_weight INTEGER"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE spool ADD COLUMN last_weighed_at DATETIME"))
+    except OperationalError:
+        pass  # Already applied
+
     # Migration: Add cost tracking fields to spool table
     try:
         await conn.execute(text("ALTER TABLE spool ADD COLUMN cost_per_kg REAL"))
@@ -1463,6 +1475,87 @@ async def run_migrations(conn):
     except OperationalError:
         pass  # Already applied
 
+    # Migration: Add NFC reader and display control columns to spoolbuddy_devices
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN nfc_reader_type VARCHAR(20)"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN nfc_connection VARCHAR(20)"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN display_brightness INTEGER DEFAULT 100"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN display_blank_timeout INTEGER DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN has_backlight BOOLEAN DEFAULT 0"))
+    except OperationalError:
+        pass  # Already applied
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN last_calibrated_at DATETIME"))
+    except OperationalError:
+        pass  # Already applied
+
+    # Migration: Add NFC tag write payload column to spoolbuddy_devices
+    try:
+        await conn.execute(text("ALTER TABLE spoolbuddy_devices ADD COLUMN pending_write_payload TEXT"))
+    except OperationalError:
+        pass  # Already applied
+
+    # Migration: Convert ams_labels table from (printer_id, ams_id) key to ams_serial_number key
+    # Labels are now keyed by AMS serial number so they persist when the AMS is moved to another printer.
+    try:
+        await conn.execute(text("DROP TABLE IF EXISTS ams_labels_new"))
+        result = await conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='ams_labels'"))
+        row = result.fetchone()
+        if row and "printer_id" in (row[0] or ""):
+            # Old schema: rebuild the table with ams_serial_number as the unique key.
+            # Existing rows get a synthetic serial "p{printer_id}a{ams_id}" so data is preserved.
+            await conn.execute(
+                text("""
+                CREATE TABLE ams_labels_new (
+                    id INTEGER PRIMARY KEY,
+                    ams_serial_number VARCHAR(50) NOT NULL,
+                    ams_id INTEGER,
+                    label VARCHAR(100) NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_ams_label_serial UNIQUE (ams_serial_number)
+                )
+            """)
+            )
+            await conn.execute(
+                text("""
+                INSERT INTO ams_labels_new (id, ams_serial_number, ams_id, label, created_at, updated_at)
+                SELECT id,
+                       'p' || CAST(printer_id AS TEXT) || 'a' || CAST(ams_id AS TEXT),
+                       ams_id,
+                       label,
+                       created_at,
+                       updated_at
+                FROM ams_labels
+            """)
+            )
+            await conn.execute(text("DROP TABLE ams_labels"))
+            await conn.execute(text("ALTER TABLE ams_labels_new RENAME TO ams_labels"))
+    except OperationalError:
+        pass  # Already migrated or table does not exist yet
+
+    # Migration: Add auto_dispatch column to virtual_printers
+    try:
+        await conn.execute(text("ALTER TABLE virtual_printers ADD COLUMN auto_dispatch BOOLEAN DEFAULT 1"))
+    except OperationalError:
+        pass  # Already applied
+
+    # Cleanup: Remove obsolete settings keys that are no longer used
+    obsolete_keys = ["slicer_binary_path"]
+    for key in obsolete_keys:
+        await conn.execute(text("DELETE FROM settings WHERE key = :key"), {"key": key})
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

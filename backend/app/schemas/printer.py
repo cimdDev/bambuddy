@@ -138,6 +138,8 @@ class AMSUnit(BaseModel):
     temp: float | None = None
     is_ams_ht: bool = False  # True for AMS-HT (single spool), False for regular AMS (4 spools)
     tray: list[AMSTray] = []
+    serial_number: str = ""  # AMS unit serial number (sn from MQTT)
+    sw_ver: str = ""  # AMS firmware version (from get_version info.module)
 
 
 class NozzleInfoResponse(BaseModel):
@@ -158,6 +160,11 @@ class NozzleRackSlot(BaseModel):
     filament_color: str = ""  # RGBA hex ("00000000" = no filament)
     filament_id: str = ""  # Bambu filament ID
     filament_type: str = ""  # Material type (e.g. "PLA", "PETG")
+
+
+class AmsLabelBody(BaseModel):
+    label: str = Field(..., min_length=1, max_length=100)
+    ams_serial: str = Field(default="", max_length=50)
 
 
 class PrintOptionsResponse(BaseModel):

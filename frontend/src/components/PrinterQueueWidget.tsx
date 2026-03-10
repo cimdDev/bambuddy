@@ -8,6 +8,7 @@ import { useToast } from '../contexts/ToastContext';
 import { formatRelativeTime } from '../utils/date';
 import { getCurrencySymbol } from '../utils/currency';
 import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
+import { filterCompatibleQueueItems } from '../utils/printer';
 import { SlicerUserBadge } from './SlicerUserBadge';
 
 interface PrinterQueueWidgetProps {
@@ -48,26 +49,11 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
   });
 
   // Filter queue to items this printer can actually print (filament type + color check)
-  const compatibleQueue = queue?.filter(item => {
-    // Type check: all required filament types must be loaded
-    if (item.required_filament_types?.length && loadedFilamentTypes?.size) {
-      if (!item.required_filament_types.every((t: string) => loadedFilamentTypes.has(t.toUpperCase()))) {
-        return false;
-      }
-    }
-    // Color check: if filament overrides specify colors, at least one must match
-    // Mirrors backend _count_override_color_matches() logic
-    if (item.filament_overrides?.length && loadedFilaments?.size) {
-      const hasColorMatch = item.filament_overrides.some(o => {
-        const oType = (o.type || '').toUpperCase();
-        const oColor = (o.color || '').replace('#', '').toLowerCase().slice(0, 6);
-        return loadedFilaments.has(`${oType}:${oColor}`);
-      });
-      if (!hasColorMatch) return false;
-    }
-    return true;
-  });
+  const compatibleQueue = queue ? filterCompatibleQueueItems(queue, loadedFilamentTypes, loadedFilaments) : undefined;
 
+  // Split into auto-dispatchable vs staged (manual_start) items
+  const autoDispatchQueue = compatibleQueue?.filter(item => !item.manual_start) ?? [];
+  const nextAutoItem = autoDispatchQueue[0];
   const nextItem = compatibleQueue?.[0];
   const totalPending = compatibleQueue?.length || 0;
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
@@ -80,9 +66,11 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
     return null;
   }
 
-  const needsClearPlate = (printerState === 'FINISH' || printerState === 'FAILED') && !plateCleared;
+  // Only prompt "Clear Plate & Start Next" when there are auto-dispatchable items
+  const needsClearPlate = (printerState === 'FINISH' || printerState === 'FAILED') && !plateCleared && autoDispatchQueue.length > 0;
 
   if (needsClearPlate) {
+    const displayItem = nextAutoItem || nextItem;
     return (
       <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
         <div className="flex items-center gap-3 mb-2">
@@ -90,7 +78,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
           <div className="min-w-0 flex-1">
             <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
             <p className="text-sm text-white truncate">
-              {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
+              {displayItem?.archive_name || displayItem?.library_file_name || `File #${displayItem?.archive_id || displayItem?.library_file_id}`}
             </p>
             {nextComment && (
               <p className="text-xs text-bambu-gray-light mt-0.5 break-words">

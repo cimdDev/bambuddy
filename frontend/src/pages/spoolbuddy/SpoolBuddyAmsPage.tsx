@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ function getAmsName(amsId: number): string {
 function mapModelCode(ssdpModel: string | null): string {
   if (!ssdpModel) return '';
   const modelMap: Record<string, string> = {
-    'O1D': 'H2D', 'O1E': 'H2D Pro', 'O2D': 'H2D Pro', 'O1C': 'H2C', 'O1S': 'H2S',
+    'O1D': 'H2D', 'O1E': 'H2D Pro', 'O2D': 'H2D Pro', 'O1C': 'H2C', 'O1C2': 'H2C', 'O1S': 'H2S',
     'BL-P001': 'X1C', 'BL-P002': 'X1', 'BL-P003': 'X1E',
     'C11': 'P1S', 'C12': 'P1P', 'C13': 'P2S',
     'N2S': 'A1', 'N1': 'A1 Mini',
@@ -70,6 +70,28 @@ export function SpoolBuddyAmsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: assignments } = useQuery({
+    queryKey: ['spool-assignments', selectedPrinterId],
+    queryFn: () => api.getAssignments(selectedPrinterId!),
+    enabled: selectedPrinterId !== null,
+    staleTime: 30 * 1000,
+  });
+
+  // Build fill-level override map from inventory assignments
+  // Key: "amsId-trayId", Value: fill percentage (0-100)
+  const fillOverrides = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!assignments) return map;
+    for (const a of assignments) {
+      const sp = a.spool;
+      if (sp && sp.label_weight > 0 && sp.weight_used != null) {
+        const fill = Math.round(Math.max(0, sp.label_weight - sp.weight_used) / sp.label_weight * 100);
+        map[`${a.ams_id}-${a.tray_id}`] = fill;
+      }
+    }
+    return map;
+  }, [assignments]);
+
   const isConnected = status?.connected ?? false;
   const amsUnits = useMemo(() => status?.ams ?? [], [status?.ams]);
   const regularAms = useMemo(() => amsUnits.filter(u => !u.is_ams_ht), [amsUnits]);
@@ -96,14 +118,14 @@ export function SpoolBuddyAmsPage() {
     ? status.ams_extruder_map
     : cachedAmsExtruderMap.current;
 
-  const getNozzleSide = (amsId: number): 'L' | 'R' | null => {
+  const getNozzleSide = useCallback((amsId: number): 'L' | 'R' | null => {
     if (!isDualNozzle) return null;
     const mappedExtruderId = amsExtruderMap[String(amsId)];
     const normalizedId = amsId >= 128 ? amsId - 128 : amsId;
     const extruderId = mappedExtruderId !== undefined ? mappedExtruderId : normalizedId;
     // extruder 0 = right, 1 = left
     return extruderId === 1 ? 'L' : 'R';
-  };
+  }, [isDualNozzle, amsExtruderMap]);
 
   const [configureSlotModal, setConfigureSlotModal] = useState<{
     amsId: number;
@@ -118,7 +140,7 @@ export function SpoolBuddyAmsPage() {
     savedPresetId?: string;
   } | null>(null);
 
-  const getActiveSlotForAms = (amsId: number): number | null => {
+  const getActiveSlotForAms = useCallback((amsId: number): number | null => {
     if (trayNow === 255 || trayNow === 254) return null;
     if (amsId <= 3) {
       const activeAmsId = Math.floor(trayNow / 4);
@@ -129,9 +151,9 @@ export function SpoolBuddyAmsPage() {
       if (trayNow === 16 + htIndex) return 0;
     }
     return null;
-  };
+  }, [trayNow]);
 
-  const handleAmsSlotClick = (amsId: number, trayId: number, tray: AMSTray | null) => {
+  const handleAmsSlotClick = useCallback((amsId: number, trayId: number, tray: AMSTray | null) => {
     const globalTrayId = amsId >= 128 ? (amsId - 128) * 4 + trayId + 64 : amsId * 4 + trayId;
     const slotPreset = slotPresets?.[globalTrayId];
     const mappedExtruderId = amsExtruderMap[String(amsId)];
@@ -149,9 +171,9 @@ export function SpoolBuddyAmsPage() {
       caliIdx: tray?.cali_idx,
       savedPresetId: slotPreset?.preset_id,
     });
-  };
+  }, [slotPresets, amsExtruderMap, isDualNozzle]);
 
-  const handleExtSlotClick = (extTray: AMSTray) => {
+  const handleExtSlotClick = useCallback((extTray: AMSTray) => {
     const extTrayId = extTray.id ?? 254;
     const slotTrayId = extTrayId - 254;
     const extSlotPreset = slotPresets?.[255 * 4 + slotTrayId];
@@ -167,7 +189,7 @@ export function SpoolBuddyAmsPage() {
       caliIdx: extTray.cali_idx,
       savedPresetId: extSlotPreset?.preset_id,
     });
-  };
+  }, [slotPresets, isDualNozzle]);
 
   // Set alert for low filament in status bar
   useEffect(() => {
@@ -194,6 +216,7 @@ export function SpoolBuddyAmsPage() {
     const items: {
       key: string; label: string; tray: AMSTray; isEmpty: boolean; isActive: boolean;
       temp?: number | null; humidity?: number | null; nozzleSide?: 'L' | 'R' | null;
+      effectiveFill: number | null;
       onClick: () => void;
     }[] = [];
 
@@ -203,6 +226,8 @@ export function SpoolBuddyAmsPage() {
         tray_id_name: null, tray_info_idx: null, remain: -1, k: null,
         cali_idx: null, tag_uid: null, tray_uuid: null, nozzle_temp_min: null, nozzle_temp_max: null,
       };
+      const invFill = fillOverrides[`${unit.id}-0`] ?? null;
+      const amsFill = tray.remain != null && tray.remain >= 0 ? tray.remain : null;
       items.push({
         key: `ht-${unit.id}`,
         label: getAmsName(unit.id),
@@ -212,16 +237,22 @@ export function SpoolBuddyAmsPage() {
         temp: unit.temp,
         humidity: unit.humidity,
         nozzleSide: getNozzleSide(unit.id),
+        effectiveFill: invFill ?? amsFill,
         onClick: () => handleAmsSlotClick(unit.id, 0, isTrayEmpty(tray) ? null : tray),
       });
     }
 
     for (const extTray of vtTrays) {
       const extTrayId = extTray.id ?? 254;
-      const isExtActive = isDualNozzle && trayNow === 254
-        ? (extTrayId === 254 && status?.active_extruder === 1) ||
-          (extTrayId === 255 && status?.active_extruder === 0)
-        : trayNow === extTrayId;
+      // tray_now=255 means "no tray loaded" (idle) — never active
+      const isExtActive = trayNow === 255 ? false
+        : isDualNozzle && trayNow === 254
+          ? (extTrayId === 254 && status?.active_extruder === 1) ||
+            (extTrayId === 255 && status?.active_extruder === 0)
+          : trayNow === extTrayId;
+      const extSlotTrayId = extTrayId - 254;
+      const extInvFill = fillOverrides[`255-${extSlotTrayId}`] ?? null;
+      const extAmsFill = extTray.remain != null && extTray.remain >= 0 ? extTray.remain : null;
       items.push({
         key: `ext-${extTrayId}`,
         label: isDualNozzle
@@ -230,16 +261,17 @@ export function SpoolBuddyAmsPage() {
         tray: extTray,
         isEmpty: isTrayEmpty(extTray),
         isActive: isExtActive,
-        nozzleSide: isDualNozzle ? (extTrayId === 254 ? 'L' : 'R') : null,
+        nozzleSide: null,
+        effectiveFill: extInvFill ?? extAmsFill,
         onClick: () => handleExtSlotClick(extTray),
       });
     }
 
     return items;
-  }, [htAms, vtTrays, isDualNozzle, trayNow, status?.active_extruder, slotPresets, amsExtruderMap, t]);
+  }, [htAms, vtTrays, isDualNozzle, trayNow, status?.active_extruder, t, getActiveSlotForAms, getNozzleSide, handleAmsSlotClick, handleExtSlotClick, fillOverrides]);
 
   return (
-    <div className="h-full flex flex-col p-3">
+    <div className="h-full flex flex-col p-4">
       <div className="flex-1 min-h-0">
         {!selectedPrinterId ? (
           <div className="flex-1 flex items-center justify-center h-full">
@@ -265,7 +297,7 @@ export function SpoolBuddyAmsPage() {
         ) : (
           <div className="flex flex-col gap-3 h-full">
             {/* Regular AMS cards — 4-slot, 2-col grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {regularAms.map((unit) => (
                 <AmsUnitCard
                   key={unit.id}
@@ -275,23 +307,24 @@ export function SpoolBuddyAmsPage() {
                   isDualNozzle={isDualNozzle}
                   nozzleSide={getNozzleSide(unit.id)}
                   thresholds={amsThresholds}
+                  fillOverrides={fillOverrides}
                 />
               ))}
             </div>
 
-            {/* Third row: single-slot cards (AMS-HT + External) */}
+            {/* Third row: single-slot cards (AMS-HT + External) — half-width to align with AMS cards */}
             {singleSlots.length > 0 && (
-              <div className="flex gap-2 flex-shrink-0">
-                {singleSlots.map(({ key, label, tray, isEmpty, isActive, temp, humidity, nozzleSide, onClick }) => {
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {singleSlots.map(({ key, label, tray, isEmpty, isActive, temp, humidity, nozzleSide, effectiveFill, onClick }) => {
                   const color = trayColorToCSS(tray.tray_color);
                   return (
                     <div
                       key={key}
-                      className={`bg-bambu-dark-secondary rounded-lg px-2 py-1.5 cursor-pointer hover:bg-bambu-dark-secondary/80 transition-all flex items-center gap-2 ${isActive ? 'ring-2 ring-bambu-green' : ''}`}
+                      className={`bg-bambu-dark-secondary rounded-lg px-3 py-2 cursor-pointer hover:bg-bambu-dark-secondary/80 transition-all flex items-center gap-3 ${isActive ? 'ring-2 ring-bambu-green' : ''}`}
                       onClick={onClick}
                     >
                       {/* Spool */}
-                      <div className="relative w-8 h-8 flex-shrink-0">
+                      <div className="relative w-10 h-10 flex-shrink-0">
                         {isEmpty ? (
                           <div className="w-full h-full rounded-full border-2 border-dashed border-gray-500 flex items-center justify-center">
                             <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
@@ -312,10 +345,10 @@ export function SpoolBuddyAmsPage() {
                       {/* Info */}
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-white/50 font-medium truncate">{label}</span>
+                          <span className="text-xs text-white/50 font-medium truncate">{label}</span>
                           {nozzleSide && <NozzleBadge side={nozzleSide} />}
                         </div>
-                        <div className="text-xs text-white/80 truncate">
+                        <div className="text-sm text-white/80 truncate">
                           {isEmpty ? 'Empty' : tray.tray_type || '?'}
                         </div>
                         {(temp != null || humidity != null) && (
@@ -338,13 +371,13 @@ export function SpoolBuddyAmsPage() {
                         )}
                       </div>
                       {/* Fill bar */}
-                      {!isEmpty && tray.remain != null && tray.remain >= 0 && (
-                        <div className="w-1 h-6 bg-bambu-dark-tertiary rounded-full overflow-hidden flex-shrink-0 flex flex-col-reverse">
+                      {!isEmpty && effectiveFill != null && effectiveFill >= 0 && (
+                        <div className="w-1.5 h-8 bg-bambu-dark-tertiary rounded-full overflow-hidden flex-shrink-0 flex flex-col-reverse">
                           <div
                             className="w-full rounded-full"
                             style={{
-                              height: `${tray.remain}%`,
-                              backgroundColor: tray.remain > 50 ? '#22c55e' : tray.remain > 20 ? '#f59e0b' : '#ef4444',
+                              height: `${effectiveFill}%`,
+                              backgroundColor: effectiveFill > 50 ? '#22c55e' : effectiveFill > 20 ? '#f59e0b' : '#ef4444',
                             }}
                           />
                         </div>
@@ -365,6 +398,7 @@ export function SpoolBuddyAmsPage() {
           printerId={selectedPrinterId}
           slotInfo={configureSlotModal}
           printerModel={mapModelCode(printer?.model ?? null) || undefined}
+          fullScreen
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['slotPresets', selectedPrinterId] });
             queryClient.invalidateQueries({ queryKey: ['printerStatus', selectedPrinterId] });

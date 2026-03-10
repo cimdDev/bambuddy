@@ -4,7 +4,7 @@ import logging
 import re
 import shutil
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 from defusedxml import ElementTree as ET
@@ -1070,6 +1070,8 @@ class ArchiveService:
         self,
         printer_id: int | None = None,
         project_id: int | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[PrintArchive]:
@@ -1087,6 +1089,14 @@ class ArchiveService:
 
         if project_id:
             query = query.where(PrintArchive.project_id == project_id)
+
+        if date_from:
+            dt_from = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+            query = query.where(PrintArchive.created_at >= dt_from)
+
+        if date_to:
+            dt_to = datetime.combine(date_to, time.max, tzinfo=timezone.utc)
+            query = query.where(PrintArchive.created_at <= dt_to)
 
         query = query.limit(limit).offset(offset)
         result = await self.db.execute(query)

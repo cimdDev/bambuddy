@@ -78,6 +78,9 @@ class PrintScheduler:
             # Track busy printers to avoid assigning multiple items to same printer
             busy_printers: set[int] = set()
 
+            # Log skip reasons once per queue check (not per item)
+            skip_reasons: dict[str, int] = {}
+
             for item in items:
                 # Check scheduled time first (scheduled_time is stored in UTC from ISO string)
                 if item.scheduled_time:
@@ -85,10 +88,12 @@ class PrintScheduler:
                     if sched.tzinfo is None:
                         sched = sched.replace(tzinfo=timezone.utc)
                     if sched > datetime.now(timezone.utc):
+                        skip_reasons["scheduled_future"] = skip_reasons.get("scheduled_future", 0) + 1
                         continue
 
                 # Skip items that require manual start
                 if item.manual_start:
+                    skip_reasons["manual_start"] = skip_reasons.get("manual_start", 0) + 1
                     continue
 
                 if item.printer_id:
@@ -261,6 +266,24 @@ class PrintScheduler:
                         await self._start_print(db, item)
                         busy_printers.add(printer_id)
 
+            # Log summary of skip reasons (helps diagnose why queue items aren't starting)
+            if skip_reasons:
+                logger.info("Queue skip summary: %s", skip_reasons)
+            if busy_printers:
+                # Log why each printer was busy (first time it was checked)
+                for pid in busy_printers:
+                    state = printer_manager.get_status(pid)
+                    connected = printer_manager.is_connected(pid)
+                    plate_cleared = printer_manager.is_plate_cleared(pid)
+                    state_name = state.state if state else "NO_STATUS"
+                    logger.info(
+                        "Queue: printer %d not available — connected=%s, state=%s, plate_cleared=%s",
+                        pid,
+                        connected,
+                        state_name,
+                        plate_cleared,
+                    )
+
     async def _find_idle_printer_for_model(
         self,
         db: AsyncSession,
@@ -279,6 +302,10 @@ class PrintScheduler:
             required_filament_types: Optional list of filament types needed (e.g., ["PLA", "PETG"])
                                      If provided, only printers with all required types loaded will match.
             target_location: Optional location filter. If provided, only printers in this location are considered.
+            filament_overrides: Optional list of override dicts. Each entry may include
+                                 ``force_color_match: true`` to require an exact type+color match
+                                 on the printer for that slot. Without the flag the existing
+                                 colour-preference logic applies.
 
         Returns:
             Tuple of (printer_id, waiting_reason):
@@ -304,14 +331,27 @@ class PrintScheduler:
         if not printers:
             return None, f"No active {normalized_model} printers{location_suffix} configured"
 
+        # Separate force-matched overrides from preference-only overrides
+        force_overrides = [o for o in (filament_overrides or []) if o.get("force_color_match")]
+        pref_overrides = [o for o in (filament_overrides or []) if not o.get("force_color_match")]
+
         # Track reasons for skipping printers
         printers_busy = []
         printers_offline = []
-        printers_missing_filament = []
+        printers_missing_filament: list[tuple[str, list[str]]] = []
         candidates: list[tuple[int, int]] = []  # (printer_id, color_match_count)
 
         for printer in printers:
             if printer.id in exclude_ids:
+                # Printer is already claimed by another job in this scheduling run.
+                # For force-color jobs, still check if the color would match — if not,
+                # report it as a color mismatch rather than plain "Busy" so the user
+                # knows the job needs a filament change, not just to wait for availability.
+                if force_overrides and not pref_overrides:
+                    missing_colors = self._get_missing_force_color_slots(printer.id, force_overrides)
+                    if missing_colors:
+                        printers_missing_filament.append((printer.name, missing_colors))
+                        continue
                 printers_busy.append(printer.name)
                 continue
 
@@ -323,6 +363,21 @@ class PrintScheduler:
                 continue
 
             if not is_idle:
+                # Printer is currently printing.  For force-color jobs, check whether the
+                # loaded color would satisfy the requirement — if not, surface it as a
+                # color-mismatch reason rather than plain "Busy" so the user understands
+                # that the job is waiting for a filament change, not just printer availability.
+                if force_overrides and not pref_overrides:
+                    missing_colors = self._get_missing_force_color_slots(printer.id, force_overrides)
+                    if missing_colors:
+                        printers_missing_filament.append((printer.name, missing_colors))
+                        logger.debug(
+                            "Printer %s (%s) is busy but also has wrong force-color: %s",
+                            printer.id,
+                            printer.name,
+                            missing_colors,
+                        )
+                        continue
                 printers_busy.append(printer.name)
                 continue
 
@@ -330,25 +385,54 @@ class PrintScheduler:
             if required_filament_types:
                 missing = self._get_missing_filament_types(printer.id, required_filament_types)
                 if missing:
-                    printers_missing_filament.append((printer.name, missing))
+                    # When force_overrides are present, enrich missing entries with color info
+                    # so the "Waiting on" message includes "TYPE (color)" instead of just "TYPE"
+                    if force_overrides:
+                        force_color_map = {
+                            (o.get("type") or "").upper(): o.get("color_name") or o.get("color", "?")
+                            for o in force_overrides
+                        }
+                        missing_enriched = [
+                            f"{t} ({force_color_map[t_upper]})" if (t_upper := t.upper()) in force_color_map else t
+                            for t in missing
+                        ]
+                        printers_missing_filament.append((printer.name, missing_enriched))
+                    else:
+                        printers_missing_filament.append((printer.name, missing))
                     logger.debug("Skipping printer %s (%s) - missing filaments: %s", printer.id, printer.name, missing)
                     continue
 
-            # If filament overrides with colors, only consider printers that have at least one color match
-            if filament_overrides:
-                color_matches = self._count_override_color_matches(printer.id, filament_overrides)
+            # Force color match: ALL flagged slots must have an exact type+color match
+            if force_overrides:
+                missing_colors = self._get_missing_force_color_slots(printer.id, force_overrides)
+                if missing_colors:
+                    printers_missing_filament.append((printer.name, missing_colors))
+                    logger.debug(
+                        "Skipping printer %s (%s) - missing force-matched colors: %s",
+                        printer.id,
+                        printer.name,
+                        missing_colors,
+                    )
+                    continue
+
+            # If preference-only overrides exist, rank by color matches (existing behaviour)
+            if pref_overrides:
+                color_matches = self._count_override_color_matches(printer.id, pref_overrides)
                 if color_matches > 0:
                     candidates.append((printer.id, color_matches))
                 else:
-                    override_colors = [f"{o.get('type', '?')} ({o.get('color', '?')})" for o in filament_overrides]
+                    override_colors = [f"{o.get('type', '?')} ({o.get('color', '?')})" for o in pref_overrides]
                     printers_missing_filament.append((printer.name, override_colors))
                     logger.debug("Skipping printer %s (%s) - no matching override colors", printer.id, printer.name)
                     continue
+            elif force_overrides:
+                # Passed all force checks — immediately eligible (no preference ordering needed)
+                return printer.id, None
             else:
-                # No overrides - take first available (existing behavior)
+                # No overrides at all - take first available (existing behavior)
                 return printer.id, None
 
-        # If we have candidates from override matching, pick the one with most color matches
+        # If we have candidates from preference override matching, pick the one with most color matches
         if candidates:
             candidates.sort(key=lambda c: c[1], reverse=True)
             return candidates[0][0], None
@@ -356,15 +440,63 @@ class PrintScheduler:
         # Build waiting reason from what we found
         reasons = []
         if printers_missing_filament:
-            # Filament mismatch is most actionable - show first
-            names_and_missing = [f"{name} (needs {', '.join(missing)})" for name, missing in printers_missing_filament]
-            reasons.append(f"Waiting for filament: {'; '.join(names_and_missing)}")
+            # Filament/color mismatch is most actionable - show first
+            if force_overrides and not pref_overrides:
+                # All mismatches are force-color failures — use descriptive message only;
+                # but only if there are no busy printers that DO have the matching color.
+                # If a printer has the right color but is busy, surface "Busy" instead so
+                # the user knows the job will start automatically once that printer is free.
+                if not printers_busy:
+                    all_missing = sorted({c for _, cols in printers_missing_filament for c in cols})
+                    return None, f"No matching material/color. Waiting on {', '.join(all_missing)}"
+                # else: fall through — printers_busy will be appended below
+            else:
+                names_and_missing = [f"{name} (needs {', '.join(missing)})" for name, missing in printers_missing_filament]
+                reasons.append(f"Waiting for filament: {'; '.join(names_and_missing)}")
         if printers_busy:
             reasons.append(f"Busy: {', '.join(printers_busy)}")
         if printers_offline:
             reasons.append(f"Offline: {', '.join(printers_offline)}")
 
         return None, " | ".join(reasons) if reasons else f"No available {model} printers{location_suffix}"
+
+    def _get_missing_force_color_slots(self, printer_id: int, force_overrides: list[dict]) -> list[str]:
+        """Return descriptive strings for force_color_match slots not satisfied by the printer.
+
+        Each entry in ``force_overrides`` must have ``type`` and ``color`` fields and is expected
+        to carry ``force_color_match: True``.  The printer must have **every** such slot loaded
+        with an exact type+color match.
+
+        Returns:
+            List of ``"TYPE (color)"`` strings for unmatched slots (empty list means all match).
+        """
+        status = printer_manager.get_status(printer_id)
+        if not status:
+            return [f"{o.get('type', '?')} ({o.get('color_name') or o.get('color', '?')})" for o in force_overrides]
+
+        # Build set of loaded type+colour pairs from AMS and external spool
+        loaded: set[tuple[str, str]] = set()
+        for ams_unit in status.raw_data.get("ams", []):
+            for tray in ams_unit.get("tray", []):
+                tray_type = tray.get("tray_type")
+                tray_color = tray.get("tray_color", "")
+                if tray_type:
+                    color_norm = tray_color.replace("#", "").lower()[:6]
+                    loaded.add((tray_type.upper(), color_norm))
+        for vt in status.raw_data.get("vt_tray") or []:
+            vt_type = vt.get("tray_type")
+            if vt_type:
+                color_norm = (vt.get("tray_color", "") or "").replace("#", "").lower()[:6]
+                loaded.add((vt_type.upper(), color_norm))
+
+        missing = []
+        for o in force_overrides:
+            o_type = (o.get("type") or "").upper()
+            o_color = (o.get("color") or "").replace("#", "").lower()[:6]
+            if (o_type, o_color) not in loaded:
+                color_label = o.get("color_name") or o.get("color", "?")
+                missing.append(f"{o_type} ({color_label})")
+        return missing
 
     def _get_missing_filament_types(self, printer_id: int, required_types: list[str]) -> list[str]:
         """Get the list of required filament types that are not loaded on the printer.
@@ -821,17 +953,27 @@ class PrintScheduler:
     def _is_printer_idle(self, printer_id: int) -> bool:
         """Check if a printer is connected and idle."""
         if not printer_manager.is_connected(printer_id):
+            logger.debug("Printer %d: not connected", printer_id)
             return False
 
         state = printer_manager.get_status(printer_id)
         if not state:
+            logger.debug("Printer %d: no status available", printer_id)
             return False
 
         # IDLE = ready for next print
         # FINISH/FAILED = ready only if user confirmed plate is cleared
-        return state.state == "IDLE" or (
+        idle = state.state == "IDLE" or (
             state.state in ("FINISH", "FAILED") and printer_manager.is_plate_cleared(printer_id)
         )
+        if not idle:
+            logger.debug(
+                "Printer %d: not idle — state=%s, plate_cleared=%s",
+                printer_id,
+                state.state,
+                printer_manager.is_plate_cleared(printer_id),
+            )
+        return idle
 
     async def _get_smart_plug(self, db: AsyncSession, printer_id: int) -> SmartPlug | None:
         """Get the smart plug associated with a printer."""
