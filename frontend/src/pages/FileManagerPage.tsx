@@ -17,7 +17,6 @@ import {
   Layers,
   HardDrive,
   File,
-  FileText,
   MoveRight,
   CheckSquare,
   Square,
