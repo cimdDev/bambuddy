@@ -16,7 +16,6 @@ import {
   Clock,
   HardDrive,
   File,
-  FileText,
   MoveRight,
   CheckSquare,
   Square,

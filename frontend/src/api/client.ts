@@ -1437,6 +1437,10 @@ export interface PrintQueueItem {
   // 3MF slicer user tracking (from archive/library metadata)
   slicer_user?: string | null;
   slicer_user_email?: string | null;
+  // Private job accounting flags
+  private_job?: boolean;
+  private_material?: boolean;
+  material_cost_paid?: boolean;
 }
 
 export interface PrintBatch {
