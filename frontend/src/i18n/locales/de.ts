@@ -979,6 +979,7 @@ export default {
       requiresPrevious: 'Erfordert vorherigen Erfolg',
       autoPowerOff: 'Automatisch ausschalten',
       gcodeInjection: 'G-code',
+      slicerUserMissingWarning: 'Bitte nur AIK Drucker Profil verwenden',
     },
     accounting: {
       privateJob: 'Privater Auftrag',

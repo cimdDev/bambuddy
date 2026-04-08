@@ -1662,6 +1662,7 @@ function PrinterCard({
   });
 
   const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? printingArchiveQuery.data?.slicer_user_email ?? null;
+  const currentMissingSlicerUser = !currentSlicerUser;
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -2758,10 +2759,16 @@ function PrinterCard({
                               {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t, activePlateLabel)}
                             </p>
 
-                            {(currentSlicerUser || printingQueueItems?.[0]?.private_job || currentQueueCost != null) && (
+                            {(currentMissingSlicerUser || currentSlicerUser || printingQueueItems?.[0]?.private_job || currentQueueCost != null) && (
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 {currentSlicerUser && (
                                   <SlicerUserBadge user={currentSlicerUser} />
+                                )}
+                                {currentMissingSlicerUser && (
+                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {t('queue.badges.slicerUserMissingWarning')}
+                                  </span>
                                 )}
                                 {printingQueueItems?.[0]?.private_job && (
                                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">

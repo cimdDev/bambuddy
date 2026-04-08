@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, Coins, AlertTriangle } from 'lucide-react';
 =======
 import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User, Coins } from 'lucide-react';
 >>>>>>> 2d5837e3 (queue/printers: restore private job badges and cost display)
+=======
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, Coins, AlertTriangle } from 'lucide-react';
+>>>>>>> 471fade0 (ui: show slicer-user warning badges across printer, archives, and files)
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
@@ -108,7 +112,6 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
               </p>
             )}
             {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
-            {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
                 {displayMissingSlicerUser && (
@@ -178,7 +181,6 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {nextComment}
               </p>
             )}
-            {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
             {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextSlicerUser && (
