@@ -983,6 +983,10 @@ export default {
     accounting: {
       privateJob: 'Private job',
       privateMaterial: 'Private material',
+      companyMaterial: 'PSI material',
+      privateMaterialPartial: 'Private material (partial)',
+      privateMaterialFull: 'Private material (full)',
+      totalCost: 'Cost: {{amount}}',
       paid: 'Paid',
       unpaid: 'Unpaid',
       reimbursementDue: 'Due: {{amount}}',

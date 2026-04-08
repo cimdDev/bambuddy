@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+<<<<<<< HEAD
 import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, Coins, AlertTriangle } from 'lucide-react';
+=======
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User, Coins } from 'lucide-react';
+>>>>>>> 2d5837e3 (queue/printers: restore private job badges and cost display)
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';

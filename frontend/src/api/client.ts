@@ -1424,6 +1424,8 @@ export interface PrintQueueItem {
   printer_name?: string | null;
   print_time_seconds?: number | null;  // Estimated print time from archive or library file
   filament_used_grams?: number | null;  // Estimated print weight from archive or library file
+  filament_type?: string | null;  // Primary filament type from model metadata
+  filament_color?: string | null;  // Primary filament color from model metadata
   // User tracking (Issue #206)
   created_by_id?: number | null;
   created_by_username?: string | null;
