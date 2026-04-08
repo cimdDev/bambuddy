@@ -43,7 +43,6 @@ import {
   CheckCircle,
   CheckSquare,
   XCircle,
-  User,
   Coins,
   Home,
   Printer as PrinterIcon,
@@ -1359,7 +1358,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { hasPermission, authEnabled } = useAuth();
+  const { hasPermission } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -1636,16 +1635,7 @@ function PrinterCard({
     enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
-  // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
-  const { data: reprintUser } = useQuery({
-    queryKey: ['currentPrintUser', printer.id],
-    queryFn: () => api.getCurrentPrintUser(printer.id),
-    enabled: status?.state === 'RUNNING',
-  });
-
-  // Combine both sources: queue item user takes precedence, then reprint user.
-  // Bambuddy user badges are auth-gated.
-  const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
+  // Bambuddy user badge intentionally hidden on running printer card.
   const currentQueueComment = printingQueueItems?.[0]?.comment?.trim() || null;
   const currentQueueCost = estimatePrintCost(
     printingQueueItems?.[0]?.filament_used_grams,
@@ -2761,17 +2751,8 @@ function PrinterCard({
                               {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t)}
                             </p>
 
-                            {(currentPrintUser || currentSlicerUser || printingQueueItems?.[0]?.private_job || currentQueueCost != null) && (
+                            {(currentSlicerUser || printingQueueItems?.[0]?.private_job || currentQueueCost != null) && (
                               <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {currentPrintUser && (
-                                  <span
-                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light"
-                                    title={`Started by ${currentPrintUser}`}
-                                  >
-                                    <User className="w-3 h-3" />
-                                    {currentPrintUser}
-                                  </span>
-                                )}
                                 {currentSlicerUser && (
                                   <SlicerUserBadge user={currentSlicerUser} />
                                 )}
@@ -2819,12 +2800,6 @@ function PrinterCard({
                               <span className="flex items-center gap-1">
                                 <Layers className="w-3 h-3" />
                                 {status.layer_num}/{status.total_layers}
-                              </span>
-                            )}
-                            {currentPrintUser && (
-                              <span className="flex items-center gap-1" title={`Started by ${currentPrintUser}`}>
-                                <User className="w-3 h-3" />
-                                {currentPrintUser}
                               </span>
                             )}
                             {currentSlicerUser && (
