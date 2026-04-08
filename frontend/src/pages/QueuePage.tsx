@@ -48,6 +48,7 @@ import {
   User,
   Pause,
   Weight,
+  Coins,
   ChevronDown,
   ChevronRight,
   List,
@@ -58,6 +59,8 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { type TimeFormat, formatETA, formatDuration, formatRelativeTime, parseUTCDate } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -75,6 +78,8 @@ type QueueAccountingPatch = {
   private_material?: boolean;
   material_cost_paid?: boolean;
 };
+
+type PrivateMaterialUsage = 'company' | 'private_partial' | 'private_full';
 
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
@@ -426,6 +431,9 @@ function SortableQueueItem({
   onUpdateComment,
   onUpdateAccounting,
   timeFormat = 'system',
+  currencySymbol,
+  defaultCostPerKg,
+  filamentCostByType,
   isSelected = false,
   onToggleSelect,
   hasPermission,
@@ -445,6 +453,9 @@ function SortableQueueItem({
   onUpdateComment: (comment: string) => Promise<void>;
   onUpdateAccounting: (patch: QueueAccountingPatch) => Promise<void>;
   timeFormat?: TimeFormat;
+  currencySymbol: string;
+  defaultCostPerKg: number;
+  filamentCostByType: Map<string, number>;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
@@ -503,6 +514,14 @@ function SortableQueueItem({
   const slicerUser = item.slicer_user || item.slicer_user_email;
   const canEditComment = canModify('queue', 'update', item.created_by_id);
   const canEditAccounting = canModify('queue', 'update', item.created_by_id);
+  const primaryFilamentType = item.filament_type?.split(',')[0]?.trim().toUpperCase() || null;
+  const filamentSpecificCostPerKg = primaryFilamentType ? filamentCostByType.get(primaryFilamentType) : undefined;
+  const itemCost = estimatePrintCost(item.filament_used_grams, filamentSpecificCostPerKg ?? defaultCostPerKg);
+  const privateMaterialUsage: PrivateMaterialUsage = item.private_material
+    ? 'private_full'
+    : item.material_cost_paid
+      ? 'private_partial'
+      : 'company';
   const [isCommentExpanded, setIsCommentExpanded] = useState(Boolean(item.comment?.trim()));
   const [isRemovingComment, setIsRemovingComment] = useState(false);
   const hasComment = Boolean(item.comment?.trim());
@@ -663,6 +682,12 @@ function SortableQueueItem({
                 {formatWeight(item.filament_used_grams)}
               </span>
             )}
+            {itemCost != null && (
+              <span className="flex items-center gap-1 sm:gap-1.5">
+                <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                {formatCurrencyAmount(itemCost, currencySymbol)}
+              </span>
+            )}
             {bambuUser && (
               <span className="hidden sm:flex items-center gap-1.5" title={t('queue.addedBy', { name: bambuUser })}>
                 <User className="w-3.5 h-3.5" />
@@ -714,7 +739,12 @@ function SortableQueueItem({
               onClick={(e) => {
                 e.stopPropagation();
                 if (!canEditAccounting) return;
-                void onUpdateAccounting({ private_job: !item.private_job });
+                const nextPrivateJob = !item.private_job;
+                void onUpdateAccounting({
+                  private_job: nextPrivateJob,
+                  private_material: nextPrivateJob ? item.private_material : false,
+                  material_cost_paid: nextPrivateJob ? item.material_cost_paid : false,
+                });
               }}
               disabled={!canEditAccounting}
               className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
@@ -732,49 +762,38 @@ function SortableQueueItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!canEditAccounting) return;
+                  const nextUsage: PrivateMaterialUsage =
+                    privateMaterialUsage === 'company'
+                      ? 'private_partial'
+                      : privateMaterialUsage === 'private_partial'
+                        ? 'private_full'
+                        : 'company';
                   void onUpdateAccounting({
                     private_job: true,
-                    private_material: !item.private_material,
-                    material_cost_paid: false,
+                    private_material: nextUsage === 'private_full',
+                    material_cost_paid: nextUsage === 'private_partial',
                   });
                 }}
                 disabled={!canEditAccounting}
                 className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
-                  item.private_material
+                  privateMaterialUsage === 'private_full'
                     ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                    : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                    : privateMaterialUsage === 'private_partial'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
                 } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
                 title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.privateMaterial')}
               >
-                {t('queue.accounting.privateMaterial')}
+                {privateMaterialUsage === 'private_full'
+                  ? t('queue.accounting.privateMaterialFull')
+                  : privateMaterialUsage === 'private_partial'
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
               </button>
             )}
-            {item.private_job && !item.private_material && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!canEditAccounting) return;
-                  void onUpdateAccounting({
-                    private_job: true,
-                    private_material: false,
-                    material_cost_paid: !item.material_cost_paid,
-                  });
-                }}
-                disabled={!canEditAccounting}
-                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
-                  item.material_cost_paid
-                    ? 'bg-green-500/10 text-green-300 border-green-500/20'
-                    : 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20'
-                } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
-                title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.paid')}
-              >
-                {item.material_cost_paid ? t('queue.accounting.paid') : t('queue.accounting.unpaid')}
-              </button>
-            )}
-            {item.private_job && !item.private_material && !item.material_cost_paid && (
-              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-red-500/10 text-red-300 border-red-500/20">
-                {t('queue.accounting.unpaid')}
+            {item.private_job && itemCost != null && (
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-500/20">
+                {t('queue.accounting.totalCost', { amount: formatCurrencyAmount(itemCost, currencySymbol) })}
               </span>
             )}
           </div>
@@ -1029,8 +1048,24 @@ export function QueuePage() {
     queryKey: ['settings'],
     queryFn: api.getSettings,
   });
+  const { data: filamentCatalog } = useQuery({
+    queryKey: ['filamentCatalog'],
+    queryFn: api.listFilaments,
+  });
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
+  const filamentCostByType = useMemo(() => {
+    const costs = new Map<string, number>();
+    if (!filamentCatalog) return costs;
+    for (const filament of filamentCatalog) {
+      const typeKey = filament.type?.trim().toUpperCase();
+      if (!typeKey || costs.has(typeKey)) continue;
+      costs.set(typeKey, filament.cost_per_kg);
+    }
+    return costs;
+  }, [filamentCatalog]);
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -1521,6 +1556,9 @@ export function QueuePage() {
                     onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                     onUpdateAccounting={(patch) => handleUpdateAccounting(item.id, patch)}
                     timeFormat={timeFormat}
+                    currencySymbol={currencySymbol}
+                    defaultCostPerKg={defaultCostPerKg}
+                    filamentCostByType={filamentCostByType}
                     hasPermission={hasPermission}
                     authEnabled={authEnabled}
                     canModify={canModify}
@@ -1640,6 +1678,9 @@ export function QueuePage() {
                         onUpdateComment={(comment) => handleUpdateComment(item.id, comment)}
                         onUpdateAccounting={(patch) => handleUpdateAccounting(item.id, patch)}
                         timeFormat={timeFormat}
+                        currencySymbol={currencySymbol}
+                        defaultCostPerKg={defaultCostPerKg}
+                        filamentCostByType={filamentCostByType}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}

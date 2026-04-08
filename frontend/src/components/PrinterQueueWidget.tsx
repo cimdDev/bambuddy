@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User, Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
@@ -8,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { formatRelativeTime } from '../utils/date';
 import { filterCompatibleQueueItems } from '../utils/printer';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { SlicerUserBadge } from './SlicerUserBadge';
 
 interface PrinterQueueWidgetProps {
@@ -30,6 +32,10 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
     refetchInterval: 30000,
+  });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
   });
 
   const clearPlateMutation = useMutation({
@@ -69,6 +75,8 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
   const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
   const nextComment = nextItem?.comment?.trim() || null;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
   // Prompt "Clear Plate & Start Next" whenever the backend flags the printer as awaiting
   // acknowledgment. Don't gate on reported state: after Auto Off cycles the printer, it
   // boots into IDLE while still awaiting - the prompt must survive that (#961). The flag
@@ -80,6 +88,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
     const displaySlicerUser = displayItem?.slicer_user || displayItem?.slicer_user_email || null;
     const displayBambuUser = authEnabled ? (displayItem?.created_by_username || null) : null;
     const displayComment = displayItem?.comment?.trim() || null;
+    const displayCost = estimatePrintCost(displayItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
     return (
       <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
         <div className="flex items-center gap-3 mb-2">
@@ -94,7 +103,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {displayComment}
               </p>
             )}
-            {(displayBambuUser || displaySlicerUser || displayItem?.private_job) && (
+            {(displayBambuUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {displayBambuUser && (
                   <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: displayBambuUser })}>
@@ -106,6 +115,12 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {displayItem?.private_job && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
                     {t('queue.accounting.privateJob')}
+                  </span>
+                )}
+                {displayCost != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                    <Coins className="w-3 h-3" />
+                    {formatCurrencyAmount(displayCost, currencySymbol)}
                   </span>
                 )}
               </div>
@@ -158,7 +173,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {nextComment}
               </p>
             )}
-            {(nextBambuUser || nextSlicerUser || nextItem?.private_job) && (
+            {(nextBambuUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
                 {nextBambuUser && (
                   <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
@@ -172,6 +187,12 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {nextItem?.private_job && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
                     {t('queue.accounting.privateJob')}
+                  </span>
+                )}
+                {nextCost != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                    <Coins className="w-3 h-3" />
+                    {formatCurrencyAmount(nextCost, currencySymbol)}
                   </span>
                 )}
               </div>

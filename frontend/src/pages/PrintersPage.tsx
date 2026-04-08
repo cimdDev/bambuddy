@@ -44,6 +44,7 @@ import {
   CheckSquare,
   XCircle,
   User,
+  Coins,
   Home,
   Printer as PrinterIcon,
   Info,
@@ -86,6 +87,8 @@ import { getPrinterImage, getWifiStrength, filterCompatibleQueueItems } from '..
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 
 // Color names resolve via getColorName() which reads the backend color_catalog
@@ -1313,6 +1316,8 @@ function PrinterCard({
   cameraViewMode = 'window',
   onOpenEmbeddedCamera,
   checkPrinterFirmware = true,
+  currencySymbol = '$',
+  defaultCostPerKg = 0,
   dryingPresets = DRYING_PRESETS,
   requirePlateClear = false,
   selectionMode = false,
@@ -1342,6 +1347,8 @@ function PrinterCard({
   cameraViewMode?: 'window' | 'embedded';
   onOpenEmbeddedCamera?: (printerId: number, printerName: string) => void;
   checkPrinterFirmware?: boolean;
+  currencySymbol?: string;
+  defaultCostPerKg?: number;
   dryingPresets?: Record<string, { n3f: number; n3s: number; n3f_hours: number; n3s_hours: number }>;
   requirePlateClear?: boolean;
   selectionMode?: boolean;
@@ -1626,7 +1633,7 @@ function PrinterCard({
   const { data: printingQueueItems } = useQuery({
     queryKey: ['queue', printer.id, 'printing'],
     queryFn: () => api.getQueue(printer.id, 'printing'),
-    enabled: status?.state === 'RUNNING',
+    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
   // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
@@ -1640,6 +1647,10 @@ function PrinterCard({
   // Bambuddy user badges are auth-gated.
   const currentPrintUser = authEnabled ? (printingQueueItems?.[0]?.created_by_username || reprintUser?.username) : null;
   const currentQueueComment = printingQueueItems?.[0]?.comment?.trim() || null;
+  const currentQueueCost = estimatePrintCost(
+    printingQueueItems?.[0]?.filament_used_grams,
+    defaultCostPerKg,
+  );
 
   const archiveId = (() => {
     const raw = printingQueueItems?.[0]?.archive_id;
@@ -2750,7 +2761,7 @@ function PrinterCard({
                               {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t)}
                             </p>
 
-                            {(currentPrintUser || currentSlicerUser || printingQueueItems?.[0]?.private_job) && (
+                            {(currentPrintUser || currentSlicerUser || printingQueueItems?.[0]?.private_job || currentQueueCost != null) && (
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 {currentPrintUser && (
                                   <span
@@ -2767,6 +2778,12 @@ function PrinterCard({
                                 {printingQueueItems?.[0]?.private_job && (
                                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
                                     {t('queue.accounting.privateJob')}
+                                  </span>
+                                )}
+                                {currentQueueCost != null && (
+                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                                    <Coins className="w-3 h-3" />
+                                    {formatCurrencyAmount(currentQueueCost, currencySymbol)}
                                   </span>
                                 )}
                               </div>
@@ -6814,6 +6831,8 @@ export function PrintersPage() {
                       cameraViewMode={settings?.camera_view_mode || 'window'}
                       onOpenEmbeddedCamera={(id, name) => setEmbeddedCameraPrinters(prev => new Map(prev).set(id, { id, name }))}
                       checkPrinterFirmware={settings?.check_printer_firmware !== false}
+                      currencySymbol={getCurrencySymbol(settings?.currency || 'USD')}
+                      defaultCostPerKg={settings?.default_filament_cost ?? 0}
                       dryingPresets={effectiveDryingPresets}
                       requirePlateClear={settings?.require_plate_clear === true}
                       selectionMode={selectionMode}
@@ -6854,6 +6873,8 @@ export function PrintersPage() {
               cameraViewMode={settings?.camera_view_mode || 'window'}
               onOpenEmbeddedCamera={(id, name) => setEmbeddedCameraPrinters(prev => new Map(prev).set(id, { id, name }))}
               checkPrinterFirmware={settings?.check_printer_firmware !== false}
+              currencySymbol={getCurrencySymbol(settings?.currency || 'USD')}
+              defaultCostPerKg={settings?.default_filament_cost ?? 0}
               dryingPresets={effectiveDryingPresets}
               requirePlateClear={settings?.require_plate_clear === true}
               selectionMode={selectionMode}
