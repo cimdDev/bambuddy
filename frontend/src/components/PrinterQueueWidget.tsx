@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, User, Coins } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, Coins, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
@@ -27,7 +27,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission, authEnabled } = useAuth();
+  const { hasPermission } = useAuth();
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
@@ -73,7 +73,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   const nextAutoItem = autoDispatchQueue[0];
   const nextItem = compatibleQueue?.[0];
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
-  const nextBambuUser = authEnabled ? (nextItem?.created_by_username || null) : null;
+  const nextMissingSlicerUser = !nextSlicerUser;
   const nextComment = nextItem?.comment?.trim() || null;
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
@@ -86,7 +86,7 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   if (needsClearPlate) {
     const displayItem = nextAutoItem || nextItem;
     const displaySlicerUser = displayItem?.slicer_user || displayItem?.slicer_user_email || null;
-    const displayBambuUser = authEnabled ? (displayItem?.created_by_username || null) : null;
+    const displayMissingSlicerUser = !displaySlicerUser;
     const displayComment = displayItem?.comment?.trim() || null;
     const displayCost = estimatePrintCost(displayItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
     return (
@@ -103,15 +103,15 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {displayComment}
               </p>
             )}
-            {(displayBambuUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
+            {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
-                {displayBambuUser && (
-                  <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: displayBambuUser })}>
-                    <User className="w-3 h-3" />
-                    {displayBambuUser}
+                {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
+                {displayMissingSlicerUser && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                    <AlertTriangle className="w-3 h-3" />
+                    {t('queue.badges.slicerUserMissingWarning')}
                   </span>
                 )}
-                {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
                 {displayItem?.private_job && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
                     {t('queue.accounting.privateJob')}
@@ -173,16 +173,16 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
                 {nextComment}
               </p>
             )}
-            {(nextBambuUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
+            {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
-                {nextBambuUser && (
-                  <span className="inline-flex items-center gap-1" title={t('queue.addedBy', { name: nextBambuUser })}>
-                    <User className="w-3 h-3" />
-                    {nextBambuUser}
-                  </span>
-                )}
                 {nextSlicerUser && (
                   <SlicerUserBadge user={nextSlicerUser} />
+                )}
+                {nextMissingSlicerUser && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                    <AlertTriangle className="w-3 h-3" />
+                    {t('queue.badges.slicerUserMissingWarning')}
+                  </span>
                 )}
                 {nextItem?.private_job && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">

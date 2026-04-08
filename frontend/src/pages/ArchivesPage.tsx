@@ -31,6 +31,7 @@ import {
   FolderOpen,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   Copy,
   Film,
   ScanSearch,
@@ -1074,8 +1075,13 @@ function ArchiveCard({
           <span>{formatDateTime(archive.created_at, timeFormat)}</span>
           <div className="flex items-center gap-2">
             {/* Slicer user (Custom Feature) */}
-            {(archive.slicer_user || archive.slicer_user_email) && (
+            {(archive.slicer_user || archive.slicer_user_email) ? (
               <SlicerUserBadge user={archive.slicer_user || archive.slicer_user_email || ''} />
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                <AlertTriangle className="w-3 h-3" />
+                {t('queue.badges.slicerUserMissingWarning')}
+              </span>
             )}
             {authEnabled && archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
@@ -2008,11 +2014,16 @@ function ArchiveListRow({
         </div>
         <div className="col-span-2 text-sm text-bambu-gray">
           <div>{formatDateOnly(archive.created_at)}</div>
-            {(archive.slicer_user || archive.slicer_user_email) && (
+            {(archive.slicer_user || archive.slicer_user_email) ? (
               <SlicerUserBadge
                 user={archive.slicer_user || archive.slicer_user_email || ''}
                 className="opacity-100"
               />
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 mt-0.5" title={t('queue.badges.slicerUserMissingWarning')}>
+                <AlertTriangle className="w-3 h-3" />
+                {t('queue.badges.slicerUserMissingWarning')}
+              </span>
             )}
           {authEnabled && archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>

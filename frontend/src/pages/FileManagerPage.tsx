@@ -706,6 +706,7 @@ interface FileCardProps {
 function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
   const slicerUser = file.slicer_user || file.slicer_user_email;
+  const missingSlicerUser = !slicerUser;
 
   return (
     <div
@@ -763,7 +764,7 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
             {t('fileManager.printedCount', { count: file.print_count })}
           </div>
         )}
-        {(slicerUser || (authEnabled && file.created_by_username)) && (
+        {(missingSlicerUser || slicerUser || (authEnabled && file.created_by_username)) && (
           <div className="mt-1 text-xs text-bambu-gray flex flex-wrap items-center gap-x-2 gap-y-1">
             {authEnabled && file.created_by_username && (
               <span className="inline-flex items-center gap-1" title={t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}>
@@ -773,6 +774,12 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
             )}
             {slicerUser && (
               <SlicerUserBadge user={slicerUser} />
+            )}
+            {missingSlicerUser && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                <AlertTriangle className="w-3 h-3" />
+                {t('queue.badges.slicerUserMissingWarning')}
+              </span>
             )}
           </div>
         )}
@@ -1999,7 +2006,6 @@ export function FileManagerPage() {
                         {(() => {
                           const slicerUser = file.slicer_user || file.slicer_user_email;
                           const bambuUser = authEnabled ? file.created_by_username : null;
-                          if (!bambuUser && !slicerUser) return '-';
                           return (
                             <div className="min-w-0 flex flex-col">
                               {bambuUser && (
@@ -2010,6 +2016,12 @@ export function FileManagerPage() {
                               )}
                               {slicerUser && (
                                 <SlicerUserBadge user={slicerUser} truncate />
+                              )}
+                              {!slicerUser && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 mt-0.5 max-w-fit" title={t('queue.badges.slicerUserMissingWarning')}>
+                                  <AlertTriangle className="w-3 h-3" />
+                                  {t('queue.badges.slicerUserMissingWarning')}
+                                </span>
                               )}
                             </div>
                           );
