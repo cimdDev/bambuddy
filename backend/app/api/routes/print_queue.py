@@ -211,6 +211,7 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "comment": item.comment,
         "private_job": item.private_job,
         "private_material": item.private_material,
+        "private_material_partial": item.private_material_partial,
         "created_at": item.created_at,
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
@@ -504,6 +505,9 @@ async def add_to_queue(
             raise HTTPException(status_code=404, detail="Project not found")
 
     ams_mapping_json = json.dumps(data.ams_mapping) if data.ams_mapping else None
+    private_job = data.private_job
+    private_material = data.private_material if private_job else False
+    private_material_partial = data.private_material_partial if private_job and not private_material else False
     items = []
     for i in range(quantity):
         item = PrintQueueItem(
@@ -515,8 +519,9 @@ async def add_to_queue(
             archive_id=data.archive_id,
             library_file_id=data.library_file_id,
             comment=(data.comment or "").strip() or None,
-            private_job=data.private_job,
-            private_material=data.private_material,
+            private_job=private_job,
+            private_material=private_material,
+            private_material_partial=private_material_partial,
             scheduled_time=data.scheduled_time,
             require_previous_success=data.require_previous_success,
             auto_off_after=data.auto_off_after,
@@ -813,7 +818,15 @@ async def update_queue_item(
     if "comment" in update_data:
         update_data["comment"] = (update_data["comment"] or "").strip() or None
 
-    accounting_fields = {"private_job", "private_material"}
+    next_private_job = update_data.get("private_job", item.private_job)
+    next_private_material = update_data.get("private_material", item.private_material)
+    if not next_private_job:
+        update_data["private_material"] = False
+        update_data["private_material_partial"] = False
+    elif next_private_material:
+        update_data["private_material_partial"] = False
+
+    accounting_fields = {"private_job", "private_material", "private_material_partial"}
     allowed_non_pending_fields = {"comment"} | accounting_fields
     non_allowed_fields = set(update_data) - allowed_non_pending_fields
     if item.status != "pending" and non_allowed_fields:

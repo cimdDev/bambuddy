@@ -410,6 +410,7 @@ export interface Archive {
   cost: number | null;
   private_job?: boolean;
   private_material?: boolean;
+  private_material_partial?: boolean;
   photos: string[] | null;
   failure_reason: string | null;
   quantity: number;
@@ -1439,6 +1440,7 @@ export interface PrintQueueItem {
   // Private job accounting flags
   private_job?: boolean;
   private_material?: boolean;
+  private_material_partial?: boolean;
 }
 
 export interface PrintBatch {
@@ -1468,6 +1470,7 @@ export interface PrintQueueItemCreate {
   comment?: string | null;
   private_job?: boolean;
   private_material?: boolean;
+  private_material_partial?: boolean;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
@@ -1498,6 +1501,7 @@ export interface PrintQueueItemUpdate {
   comment?: string | null;
   private_job?: boolean | null;
   private_material?: boolean | null;
+  private_material_partial?: boolean | null;
   scheduled_time?: string | null;
   require_previous_success?: boolean;
   auto_off_after?: boolean;
@@ -3077,6 +3081,7 @@ export const api = {
     cost?: number;
     private_job?: boolean;
     private_material?: boolean;
+    private_material_partial?: boolean;
     failure_reason?: string | null;
     status?: string;
     quantity?: number;

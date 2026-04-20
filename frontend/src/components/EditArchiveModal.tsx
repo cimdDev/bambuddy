@@ -52,6 +52,9 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
   const [quantity, setQuantity] = useState(archive.quantity ?? 1);
   const [privateJob, setPrivateJob] = useState(Boolean(archive.private_job));
   const [privateMaterial, setPrivateMaterial] = useState(Boolean(archive.private_material));
+  const [privateMaterialPartial, setPrivateMaterialPartial] = useState(
+    Boolean(archive.private_material_partial) && !Boolean(archive.private_material)
+  );
   const [photos, setPhotos] = useState<string[]>(archive.photos || []);
   const [externalUrl, setExternalUrl] = useState(archive.external_url || '');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -179,6 +182,7 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
       quantity: quantity,
       private_job: privateJob,
       private_material: privateMaterial,
+      private_material_partial: privateJob && !privateMaterial ? privateMaterialPartial : false,
       external_url: externalUrl || null,
     };
 
@@ -281,6 +285,7 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
                   setPrivateJob(checked);
                   if (!checked) {
                     setPrivateMaterial(false);
+                    setPrivateMaterialPartial(false);
                   }
                 }}
                 className="rounded border-bambu-dark-tertiary bg-bambu-dark"
@@ -293,11 +298,24 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
                   type="checkbox"
                   checked={privateMaterial}
                   onChange={(e) => {
-                    setPrivateMaterial(e.target.checked);
+                    const checked = e.target.checked;
+                    setPrivateMaterial(checked);
+                    if (checked) setPrivateMaterialPartial(false);
                   }}
                   className="rounded border-bambu-dark-tertiary bg-bambu-dark"
                 />
                 {t('editArchive.accounting.privateMaterial')}
+              </label>
+            )}
+            {privateJob && !privateMaterial && (
+              <label className="flex items-center gap-2 text-sm text-white">
+                <input
+                  type="checkbox"
+                  checked={privateMaterialPartial}
+                  onChange={(e) => setPrivateMaterialPartial(e.target.checked)}
+                  className="rounded border-bambu-dark-tertiary bg-bambu-dark"
+                />
+                {t('editArchive.accounting.privateMaterialPartial')}
               </label>
             )}
           </div>

@@ -1032,11 +1032,15 @@ function ArchiveCard({
             <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${
               archive.private_material
                 ? 'bg-emerald-500/20 text-emerald-300'
-                : 'bg-fuchsia-500/20 text-fuchsia-300'
+                : archive.private_material_partial
+                  ? 'bg-amber-500/20 text-amber-300'
+                  : 'bg-fuchsia-500/20 text-fuchsia-300'
             }`}>
               {archive.private_material
                 ? t('queue.accounting.privateMaterialFull')
-                : t('queue.accounting.companyMaterial')}
+                : archive.private_material_partial
+                  ? t('queue.accounting.privateMaterialPartial')
+                  : t('queue.accounting.companyMaterial')}
             </span>
           )}
           {archive.notes && (

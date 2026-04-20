@@ -1653,10 +1653,20 @@ async def run_migrations(conn):
     # Migration: Add accounting flags to print_queue for reimbursement tracking
     await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_job BOOLEAN DEFAULT 0")
     await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material_partial BOOLEAN DEFAULT 0")
+    await _safe_execute(
+        conn,
+        "UPDATE print_queue SET private_material_partial = COALESCE(material_cost_paid, 0) WHERE private_material = 0",
+    )
 
     # Migration: Add accounting flags to print_archives for reimbursement tracking
     await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_job BOOLEAN DEFAULT 0")
     await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material_partial BOOLEAN DEFAULT 0")
+    await _safe_execute(
+        conn,
+        "UPDATE print_archives SET private_material_partial = COALESCE(material_cost_paid, 0) WHERE private_material = 0",
+    )
 
 
 async def seed_notification_templates():
