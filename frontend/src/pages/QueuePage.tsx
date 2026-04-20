@@ -76,7 +76,10 @@ import { QueueTimelineView } from '../components/QueueTimelineView';
 type QueueAccountingPatch = {
   private_job?: boolean;
   private_material?: boolean;
+  private_material_partial?: boolean;
 };
+
+type PrivateMaterialUsage = 'company' | 'private_partial' | 'private_full';
 
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
@@ -514,7 +517,11 @@ function SortableQueueItem({
   const primaryFilamentType = item.filament_type?.split(',')[0]?.trim().toUpperCase() || null;
   const filamentSpecificCostPerKg = primaryFilamentType ? filamentCostByType.get(primaryFilamentType) : undefined;
   const itemCost = estimatePrintCost(item.filament_used_grams, filamentSpecificCostPerKg ?? defaultCostPerKg);
-  const privateMaterialUsage = item.private_material ? 'private_full' : 'company';
+  const privateMaterialUsage: PrivateMaterialUsage = item.private_material
+    ? 'private_full'
+    : item.private_material_partial
+      ? 'private_partial'
+      : 'company';
   const [isCommentExpanded, setIsCommentExpanded] = useState(Boolean(item.comment?.trim()));
   const [isRemovingComment, setIsRemovingComment] = useState(false);
   const hasComment = Boolean(item.comment?.trim());
@@ -736,6 +743,7 @@ function SortableQueueItem({
                 void onUpdateAccounting({
                   private_job: nextPrivateJob,
                   private_material: nextPrivateJob ? item.private_material : false,
+                  private_material_partial: nextPrivateJob ? item.private_material_partial : false,
                 });
               }}
               disabled={!canEditAccounting}
@@ -754,22 +762,33 @@ function SortableQueueItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!canEditAccounting) return;
+                  const nextUsage: PrivateMaterialUsage =
+                    privateMaterialUsage === 'company'
+                      ? 'private_partial'
+                      : privateMaterialUsage === 'private_partial'
+                        ? 'private_full'
+                        : 'company';
                   void onUpdateAccounting({
                     private_job: true,
-                    private_material: !item.private_material,
+                    private_material: nextUsage === 'private_full',
+                    private_material_partial: nextUsage === 'private_partial',
                   });
                 }}
                 disabled={!canEditAccounting}
                 className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
                   privateMaterialUsage === 'private_full'
                     ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                    : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                    : privateMaterialUsage === 'private_partial'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
                 } ${!canEditAccounting ? 'opacity-60 cursor-not-allowed' : ''}`}
                 title={!canEditAccounting ? t('queue.permissions.noEdit') : t('queue.accounting.privateMaterial')}
               >
                 {privateMaterialUsage === 'private_full'
                   ? t('queue.accounting.privateMaterialFull')
-                  : t('queue.accounting.companyMaterial')}
+                  : privateMaterialUsage === 'private_partial'
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
               </button>
             )}
             {itemCost != null && (

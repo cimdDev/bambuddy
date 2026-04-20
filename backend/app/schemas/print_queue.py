@@ -27,6 +27,7 @@ class PrintQueueItemCreate(BaseModel):
     comment: str | None = None
     private_job: bool = False
     private_material: bool = False
+    private_material_partial: bool = False
     scheduled_time: datetime | None = None  # None = ASAP (next when idle)
     require_previous_success: bool = False
     auto_off_after: bool = False  # Power off printer after print completes
@@ -60,6 +61,7 @@ class PrintQueueItemUpdate(BaseModel):
     comment: str | None = None
     private_job: bool | None = None
     private_material: bool | None = None
+    private_material_partial: bool | None = None
     scheduled_time: datetime | None = None
     require_previous_success: bool | None = None
     auto_off_after: bool | None = None
@@ -108,6 +110,7 @@ class PrintQueueItemResponse(BaseModel):
     comment: str | None = None
     private_job: bool = False
     private_material: bool = False
+    private_material_partial: bool = False
     created_at: UTCDatetime
 
     # Nested info for UI (populated in route)

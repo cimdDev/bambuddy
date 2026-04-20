@@ -1661,6 +1661,9 @@ class PrintScheduler:
                 if archive:
                     archive.private_job = item.private_job
                     archive.private_material = item.private_material
+                    archive.private_material_partial = (
+                        item.private_material_partial and item.private_job and not item.private_material
+                    )
                     item.archive_id = archive.id
                     await db.flush()
                     logger.info(
