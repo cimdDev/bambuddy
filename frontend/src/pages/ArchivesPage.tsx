@@ -1022,50 +1022,44 @@ function ArchiveCard({
         </div>
 
         {/* Tags & Notes */}
-        {(archive.tags || archive.notes || archive.private_job) && (
-          <div className="flex flex-wrap items-center gap-1.5 mb-3">
-            {archive.private_job && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-fuchsia-500/20 text-fuchsia-300 rounded text-xs">
-                {t('archives.card.privateJob')}
-              </span>
-            )}
-            {archive.private_job && archive.private_material && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-xs">
-                {t('archives.card.privateMaterial')}
-              </span>
-            )}
-            {archive.private_job && !archive.private_material && (
-              <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${
-                archive.material_cost_paid
-                  ? 'bg-green-500/20 text-green-300'
-                  : 'bg-yellow-500/20 text-yellow-300'
-              }`}>
-                {archive.material_cost_paid ? t('archives.card.paid') : t('archives.card.unpaid')}
-              </span>
-            )}
-            {archive.private_job && !archive.private_material && !archive.material_cost_paid && archive.cost != null && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500/20 text-red-300 rounded text-xs">
-                {t('archives.card.reimbursementDue', { amount: `${currency}${archive.cost.toFixed(2)}` })}
-              </span>
-            )}
-            {archive.notes && (
-              <div
-                className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs"
-                title={archive.notes}
-              >
-                <StickyNote className="w-3 h-3" />
-              </div>
-            )}
-            {archive.tags?.split(',').map((tag, i) => (
-              <span
-                key={i}
-                className="px-1.5 py-0.5 bg-bambu-dark-tertiary text-bambu-gray-light rounded text-xs"
-              >
-                {tag.trim()}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          {archive.private_job && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-fuchsia-500/20 text-fuchsia-300 rounded text-xs">
+              {t('archives.card.privateJob')}
+            </span>
+          )}
+          {archive.private_job && (
+            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${
+              archive.private_material
+                ? 'bg-emerald-500/20 text-emerald-300'
+                : archive.material_cost_paid
+                  ? 'bg-amber-500/20 text-amber-300'
+                  : 'bg-fuchsia-500/20 text-fuchsia-300'
+            }`}>
+              {archive.private_material
+                ? t('queue.accounting.privateMaterialFull')
+                : archive.material_cost_paid
+                  ? t('queue.accounting.privateMaterialPartial')
+                  : t('queue.accounting.companyMaterial')}
+            </span>
+          )}
+          {archive.notes && (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs"
+              title={archive.notes}
+            >
+              <StickyNote className="w-3 h-3" />
+            </div>
+          )}
+          {archive.tags?.split(',').map((tag, i) => (
+            <span
+              key={i}
+              className="px-1.5 py-0.5 bg-bambu-dark-tertiary text-bambu-gray-light rounded text-xs"
+            >
+              {tag.trim()}
+            </span>
+          ))}
+        </div>
 
         {/* Spacer to push content to bottom */}
         <div className="flex-1" />
