@@ -833,11 +833,20 @@ async def update_queue_item(
             or update_data["target_model"]
         )
 
-    # Cannot specify both printer_id and target_model
-    new_printer_id = update_data.get("printer_id", item.printer_id)
-    new_target_model = update_data.get("target_model", item.target_model)
-    if new_printer_id and new_target_model:
-        raise HTTPException(400, "Cannot specify both printer_id and target_model")
+    # If a concrete printer is set in an update payload, prefer it over model routing.
+    # This keeps updates resilient when older clients accidentally send both fields.
+    if "printer_id" in update_data and update_data["printer_id"] is not None:
+        update_data["target_model"] = None
+        update_data["target_location"] = None
+
+    # Cannot specify both printer_id and target_model when routing fields are being edited.
+    # Model-based jobs keep target_model even after assignment to a concrete printer_id while
+    # printing; non-routing patches (comment/accounting) must remain editable in that state.
+    if "printer_id" in update_data or "target_model" in update_data:
+        new_printer_id = update_data.get("printer_id", item.printer_id)
+        new_target_model = update_data.get("target_model", item.target_model)
+        if new_printer_id and new_target_model:
+            raise HTTPException(400, "Cannot specify both printer_id and target_model")
 
     # Validate new printer_id if being changed (and not None)
     if "printer_id" in update_data and update_data["printer_id"] is not None:

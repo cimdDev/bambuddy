@@ -337,6 +337,50 @@ class TestPrintQueueAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_update_printing_item_accounting_when_model_assigned(
+        self, async_client: AsyncClient, queue_item_factory, printer_factory, archive_factory
+    ):
+        """Accounting updates should work for printing items that have both printer_id and target_model."""
+        printer = await printer_factory(model="X1C")
+        archive = await archive_factory()
+        item = await queue_item_factory(
+            status="printing",
+            printer_id=printer.id,
+            target_model="X1C",
+            archive_id=archive.id,
+            private_job=False,
+            private_material=False,
+            material_cost_paid=False,
+        )
+
+        response = await async_client.patch(
+            f"/api/v1/queue/{item.id}",
+            json={"private_job": True, "private_material": True, "material_cost_paid": False},
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result["private_job"] is True
+        assert result["private_material"] is True
+        assert result["material_cost_paid"] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_update_queue_item_prefers_printer_id_when_target_model_is_also_sent(
+        self, async_client: AsyncClient, queue_item_factory
+    ):
+        """When both are sent, printer_id wins and target_model is cleared."""
+        item = await queue_item_factory()
+        response = await async_client.patch(
+            f"/api/v1/queue/{item.id}",
+            json={"printer_id": item.printer_id, "target_model": "X1C"},
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result["printer_id"] == item.printer_id
+        assert result["target_model"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_delete_queue_item(self, async_client: AsyncClient, queue_item_factory, db_session):
         """Verify queue item can be deleted."""
         item = await queue_item_factory()
