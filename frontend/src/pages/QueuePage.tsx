@@ -791,7 +791,7 @@ function SortableQueueItem({
                     : t('queue.accounting.companyMaterial')}
               </button>
             )}
-            {item.private_job && itemCost != null && (
+            {itemCost != null && (
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-500/20">
                 {t('queue.accounting.totalCost', { amount: formatCurrencyAmount(itemCost, currencySymbol) })}
               </span>

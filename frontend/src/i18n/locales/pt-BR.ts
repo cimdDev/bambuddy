@@ -767,8 +767,6 @@ export default {
       objects: '{{count}} objetos',
       privateJob: 'Trabalho privado',
       privateMaterial: 'Material privado',
-      paid: 'Pago',
-      unpaid: 'Não pago',
       reimbursementDue: 'Devido: {{amount}}',
       slicedFor: 'Fatiado para {{model}}',
       uploadedBy: 'Enviado por',
@@ -976,8 +974,6 @@ export default {
     accounting: {
       privateJob: 'Trabalho privado',
       privateMaterial: 'Material privado',
-      paid: 'Pago',
-      unpaid: 'Não pago',
       reimbursementDue: 'Devido: {{amount}}',
     },
     // Empty state
@@ -3707,7 +3703,6 @@ export default {
       title: 'Contabilidade',
       privateJob: 'Trabalho privado (custo do material pode exigir reembolso)',
       privateMaterial: 'Impresso com material privado (sem reembolso)',
-      materialCostPaid: 'Custo do material pago',
     },
     saving: 'Salvando...',
     // Failure reasons

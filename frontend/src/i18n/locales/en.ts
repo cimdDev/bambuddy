@@ -774,8 +774,6 @@ export default {
       objects: '{{count}} objects',
       privateJob: 'Private job',
       privateMaterial: 'Private material',
-      paid: 'Paid',
-      unpaid: 'Unpaid',
       reimbursementDue: 'Due: {{amount}}',
       slicedFor: 'Sliced for {{model}}',
       uploadedBy: 'Uploaded By',
@@ -988,8 +986,6 @@ export default {
       privateMaterialPartial: 'Private material (partial)',
       privateMaterialFull: 'Private material (full)',
       totalCost: 'Cost: {{amount}}',
-      paid: 'Paid',
-      unpaid: 'Unpaid',
       reimbursementDue: 'Due: {{amount}}',
     },
     // Empty state
@@ -3778,9 +3774,9 @@ export default {
     printResult: 'Print result',
     accounting: {
       title: 'Accounting',
-      privateJob: 'Private job (material cost may need reimbursement)',
-      privateMaterial: 'Printed with private material (no reimbursement needed)',
-      materialCostPaid: 'Material cost paid',
+      privateJob: 'Private job',
+      privateMaterial: 'Printed with private material (full)',
+      privateMaterialPartial: 'Printed with private material (partially)',
     },
     saving: 'Saving...',
     // Failure reasons
