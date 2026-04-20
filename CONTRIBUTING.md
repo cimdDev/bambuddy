@@ -186,6 +186,12 @@ docker compose -f docker-compose.test.yml run --rm frontend-test
    git commit -m "Add feature: description of what you added"
    ```
 
+### Updating `dev` from upstream with local patch stack
+
+If you maintain local custom commits on top of upstream `dev`, use the documented runbook:
+
+- [`docs/upstream-patch-stack-workflow.md`](docs/upstream-patch-stack-workflow.md)
+
 ### Branch Naming
 
 - `feature/` - New features
