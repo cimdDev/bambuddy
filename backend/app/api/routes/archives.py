@@ -137,7 +137,6 @@ def archive_to_response(
         "cost": archive.cost,
         "private_job": archive.private_job,
         "private_material": archive.private_material,
-        "material_cost_paid": archive.material_cost_paid,
         "photos": archive.photos,
         "failure_reason": archive.failure_reason,
         "quantity": archive.quantity,
@@ -1153,8 +1152,6 @@ async def update_archive(
             raise HTTPException(403, "You can only update your own archives")
 
     updates = update_data.model_dump(exclude_unset=True)
-    if updates.get("private_material"):
-        updates["material_cost_paid"] = False
     for field, value in updates.items():
         setattr(archive, field, value)
 

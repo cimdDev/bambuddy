@@ -83,7 +83,6 @@ class PrintQueueItem(Base):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     private_job: Mapped[bool] = mapped_column(Boolean, default=False)
     private_material: Mapped[bool] = mapped_column(Boolean, default=False)
-    material_cost_paid: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
