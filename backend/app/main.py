@@ -2677,7 +2677,6 @@ async def on_print_complete(printer_id: int, data: dict):
                 queue_accounting_flags = {
                     "private_job": bool(item.private_job),
                     "private_material": bool(item.private_material),
-                    "material_cost_paid": bool(item.material_cost_paid),
                 }
                 await db.commit()
                 queue_item_id = item.id
@@ -2994,9 +2993,6 @@ async def on_print_complete(printer_id: int, data: dict):
                 if archive:
                     archive.private_job = bool(queue_accounting_flags.get("private_job", False))
                     archive.private_material = bool(queue_accounting_flags.get("private_material", False))
-                    archive.material_cost_paid = (
-                        bool(queue_accounting_flags.get("material_cost_paid", False)) and not archive.private_material
-                    )
                     await db.commit()
             logger.info(
                 "[ARCHIVE] Archive %s status updated to %s, failure_reason=%s", archive_id, status, failure_reason

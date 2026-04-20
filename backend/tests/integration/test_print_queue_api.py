@@ -350,18 +350,16 @@ class TestPrintQueueAPI:
             archive_id=archive.id,
             private_job=False,
             private_material=False,
-            material_cost_paid=False,
         )
 
         response = await async_client.patch(
             f"/api/v1/queue/{item.id}",
-            json={"private_job": True, "private_material": True, "material_cost_paid": False},
+            json={"private_job": True, "private_material": True},
         )
         assert response.status_code == 200
         result = response.json()
         assert result["private_job"] is True
         assert result["private_material"] is True
-        assert result["material_cost_paid"] is False
 
     @pytest.mark.asyncio
     @pytest.mark.integration
