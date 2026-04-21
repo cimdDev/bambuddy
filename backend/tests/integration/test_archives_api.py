@@ -264,37 +264,47 @@ class TestArchivesAPI:
             filament_used_grams=50.0,
             cost=5.0,
         )
+        await archive_factory(
+            printer.id,
+            print_name="Private Job, Company Material",
+            private_job=True,
+            private_material=False,
+            private_material_partial=False,
+            filament_used_grams=25.0,
+            cost=2.5,
+        )
 
         response = await async_client.get("/api/v1/archives/stats")
 
         assert response.status_code == 200
         result = response.json()
         accounting = result["accounting"]
+        assert result["total_cost"] == pytest.approx(17.5, abs=0.1)
 
         assert accounting["jobs"]["psi"] == 1
-        assert accounting["jobs"]["private"] == 2
-        assert accounting["jobs"]["psi_percent"] == pytest.approx(33.3, abs=0.1)
-        assert accounting["jobs"]["private_percent"] == pytest.approx(66.7, abs=0.1)
+        assert accounting["jobs"]["private"] == 3
+        assert accounting["jobs"]["psi_percent"] == pytest.approx(25.0, abs=0.1)
+        assert accounting["jobs"]["private_percent"] == pytest.approx(75.0, abs=0.1)
         assert accounting["jobs"]["psi_percent"] + accounting["jobs"]["private_percent"] == pytest.approx(100.0, abs=0.1)
 
-        assert accounting["material_weight_grams"]["psi"] == 100.0
+        assert accounting["material_weight_grams"]["psi"] == 125.0
         assert accounting["material_weight_grams"]["private"] == 50.0
         assert accounting["material_weight_grams"]["partial"] == 50.0
-        assert accounting["material_weight_grams"]["psi_percent"] == pytest.approx(50.0, abs=0.1)
-        assert accounting["material_weight_grams"]["private_percent"] == pytest.approx(25.0, abs=0.1)
-        assert accounting["material_weight_grams"]["partial_percent"] == pytest.approx(25.0, abs=0.1)
+        assert accounting["material_weight_grams"]["psi_percent"] == pytest.approx(55.6, abs=0.1)
+        assert accounting["material_weight_grams"]["private_percent"] == pytest.approx(22.2, abs=0.1)
+        assert accounting["material_weight_grams"]["partial_percent"] == pytest.approx(22.2, abs=0.1)
         assert (
             accounting["material_weight_grams"]["psi_percent"]
             + accounting["material_weight_grams"]["private_percent"]
             + accounting["material_weight_grams"]["partial_percent"]
         ) == pytest.approx(100.0, abs=0.1)
 
-        assert accounting["material_cost"]["psi"] == 10.0
-        assert accounting["material_cost"]["private"] == 5.0
+        assert accounting["material_cost"]["psi"] == 12.5
+        assert accounting["material_cost"]["private"] == 0.0
         assert accounting["material_cost"]["partial"] == 5.0
-        assert accounting["material_cost"]["psi_percent"] == pytest.approx(50.0, abs=0.1)
-        assert accounting["material_cost"]["private_percent"] == pytest.approx(25.0, abs=0.1)
-        assert accounting["material_cost"]["partial_percent"] == pytest.approx(25.0, abs=0.1)
+        assert accounting["material_cost"]["psi_percent"] == pytest.approx(71.4, abs=0.1)
+        assert accounting["material_cost"]["private_percent"] == pytest.approx(0.0, abs=0.1)
+        assert accounting["material_cost"]["partial_percent"] == pytest.approx(28.6, abs=0.1)
         assert (
             accounting["material_cost"]["psi_percent"]
             + accounting["material_cost"]["private_percent"]
@@ -331,11 +341,13 @@ class TestArchivesAPI:
         response = await async_client.get("/api/v1/archives/stats?date_from=2024-02-01&date_to=2024-02-28")
 
         assert response.status_code == 200
-        accounting = response.json()["accounting"]
+        payload = response.json()
+        accounting = payload["accounting"]
+        assert payload["total_cost"] == pytest.approx(0.0, abs=0.1)
         assert accounting["jobs"]["psi"] == 0
         assert accounting["jobs"]["private"] == 1
         assert accounting["material_weight_grams"]["private"] == 50.0
-        assert accounting["material_cost"]["private"] == 5.0
+        assert accounting["material_cost"]["private"] == 0.0
 
 
 class TestArchivesSlimAPI:

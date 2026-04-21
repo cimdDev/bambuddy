@@ -1751,6 +1751,7 @@ export function QueuePage() {
                       item={item}
                       onRemove={() => setConfirmAction({ type: 'remove', item })}
                       onRequeue={() => setRequeueItem(item)}
+                      onUpdateAccounting={(patch) => handleUpdateAccounting(item.id, patch)}
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}

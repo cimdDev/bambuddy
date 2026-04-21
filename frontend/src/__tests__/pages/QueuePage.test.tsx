@@ -92,6 +92,9 @@ const mockQueueItems = [
     archive_thumbnail: '/thumb3.png',
     printer_name: 'Test Printer',
     print_time_seconds: 1800,
+    private_job: true,
+    private_material: false,
+    private_material_partial: true,
   },
 ];
 
@@ -136,6 +139,10 @@ describe('QueuePage', () => {
       }),
       http.post('/api/v1/queue/:id/stop', () => {
         return HttpResponse.json({ success: true });
+      }),
+      http.patch('/api/v1/queue/:id', async ({ request }) => {
+        const patch = await request.json();
+        return HttpResponse.json(patch);
       }),
       http.post('/api/v1/queue/reorder', () => {
         return HttpResponse.json({ success: true });
@@ -337,6 +344,27 @@ describe('QueuePage', () => {
 
       const requeueButtons = screen.getAllByTitle('Re-queue');
       expect(requeueButtons.length).toBeGreaterThan(0);
+    });
+
+    it('shows editable accounting badges for history items', async () => {
+      render(<QueuePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Completed Print')).toBeInTheDocument();
+      });
+
+      expect(screen.getAllByRole('button', { name: 'Private job' }).length).toBeGreaterThan(0);
+      expect(screen.getByRole('button', { name: 'Private material (partial)' })).toBeInTheDocument();
+    });
+
+    it('shows archive link for history archive items', async () => {
+      render(<QueuePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Completed Print')).toBeInTheDocument();
+      });
+
+      expect(screen.getAllByTitle('View archive').length).toBeGreaterThan(0);
     });
   });
 

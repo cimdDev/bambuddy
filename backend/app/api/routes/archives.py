@@ -748,9 +748,6 @@ async def get_archive_stats(
     )
     total_filament = filament_result.scalar() or 0
 
-    cost_result = await db.execute(select(func.sum(PrintArchive.cost)).where(*base_conditions))
-    total_cost = cost_result.scalar() or 0
-
     # Accounting breakdown (PSI vs private job and material/cost ownership)
     accounting_rows = await db.execute(
         select(
@@ -765,6 +762,7 @@ async def get_archive_stats(
     jobs_psi = 0
     material_weight = {"psi": 0.0, "private": 0.0, "partial": 0.0}
     material_cost = {"psi": 0.0, "private": 0.0, "partial": 0.0}
+    total_cost = 0.0
 
     for private_job, private_material, private_material_partial, filament_used_grams, cost in accounting_rows.all():
         if private_job:
@@ -778,8 +776,14 @@ async def get_archive_stats(
         elif private_material_partial:
             bucket = "partial"
 
+        cost_value = float(cost or 0)
         material_weight[bucket] += float(filament_used_grams or 0)
-        material_cost[bucket] += float(cost or 0)
+        # Material cost represents PSI/company spend only. Fully private
+        # material is already paid by the user and must not increase company
+        # cost totals, while partial jobs remain tracked separately.
+        if bucket != "private":
+            material_cost[bucket] += cost_value
+            total_cost += cost_value
 
     def _percent(part: float, total: float) -> float:
         if total <= 0:

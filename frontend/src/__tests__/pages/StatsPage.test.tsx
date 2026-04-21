@@ -141,6 +141,25 @@ const mockArchives = [
     private_material: false,
     private_material_partial: false,
   },
+  {
+    id: 5,
+    created_at: '2024-01-04T09:00:00Z',
+    started_at: '2024-01-04T09:00:00Z',
+    completed_at: '2024-01-04T12:00:00Z',
+    print_name: 'Private With PSI Material',
+    status: 'completed',
+    printer_id: 2,
+    filament_type: 'PLA',
+    filament_color: '#FFFFFF',
+    filament_used_grams: 60,
+    actual_time_seconds: 10800,
+    print_time_seconds: 10800,
+    cost: 1.20,
+    quantity: 1,
+    private_job: true,
+    private_material: false,
+    private_material_partial: false,
+  },
 ];
 
 const mockSettings = {
@@ -218,6 +237,14 @@ describe('StatsPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Total Prints')).toBeInTheDocument();
         expect(screen.getByText('150')).toBeInTheDocument();
+      });
+    });
+
+    it('includes private jobs with PSI and partial material in the private cost summary', async () => {
+      render(<StatsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Private $ 1.50 • Partial $ 0.30')).toBeInTheDocument();
       });
     });
 
