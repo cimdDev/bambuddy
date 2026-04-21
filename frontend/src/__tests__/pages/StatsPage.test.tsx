@@ -33,6 +33,30 @@ const mockStats = {
   },
   total_energy_kwh: 45.5,
   total_energy_cost: 12.50,
+  accounting: {
+    jobs: {
+      psi: 125,
+      private: 25,
+      psi_percent: 83.3,
+      private_percent: 16.7,
+    },
+    material_weight_grams: {
+      psi: 4200,
+      private: 1000,
+      partial: 300,
+      psi_percent: 76.4,
+      private_percent: 18.2,
+      partial_percent: 5.4,
+    },
+    material_cost: {
+      psi: 95.0,
+      private: 24.0,
+      partial: 6.5,
+      psi_percent: 75.7,
+      private_percent: 19.1,
+      partial_percent: 5.2,
+    },
+  },
 };
 
 const mockPrinters = [
@@ -56,6 +80,9 @@ const mockArchives = [
     print_time_seconds: 15000,
     cost: 0.75,
     quantity: 1,
+    private_job: false,
+    private_material: false,
+    private_material_partial: false,
   },
   {
     id: 2,
@@ -72,6 +99,9 @@ const mockArchives = [
     print_time_seconds: 27000,
     cost: 5.40,
     quantity: 1,
+    private_job: true,
+    private_material: true,
+    private_material_partial: false,
   },
   {
     id: 3,
@@ -88,6 +118,9 @@ const mockArchives = [
     print_time_seconds: 7200,
     cost: 0.30,
     quantity: 1,
+    private_job: true,
+    private_material: false,
+    private_material_partial: true,
   },
   {
     id: 4,
@@ -104,6 +137,9 @@ const mockArchives = [
     print_time_seconds: 20000,
     cost: 1.35,
     quantity: 1,
+    private_job: false,
+    private_material: false,
+    private_material_partial: false,
   },
 ];
 
@@ -222,6 +258,7 @@ describe('StatsPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Filament Cost')).toBeInTheDocument();
+        expect(screen.getByText('25 private')).toBeInTheDocument();
       });
     });
 
@@ -280,6 +317,16 @@ describe('StatsPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Records')).toBeInTheDocument();
+      });
+    });
+
+    it('shows PSI/private accounting widget', async () => {
+      render(<StatsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('PSI / Private Accounting')).toBeInTheDocument();
+        expect(screen.getByText('Material Weight Split')).toBeInTheDocument();
+        expect(screen.getByText('Material Cost Split')).toBeInTheDocument();
       });
     });
   });

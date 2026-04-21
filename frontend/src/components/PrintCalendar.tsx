@@ -2,10 +2,11 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 
 interface PrintCalendarProps {
   printDates: string[]; // Array of ISO date strings
+  privatePrintDates?: string[]; // Optional private-print dates for dual-color heatmap
   months?: number; // How many months to show (default 3)
 }
 
-export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
+export function PrintCalendar({ printDates, privatePrintDates = [], months = 3 }: PrintCalendarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -23,12 +24,17 @@ export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
     return () => observer.disconnect();
   }, []);
 
-  const { weeks, monthLabels, printCounts } = useMemo(() => {
+  const { weeks, monthLabels, printCounts, privateCounts } = useMemo(() => {
     // Count prints per day
     const counts: Record<string, number> = {};
     printDates.forEach((date) => {
       const day = date.split('T')[0];
       counts[day] = (counts[day] || 0) + 1;
+    });
+    const privateDayCounts: Record<string, number> = {};
+    privatePrintDates.forEach((date) => {
+      const day = date.split('T')[0];
+      privateDayCounts[day] = (privateDayCounts[day] || 0) + 1;
     });
 
     // Generate weeks for the last N months
@@ -69,18 +75,21 @@ export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
       weeks.push(currentWeek);
     }
 
-    return { weeks, monthLabels, printCounts: counts };
-  }, [printDates, months]);
+    return { weeks, monthLabels, printCounts: counts, privateCounts: privateDayCounts };
+  }, [printDates, privatePrintDates, months]);
 
   const maxCount = Math.max(1, ...Object.values(printCounts));
 
-  const getColor = (count: number) => {
-    if (count === 0) return 'bg-bambu-dark';
-    const intensity = count / maxCount;
-    if (intensity <= 0.25) return 'bg-bambu-green/30';
-    if (intensity <= 0.5) return 'bg-bambu-green/50';
-    if (intensity <= 0.75) return 'bg-bambu-green/75';
-    return 'bg-bambu-green';
+  const getColor = (count: number, privateCount: number) => {
+    if (count === 0) return '#1f1f1f';
+    const intensity = Math.max(0.25, Math.min(1, count / maxCount));
+    const alpha = intensity.toFixed(3);
+    const psi = `rgba(0, 174, 66, ${alpha})`;
+    const privateColor = `rgba(59, 130, 246, ${alpha})`;
+    if (privateCount <= 0) return psi;
+    if (privateCount >= count) return privateColor;
+    const privatePct = (privateCount / count) * 100;
+    return `linear-gradient(90deg, ${privateColor} ${privatePct}%, ${psi} ${privatePct}%)`;
   };
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -151,14 +160,15 @@ export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
 
                   const dateStr = day.toISOString().split('T')[0];
                   const count = printCounts[dateStr] || 0;
+                  const privateCount = privateCounts[dateStr] || 0;
                   const isToday = dateStr === new Date().toISOString().split('T')[0];
 
                   return (
                     <div
                       key={dayOfWeek}
-                      className={`rounded-sm ${getColor(count)} ${isToday ? 'ring-1 ring-white' : ''}`}
-                      style={{ width: cellSize, height: cellSize }}
-                      title={`${day.toLocaleDateString()}: ${count} print${count !== 1 ? 's' : ''}`}
+                      className={`rounded-sm ${isToday ? 'ring-1 ring-white' : ''}`}
+                      style={{ width: cellSize, height: cellSize, background: getColor(count, privateCount) }}
+                      title={`${day.toLocaleDateString()}: ${count} print${count !== 1 ? 's' : ''} (PSI ${count - privateCount}, Private ${privateCount})`}
                     />
                   );
                 })}
@@ -170,11 +180,17 @@ export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
           <div className="flex items-center gap-2 mt-3 text-bambu-gray" style={{ fontSize }}>
             <span>Less</span>
             <div className="flex" style={{ gap }}>
-              <div className="rounded-sm bg-bambu-dark" style={{ width: cellSize, height: cellSize }} />
-              <div className="rounded-sm bg-bambu-green/30" style={{ width: cellSize, height: cellSize }} />
-              <div className="rounded-sm bg-bambu-green/50" style={{ width: cellSize, height: cellSize }} />
-              <div className="rounded-sm bg-bambu-green/75" style={{ width: cellSize, height: cellSize }} />
-              <div className="rounded-sm bg-bambu-green" style={{ width: cellSize, height: cellSize }} />
+              <div className="rounded-sm" style={{ width: cellSize, height: cellSize, background: '#1f1f1f' }} />
+              <div className="rounded-sm" style={{ width: cellSize, height: cellSize, background: 'rgba(0, 174, 66, 0.4)' }} />
+              <div className="rounded-sm" style={{ width: cellSize, height: cellSize, background: 'rgba(59, 130, 246, 0.7)' }} />
+              <div
+                className="rounded-sm"
+                style={{
+                  width: cellSize,
+                  height: cellSize,
+                  background: 'linear-gradient(90deg, rgba(59,130,246,1) 50%, rgba(0,174,66,1) 50%)',
+                }}
+              />
             </div>
             <span>More</span>
           </div>

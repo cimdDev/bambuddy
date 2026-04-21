@@ -438,7 +438,32 @@ export interface ArchiveSlim {
   completed_at: string | null;
   cost: number | null;
   quantity: number;
+  private_job: boolean;
+  private_material: boolean;
+  private_material_partial: boolean;
   created_at: string;
+}
+
+export interface AccountingTwoWay {
+  psi: number;
+  private: number;
+  psi_percent: number;
+  private_percent: number;
+}
+
+export interface AccountingThreeWay {
+  psi: number;
+  private: number;
+  partial: number;
+  psi_percent: number;
+  private_percent: number;
+  partial_percent: number;
+}
+
+export interface ArchiveAccounting {
+  jobs: AccountingTwoWay;
+  material_weight_grams: AccountingThreeWay;
+  material_cost: AccountingThreeWay;
 }
 
 export interface PrintLogEntry {
@@ -480,6 +505,7 @@ export interface ArchiveStats {
   // snapshot history (e.g. right after upgrade, before hourly snapshots have
   // a baseline). UI should explain why the number may undercount.
   energy_data_warming_up?: boolean;
+  accounting: ArchiveAccounting;
 }
 
 export interface TagInfo {
