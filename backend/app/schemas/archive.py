@@ -137,6 +137,9 @@ class ArchiveSlim(BaseModel):
     completed_at: datetime | None
     cost: float | None
     quantity: int = 1
+    private_job: bool = False
+    private_material: bool = False
+    private_material_partial: bool = False
     created_at: datetime
 
     class Config:
@@ -163,6 +166,7 @@ class ArchiveStats(BaseModel):
     # incomplete snapshot history — e.g. right after a fresh upgrade before the
     # hourly snapshot loop has built up a baseline. Frontend shows a tooltip.
     energy_data_warming_up: bool = False
+    accounting: dict
 
 
 class ProjectPageImage(BaseModel):

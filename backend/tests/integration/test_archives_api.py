@@ -225,6 +225,117 @@ class TestArchivesAPI:
         # Check for actual stats fields
         assert "total_prints" in result
         assert "successful_prints" in result
+        assert "accounting" in result
+        assert "jobs" in result["accounting"]
+        assert "material_weight_grams" in result["accounting"]
+        assert "material_cost" in result["accounting"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_get_archive_stats_accounting_breakdown(
+        self, async_client: AsyncClient, archive_factory, printer_factory, db_session
+    ):
+        """Verify PSI/private accounting stats are computed correctly."""
+        printer = await printer_factory()
+        await archive_factory(
+            printer.id,
+            print_name="PSI Job",
+            private_job=False,
+            private_material=False,
+            private_material_partial=False,
+            filament_used_grams=100.0,
+            cost=10.0,
+        )
+        await archive_factory(
+            printer.id,
+            print_name="Private Job, Private Material",
+            private_job=True,
+            private_material=True,
+            private_material_partial=False,
+            filament_used_grams=50.0,
+            cost=5.0,
+        )
+        await archive_factory(
+            printer.id,
+            print_name="Private Job, Partial Material",
+            private_job=True,
+            private_material=False,
+            private_material_partial=True,
+            filament_used_grams=50.0,
+            cost=5.0,
+        )
+
+        response = await async_client.get("/api/v1/archives/stats")
+
+        assert response.status_code == 200
+        result = response.json()
+        accounting = result["accounting"]
+
+        assert accounting["jobs"]["psi"] == 1
+        assert accounting["jobs"]["private"] == 2
+        assert accounting["jobs"]["psi_percent"] == pytest.approx(33.3, abs=0.1)
+        assert accounting["jobs"]["private_percent"] == pytest.approx(66.7, abs=0.1)
+        assert accounting["jobs"]["psi_percent"] + accounting["jobs"]["private_percent"] == pytest.approx(100.0, abs=0.1)
+
+        assert accounting["material_weight_grams"]["psi"] == 100.0
+        assert accounting["material_weight_grams"]["private"] == 50.0
+        assert accounting["material_weight_grams"]["partial"] == 50.0
+        assert accounting["material_weight_grams"]["psi_percent"] == pytest.approx(50.0, abs=0.1)
+        assert accounting["material_weight_grams"]["private_percent"] == pytest.approx(25.0, abs=0.1)
+        assert accounting["material_weight_grams"]["partial_percent"] == pytest.approx(25.0, abs=0.1)
+        assert (
+            accounting["material_weight_grams"]["psi_percent"]
+            + accounting["material_weight_grams"]["private_percent"]
+            + accounting["material_weight_grams"]["partial_percent"]
+        ) == pytest.approx(100.0, abs=0.1)
+
+        assert accounting["material_cost"]["psi"] == 10.0
+        assert accounting["material_cost"]["private"] == 5.0
+        assert accounting["material_cost"]["partial"] == 5.0
+        assert accounting["material_cost"]["psi_percent"] == pytest.approx(50.0, abs=0.1)
+        assert accounting["material_cost"]["private_percent"] == pytest.approx(25.0, abs=0.1)
+        assert accounting["material_cost"]["partial_percent"] == pytest.approx(25.0, abs=0.1)
+        assert (
+            accounting["material_cost"]["psi_percent"]
+            + accounting["material_cost"]["private_percent"]
+            + accounting["material_cost"]["partial_percent"]
+        ) == pytest.approx(100.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_get_archive_stats_accounting_respects_date_filter(
+        self, async_client: AsyncClient, archive_factory, printer_factory, db_session
+    ):
+        """Verify accounting breakdown honors date filtering."""
+        from datetime import datetime, timezone
+
+        printer = await printer_factory()
+        await archive_factory(
+            printer.id,
+            print_name="Old PSI Job",
+            private_job=False,
+            filament_used_grams=100.0,
+            cost=10.0,
+            created_at=datetime(2024, 1, 10, tzinfo=timezone.utc),
+        )
+        await archive_factory(
+            printer.id,
+            print_name="Filtered Private Job",
+            private_job=True,
+            private_material=True,
+            filament_used_grams=50.0,
+            cost=5.0,
+            created_at=datetime(2024, 2, 10, tzinfo=timezone.utc),
+        )
+
+        response = await async_client.get("/api/v1/archives/stats?date_from=2024-02-01&date_to=2024-02-28")
+
+        assert response.status_code == 200
+        accounting = response.json()["accounting"]
+        assert accounting["jobs"]["psi"] == 0
+        assert accounting["jobs"]["private"] == 1
+        assert accounting["material_weight_grams"]["private"] == 50.0
+        assert accounting["material_cost"]["private"] == 5.0
 
 
 class TestArchivesSlimAPI:
@@ -275,6 +386,9 @@ class TestArchivesSlimAPI:
         assert item["print_time_seconds"] == 3600
         assert item["cost"] == 1.50
         assert item["quantity"] == 2
+        assert item["private_job"] is False
+        assert item["private_material"] is False
+        assert item["private_material_partial"] is False
         assert "created_at" in item
 
         # Full archive fields must NOT be present
@@ -375,6 +489,28 @@ class TestArchivesSlimAPI:
 
         assert response.status_code == 200
         assert len(response.json()) == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_slim_includes_private_accounting_flags(
+        self, async_client: AsyncClient, archive_factory, printer_factory, db_session
+    ):
+        """Verify slim endpoint includes private accounting flags used by stats charts."""
+        printer = await printer_factory()
+        await archive_factory(
+            printer.id,
+            private_job=True,
+            private_material=False,
+            private_material_partial=True,
+        )
+
+        response = await async_client.get("/api/v1/archives/slim")
+
+        assert response.status_code == 200
+        item = response.json()[0]
+        assert item["private_job"] is True
+        assert item["private_material"] is False
+        assert item["private_material_partial"] is True
 
 
 class TestArchiveDataIntegrity:
