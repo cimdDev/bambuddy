@@ -41,6 +41,7 @@ import { getCurrencySymbol } from '../utils/currency';
 import { formatWeight } from '../utils/weight';
 import { parseUTCDate, formatDuration } from '../utils/date';
 import { MetricToggle, type Metric } from '../components/MetricToggle';
+import { buildPrinterBreakdown, getPrinterMetricValue, getPrivateJobCostSummary } from './statsPageUtils';
 
 // Timeframe types and helpers
 type TimeframePreset = 'today' | 'this-week' | 'this-month' | 'last-7' | 'last-30' | 'last-90' | 'this-year' | 'all-time' | 'custom';
@@ -142,9 +143,11 @@ function withIntensity(color: string, intensity: number): string {
 // Widget Components
 function QuickStatsWidget({
   stats,
+  archives,
   currency,
 }: {
   stats: ArchiveStats | undefined;
+  archives: ArchiveSlim[];
   currency: string;
 }) {
   const { t } = useTranslation();
@@ -154,8 +157,9 @@ function QuickStatsWidget({
   const privatePrints = stats?.accounting?.jobs?.private || 0;
   const privateWeight = stats?.accounting?.material_weight_grams?.private || 0;
   const partialWeight = stats?.accounting?.material_weight_grams?.partial || 0;
-  const privateCost = stats?.accounting?.material_cost?.private || 0;
-  const partialCost = stats?.accounting?.material_cost?.partial || 0;
+  const privateJobCostSummary = useMemo(() => getPrivateJobCostSummary(archives), [archives]);
+  const privateCost = privateJobCostSummary.companyMaterial + privateJobCostSummary.partialMaterial;
+  const partialCost = privateJobCostSummary.partialMaterial;
 
   const items = [
     {
@@ -656,11 +660,9 @@ function PrintActivityWidget({
 }
 
 function PrinterStatsWidget({
-  stats,
   archives,
   printerMap,
 }: {
-  stats: { prints_by_printer: Record<string, number> } | undefined;
   archives: ArchiveSlim[];
   printerMap: Map<string, string>;
 }) {
@@ -670,72 +672,19 @@ function PrinterStatsWidget({
 
   // Per-printer data
   const printerData = useMemo(() => {
-    const map = new Map<string, {
-      psi_prints: number;
-      private_prints: number;
-      psi_weight: number;
-      private_weight: number;
-      partial_weight: number;
-      psi_time: number;
-      private_time: number;
-    }>();
-    if (stats?.prints_by_printer) {
-      Object.entries(stats.prints_by_printer).forEach(([id, count]) => {
-        const entry = map.get(id) || {
-          psi_prints: 0,
-          private_prints: 0,
-          psi_weight: 0,
-          private_weight: 0,
-          partial_weight: 0,
-          psi_time: 0,
-          private_time: 0,
-        };
-        entry.psi_prints = count;
-        map.set(id, entry);
-      });
-    }
-    archives.forEach(a => {
-      if (!a.printer_id) return;
-      const id = String(a.printer_id);
-      const entry = map.get(id) || {
-        psi_prints: 0,
-        private_prints: 0,
-        psi_weight: 0,
-        private_weight: 0,
-        partial_weight: 0,
-        psi_time: 0,
-        private_time: 0,
-      };
-      const weight = a.filament_used_grams || 0;
-      const time = (a.actual_time_seconds || a.print_time_seconds || 0) / 3600;
-      if (isPrivateJob(a)) {
-        if (!stats?.prints_by_printer) entry.private_prints++;
-        entry.private_time += time;
-      } else {
-        if (!stats?.prints_by_printer) entry.psi_prints++;
-        entry.psi_time += time;
-      }
-      const bucket = materialBucket(a);
-      if (bucket === 'private') entry.private_weight += weight;
-      else if (bucket === 'partial') entry.partial_weight += weight;
-      else entry.psi_weight += weight;
-      map.set(id, entry);
-    });
-    return Array.from(map.entries())
+    return Array.from(buildPrinterBreakdown(archives).entries())
       .map(([id, v]) => {
-        const psi = printerMetric === 'prints' ? v.psi_prints : printerMetric === 'weight' ? Math.round(v.psi_weight) : Math.round(v.psi_time * 10) / 10;
-        const privateValue = printerMetric === 'prints' ? v.private_prints : printerMetric === 'weight' ? Math.round(v.private_weight) : Math.round(v.private_time * 10) / 10;
-        const partial = printerMetric === 'weight' ? Math.round(v.partial_weight) : 0;
+        const values = getPrinterMetricValue(v, printerMetric);
         return {
           name: printerMap.get(id) || `${t('common.printer')} ${id}`,
-          psi,
-          private: privateValue,
-          partial,
-          total: psi + privateValue + partial,
+          psi: values.psi,
+          private: values.private,
+          partial: values.partial,
+          total: values.psi + values.private + values.partial,
         };
       })
       .sort((a, b) => b.total - a.total);
-  }, [stats, archives, printerMap, printerMetric, t]);
+  }, [archives, printerMap, printerMetric, t]);
 
   // Hourly distribution (time of day)
   const hourlyData = useMemo(() => {
@@ -1305,7 +1254,7 @@ export function StatsPage() {
     {
       id: 'quick-stats',
       title: t('stats.quickStats'),
-      component: <QuickStatsWidget stats={stats} currency={currency} />,
+      component: <QuickStatsWidget stats={stats} archives={archives || []} currency={currency} />,
       defaultSize: 2,
     },
     {
@@ -1347,7 +1296,7 @@ export function StatsPage() {
     {
       id: 'printer-stats',
       title: t('stats.printerStats'),
-      component: <PrinterStatsWidget stats={stats} archives={archives || []} printerMap={printerMap} />,
+      component: <PrinterStatsWidget archives={archives || []} printerMap={printerMap} />,
       defaultSize: 4,
     },
     {
