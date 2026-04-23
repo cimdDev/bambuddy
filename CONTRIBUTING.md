@@ -174,6 +174,26 @@ docker compose -f docker-compose.test.yml run --rm frontend-test
 - `refactor/` - Code refactoring
 - `test/` - Test additions or fixes
 
+## Custom Clean Patch Stack Maintenance
+
+If you maintain the custom clean patch stack used on top of upstream `dev`, use the repo runbook:
+
+- [`docs/upstream-patch-stack-workflow.md`](docs/upstream-patch-stack-workflow.md)
+
+That workflow defines:
+
+- the canonical clean branch layout
+- feature ownership and replay order
+- how to refresh `upstream-track` and `dev`
+- how to rebase each owning feature branch
+- how to rebuild `custom/clean-patch-stack`
+
+For custom feature maintenance:
+
+- make the change on the owning `custom-clean/feature-*` branch first
+- avoid putting unrelated fixes directly on `custom/clean-patch-stack`
+- replay the owning branch changes onto `custom/clean-patch-stack` after validation
+
 ## Code Style
 
 ### Backend (Python)
