@@ -130,6 +130,8 @@ class PrintQueueItemResponse(BaseModel):
     # User tracking (Issue #206)
     created_by_id: int | None = None
     created_by_username: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
     # Batch grouping
     batch_id: int | None = None

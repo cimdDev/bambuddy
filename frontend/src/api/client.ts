@@ -574,6 +574,8 @@ export interface Archive {
   bed_temperature: number | null;
   bed_type: string | null;  // Build plate type from 3MF (e.g. "Cool Plate", "Textured PEI Plate")
   nozzle_temperature: number | null;
+  slicer_user: string | null;
+  slicer_user_email: string | null;
   sliced_for_model: string | null;  // Printer model this file was sliced for
   status: string;
   started_at: string | null;
@@ -616,6 +618,8 @@ export interface ArchiveSlim {
   completed_at: string | null;
   cost: number | null;
   quantity: number;
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
   created_at: string;
 }
 
@@ -1834,6 +1838,8 @@ export interface PrintQueueItem {
   printer_name?: string | null;
   print_time_seconds?: number | null;  // Estimated print time from archive or library file
   filament_used_grams?: number | null;  // Estimated print weight from archive or library file
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
   // User tracking (Issue #206)
   created_by_id?: number | null;
   created_by_username?: string | null;
@@ -3640,6 +3646,8 @@ export const api = {
     status?: string;
     quantity?: number;
     external_url?: string | null;
+    slicer_user?: string | null;
+    slicer_user_email?: string | null;
   }) =>
     request<Archive>(`/archives/${id}`, {
       method: 'PATCH',
@@ -6074,6 +6082,8 @@ export interface LibraryFile {
   print_time_seconds: number | null;
   filament_used_grams: number | null;
   sliced_for_model: string | null;
+  slicer_user: string | null;
+  slicer_user_email: string | null;
 }
 
 export interface LibraryFileListItem {
@@ -6094,6 +6104,8 @@ export interface LibraryFileListItem {
   print_time_seconds: number | null;
   filament_used_grams: number | null;
   sliced_for_model: string | null;
+  slicer_user: string | null;
+  slicer_user_email: string | null;
 }
 
 export interface LibraryFileUpdate {
@@ -6101,6 +6113,8 @@ export interface LibraryFileUpdate {
   folder_id?: number | null;
   project_id?: number | null;
   notes?: string | null;
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
 }
 
 // Library trash (#1008)

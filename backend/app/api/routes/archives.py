@@ -247,6 +247,8 @@ def archive_to_response(
         "bed_temperature": archive.bed_temperature,
         "bed_type": archive.bed_type,
         "nozzle_temperature": archive.nozzle_temperature,
+        "slicer_user": archive.slicer_user,
+        "slicer_user_email": archive.slicer_user_email,
         "sliced_for_model": archive.sliced_for_model,
         "status": archive.status,
         "started_at": archive.started_at,
@@ -507,7 +509,8 @@ async def search_archives(
 ):
     """Full-text search across archives.
 
-    Searches print_name, filename, tags, notes, designer, and filament_type fields.
+    Searches print_name, filename, tags, notes, designer, filament_type,
+    slicer_user, and slicer_user_email fields.
     Supports partial matches with wildcards (e.g., 'vor*' matches 'voron').
     """
     from sqlalchemy import text
@@ -538,7 +541,9 @@ async def search_archives(
                 COALESCE(tags, '') || ' ' ||
                 COALESCE(notes, '') || ' ' ||
                 COALESCE(designer, '') || ' ' ||
-                COALESCE(filament_type, '')
+                COALESCE(filament_type, '') || ' ' ||
+                COALESCE(slicer_user, '') || ' ' ||
+                COALESCE(slicer_user_email, '')
             ) @@ to_tsquery('simple', :search_term)
             LIMIT :limit OFFSET :offset
         """)
@@ -563,6 +568,8 @@ async def search_archives(
                     | (PrintArchive.notes.ilike(like_pattern))
                     | (PrintArchive.designer.ilike(like_pattern))
                     | (PrintArchive.filament_type.ilike(like_pattern))
+                    | (PrintArchive.slicer_user.ilike(like_pattern))
+                    | (PrintArchive.slicer_user_email.ilike(like_pattern))
                 ),
                 PrintArchive.deleted_at.is_(None),
             )
@@ -628,8 +635,8 @@ async def rebuild_search_index(
             await db.execute(text("DELETE FROM archive_fts"))
             await db.execute(
                 text("""
-                INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type)
-                SELECT id, print_name, filename, tags, notes, designer, filament_type
+                INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
+                SELECT id, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
                 FROM print_archives
             """)
             )
@@ -1357,8 +1364,14 @@ async def update_archive(
         if archive.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own archives")
 
-    update_payload = update_data.model_dump(exclude_unset=True)
-    for field, value in update_payload.items():
+<<<<<<< HEAD
+    updates = update_data.model_dump(exclude_unset=True)
+    if "slicer_user" in updates:
+        updates["slicer_user"] = updates["slicer_user"].strip() if updates["slicer_user"] else None
+    if "slicer_user_email" in updates:
+        updates["slicer_user_email"] = updates["slicer_user_email"].strip() if updates["slicer_user_email"] else None
+
+    for field, value in updates.items():
         setattr(archive, field, value)
 
     # #1444: Mirror per-run classification fields to the most recent
@@ -1372,7 +1385,7 @@ async def update_archive(
     # the modal is implicitly showing (archive.failure_reason / status are
     # overwritten on each reprint to reflect the latest run's outcome).
     mirror_fields = {"failure_reason", "status"}
-    to_mirror = {k: v for k, v in update_payload.items() if k in mirror_fields}
+    to_mirror = {k: v for k, v in updates.items() if k in mirror_fields}
     if to_mirror:
         from backend.app.models.print_log import PrintLogEntry
 
@@ -1463,6 +1476,10 @@ async def rescan_archive(
         archive.makerworld_url = metadata["makerworld_url"]
     if metadata.get("designer"):
         archive.designer = metadata["designer"]
+    if metadata.get("slicer_user"):
+        archive.slicer_user = metadata["slicer_user"]
+    if metadata.get("slicer_user_email"):
+        archive.slicer_user_email = metadata["slicer_user_email"]
 
     # Calculate cost: prefer spool-based cost if available, else catalog-based.
     # When spool-based costs exist but don't cover every filament gram used
@@ -1622,6 +1639,10 @@ async def rescan_all_archives(
                 archive.makerworld_url = metadata["makerworld_url"]
             if metadata.get("designer"):
                 archive.designer = metadata["designer"]
+            if metadata.get("slicer_user"):
+                archive.slicer_user = metadata["slicer_user"]
+            if metadata.get("slicer_user_email"):
+                archive.slicer_user_email = metadata["slicer_user_email"]
 
             updated += 1
         except Exception as e:

@@ -38,6 +38,8 @@ class PrintArchive(Base):
 
     # Printer model this file was sliced for (extracted from 3MF metadata)
     sliced_for_model: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    slicer_user: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    slicer_user_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
     # Print result
     status: Mapped[str] = mapped_column(String(20), default="completed")

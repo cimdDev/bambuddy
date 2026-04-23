@@ -751,6 +751,8 @@ async def run_migrations(conn):
                     notes,
                     designer,
                     filament_type,
+                    slicer_user,
+                    slicer_user_email,
                     content='print_archives',
                     content_rowid='id'
                 )
@@ -764,8 +766,8 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_insert AFTER INSERT ON print_archives BEGIN
-                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type)
-                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type);
+                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
+                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type, new.slicer_user, new.slicer_user_email);
                 END
             """)
             )
@@ -776,8 +778,8 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_delete AFTER DELETE ON print_archives BEGIN
-                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type)
-                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type);
+                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
+                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type, old.slicer_user, old.slicer_user_email);
                 END
             """)
             )
@@ -788,10 +790,10 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_update AFTER UPDATE ON print_archives BEGIN
-                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type)
-                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type);
-                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type)
-                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type);
+                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
+                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type, old.slicer_user, old.slicer_user_email);
+                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
+                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type, new.slicer_user, new.slicer_user_email);
                 END
             """)
             )
@@ -1574,6 +1576,104 @@ async def run_migrations(conn):
 
     # Migration: Add weight_locked flag to spool table (skip AMS auto-sync for manually-entered weights)
     await _safe_execute(conn, "ALTER TABLE spool ADD COLUMN weight_locked BOOLEAN DEFAULT 0")
+
+    # Migration: Add slicer_user columns to print_archives (custom feature)
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN slicer_user VARCHAR(100)"))
+    except OperationalError:
+        pass
+
+    try:
+        await conn.execute(text("ALTER TABLE print_archives ADD COLUMN slicer_user_email VARCHAR(255)"))
+    except OperationalError:
+        pass
+
+    # Migration: Ensure archive_fts includes slicer_user + slicer_user_email
+    try:
+        res = await conn.execute(text("PRAGMA table_info(archive_fts)"))
+        cols = {row[1] for row in res.fetchall()}
+        needs_rebuild = not {"slicer_user", "slicer_user_email"}.issubset(cols)
+
+        if needs_rebuild:
+            await conn.execute(text("DROP TRIGGER IF EXISTS archive_fts_insert"))
+            await conn.execute(text("DROP TRIGGER IF EXISTS archive_fts_delete"))
+            await conn.execute(text("DROP TRIGGER IF EXISTS archive_fts_update"))
+            await conn.execute(text("DROP TABLE IF EXISTS archive_fts"))
+            await conn.execute(
+                text("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS archive_fts USING fts5(
+                    print_name,
+                    filename,
+                    tags,
+                    notes,
+                    designer,
+                    filament_type,
+                    slicer_user,
+                    slicer_user_email,
+                    content='print_archives',
+                    content_rowid='id'
+                )
+                """)
+            )
+            await conn.execute(
+                text("""
+                INSERT INTO archive_fts(
+                    rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                )
+                SELECT
+                    id, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                FROM print_archives
+                """)
+            )
+            await conn.execute(
+                text("""
+                CREATE TRIGGER IF NOT EXISTS archive_fts_insert AFTER INSERT ON print_archives BEGIN
+                    INSERT INTO archive_fts(
+                        rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                    )
+                    VALUES (
+                        new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type,
+                        new.slicer_user, new.slicer_user_email
+                    );
+                END
+                """)
+            )
+            await conn.execute(
+                text("""
+                CREATE TRIGGER IF NOT EXISTS archive_fts_delete AFTER DELETE ON print_archives BEGIN
+                    INSERT INTO archive_fts(
+                        archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                    )
+                    VALUES (
+                        'delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type,
+                        old.slicer_user, old.slicer_user_email
+                    );
+                END
+                """)
+            )
+            await conn.execute(
+                text("""
+                CREATE TRIGGER IF NOT EXISTS archive_fts_update AFTER UPDATE ON print_archives BEGIN
+                    INSERT INTO archive_fts(
+                        archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                    )
+                    VALUES (
+                        'delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type,
+                        old.slicer_user, old.slicer_user_email
+                    );
+
+                    INSERT INTO archive_fts(
+                        rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                    )
+                    VALUES (
+                        new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type,
+                        new.slicer_user, new.slicer_user_email
+                    );
+                END
+                """)
+            )
+    except (OperationalError, ProgrammingError):
+        pass
 
     # Migration: Add SpoolBuddy scale weight tracking columns to spool table
     await _safe_execute(conn, "ALTER TABLE spool ADD COLUMN last_scale_weight INTEGER")

@@ -221,6 +221,9 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "been_jumped": item.been_jumped,
         # Auto-print G-code injection
         "gcode_injection": item.gcode_injection,
+        # 3MF slicer user metadata
+        "slicer_user": None,
+        "slicer_user_email": None,
     }
     response = PrintQueueItemResponse(**item_dict)
     if item.archive:
@@ -254,6 +257,8 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
                         response.print_time_seconds = plate_time
                     if plate_weight > 0:
                         response.filament_used_grams = plate_weight
+            response.slicer_user = item.archive.slicer_user
+            response.slicer_user_email = item.archive.slicer_user_email
     if item.library_file:
         response.library_file_name = (
             item.library_file.file_metadata.get("print_name") if item.library_file.file_metadata else None
@@ -270,6 +275,10 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
             response.layer_height = item.library_file.file_metadata.get("layer_height")
             response.nozzle_diameter = item.library_file.file_metadata.get("nozzle_diameter")
             response.sliced_for_model = item.library_file.file_metadata.get("sliced_for_model")
+            if not response.slicer_user:
+                response.slicer_user = item.library_file.file_metadata.get("slicer_user")
+            if not response.slicer_user_email:
+                response.slicer_user_email = item.library_file.file_metadata.get("slicer_user_email")
         if item.plate_id:
             lib_path = Path(item.library_file.file_path)
             library_file_path = lib_path if lib_path.is_absolute() else settings.base_dir / item.library_file.file_path

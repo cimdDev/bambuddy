@@ -1039,6 +1039,18 @@ export default {
       requiresPrevious: 'Requires previous success',
       autoPowerOff: 'Auto power off',
       gcodeInjection: 'G-code',
+      slicerUserMissingWarning: 'Missing user badge',
+    },
+    editSlicerUser: {
+      title: 'Set user badge',
+      description: 'Enter the correct user badge for this print. You can use a badge name or email address.',
+      label: 'User badge',
+      placeholder: 'your user badge',
+      addMissing: 'Add missing user badge',
+      editExisting: 'Edit user badge',
+      saved: 'User badge updated',
+      required: 'Please enter a user badge',
+      unsupported: 'This item cannot be updated',
     },
     // Empty state
     empty: {
@@ -4162,6 +4174,9 @@ export default {
     or: 'or',
     browseFiles: 'Browse Files',
     extractionInfo: 'The printer model will be automatically extracted from the 3MF file metadata.',
+    missingUserBadgeWarning: '{{count}} uploaded file is missing a user badge. You can correct it now.',
+    confirmMissingUserBadge: 'No user badge was found in the 3MF for "{{name}}". Please confirm or correct it now.',
+    confirmMissingUserBadgeHint: 'Suggested from your most-used uploads: {{user}}',
     uploaded: 'uploaded',
     failed: 'failed',
     uploading: 'Uploading...',
