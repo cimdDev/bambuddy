@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
@@ -49,6 +49,14 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
             <p className="text-sm text-white truncate">
               {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
+            {nextItem?.comment && (
+              <div className="mt-1 flex items-start gap-1.5 text-xs text-bambu-gray-light">
+                <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-bambu-gray" />
+                <p className="line-clamp-2 whitespace-pre-wrap break-words">
+                  {nextItem.comment}
+                </p>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

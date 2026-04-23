@@ -1040,6 +1040,12 @@ export default {
       autoPowerOff: 'Auto power off',
       gcodeInjection: 'G-code',
     },
+    comment: {
+      label: 'Comment',
+      add: 'Add comment',
+      edit: 'Edit comment',
+      placeholder: 'Add a queue comment...',
+    },
     // Empty state
     empty: {
       title: 'No prints scheduled',

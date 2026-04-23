@@ -1040,6 +1040,12 @@ export default {
       autoPowerOff: 'Automatisch ausschalten',
       gcodeInjection: 'G-Code',
     },
+    comment: {
+      label: 'Kommentar',
+      add: 'Kommentar hinzufügen',
+      edit: 'Kommentar bearbeiten',
+      placeholder: 'Kommentar zur Warteschlange hinzufügen...',
+    },
     // Empty state
     empty: {
       title: 'Keine Drucke geplant',

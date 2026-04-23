@@ -274,6 +274,26 @@ class TestPrintQueueAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_add_to_queue_trims_comment(
+        self, async_client: AsyncClient, printer_factory, archive_factory, db_session
+    ):
+        """Verify queue comments are trimmed on create."""
+        printer = await printer_factory()
+        archive = await archive_factory()
+
+        response = await async_client.post(
+            "/api/v1/queue/",
+            json={
+                "printer_id": printer.id,
+                "archive_id": archive.id,
+                "comment": "  Handle with care  ",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["comment"] == "Handle with care"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_update_queue_item_plate_id(self, async_client: AsyncClient, queue_item_factory, db_session):
         """Verify queue item plate_id can be updated."""
         item = await queue_item_factory()
@@ -334,6 +354,50 @@ class TestPrintQueueAPI:
         assert response.status_code == 200
         result = response.json()
         assert result["manual_start"] is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_update_queue_item_comment_trims_and_clears(
+        self, async_client: AsyncClient, queue_item_factory, db_session
+    ):
+        """Verify queue comments are trimmed and whitespace clears them."""
+        item = await queue_item_factory(comment="Existing")
+
+        response = await async_client.patch(
+            f"/api/v1/queue/{item.id}",
+            json={"comment": "  Updated note  "},
+        )
+        assert response.status_code == 200
+        assert response.json()["comment"] == "Updated note"
+
+        clear_response = await async_client.patch(
+            f"/api/v1/queue/{item.id}",
+            json={"comment": "   "},
+        )
+        assert clear_response.status_code == 200
+        assert clear_response.json()["comment"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_update_non_pending_queue_item_allows_comment_only(
+        self, async_client: AsyncClient, queue_item_factory, db_session
+    ):
+        """Verify non-pending items accept comment-only updates."""
+        item = await queue_item_factory(status="printing", comment=None)
+
+        response = await async_client.patch(
+            f"/api/v1/queue/{item.id}",
+            json={"comment": "  Still printing  "},
+        )
+        assert response.status_code == 200
+        assert response.json()["comment"] == "Still printing"
+
+        rejected = await async_client.patch(
+            f"/api/v1/queue/{item.id}",
+            json={"comment": "Nope", "auto_off_after": True},
+        )
+        assert rejected.status_code == 400
+        assert rejected.json()["detail"] == "Can only update pending items"
 
     @pytest.mark.asyncio
     @pytest.mark.integration

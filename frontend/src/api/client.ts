@@ -1822,6 +1822,7 @@ export interface PrintQueueItem {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  comment: string | null;
   created_at: string;
   archive_name?: string | null;
   archive_thumbnail?: string | null;
@@ -1889,6 +1890,7 @@ export interface PrintQueueItemCreate {
   quantity?: number;
   // Project to associate the resulting archive with
   project_id?: number;
+  comment?: string | null;
 }
 
 export interface PrintQueueItemUpdate {
@@ -1912,6 +1914,7 @@ export interface PrintQueueItemUpdate {
   use_ams?: boolean;
   // Auto-print G-code injection
   gcode_injection?: boolean;
+  comment?: string | null;
 }
 
 export interface PrintQueueBulkUpdate {

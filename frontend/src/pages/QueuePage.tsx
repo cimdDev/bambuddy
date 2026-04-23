@@ -67,6 +67,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
 import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
+import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
@@ -291,6 +292,7 @@ function SortableQueueItem({
   onStop,
   onRequeue,
   onStart,
+  onUpdateComment,
   timeFormat = 'system',
   isSelected = false,
   onToggleSelect,
@@ -307,6 +309,7 @@ function SortableQueueItem({
   onStop: () => void;
   onRequeue: () => void;
   onStart: () => void;
+  onUpdateComment?: (comment: string | null) => Promise<void>;
   timeFormat?: TimeFormat;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -363,6 +366,7 @@ function SortableQueueItem({
   const isPrinting = item.status === 'printing';
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
+  const canEditComment = !!onUpdateComment && canModify('queue', 'update', item.created_by_id);
 
   const isMobileSelectable = isPending && onToggleSelect;
 
@@ -558,6 +562,17 @@ function SortableQueueItem({
               </span>
             )}
           </div>
+
+          <QueueItemCommentEditor
+            comment={item.comment}
+            canEdit={canEditComment}
+            onSave={onUpdateComment}
+            label={t('queue.comment.label')}
+            addLabel={t('queue.comment.add')}
+            editLabel={t('queue.comment.edit')}
+            placeholder={t('queue.comment.placeholder')}
+            savingLabel={t('common.saving')}
+          />
 
           {/* Progress bar for printing items - TODO: integrate with WebSocket */}
           {isPrinting && status && (() => {
@@ -907,6 +922,15 @@ export function QueuePage() {
       setSelectedItems([]);
       setShowBulkEditModal(false);
       showToast(result.message);
+    },
+    onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
     onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
   });
@@ -1291,6 +1315,7 @@ export function QueuePage() {
                     onStop={() => setConfirmAction({ type: 'stop', item })}
                     onRequeue={() => {}}
                     onStart={() => {}}
+                    onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
                     timeFormat={timeFormat}
                     hasPermission={hasPermission}
                     canModify={canModify}
@@ -1407,6 +1432,7 @@ export function QueuePage() {
                         onStop={() => {}}
                         onRequeue={() => {}}
                         onStart={() => startMutation.mutate({ id: item.id })}
+                        onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
                         timeFormat={timeFormat}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
@@ -1466,6 +1492,7 @@ export function QueuePage() {
                       item={item}
                       onRemove={() => setConfirmAction({ type: 'remove', item })}
                       onRequeue={() => setRequeueItem(item)}
+                      onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}

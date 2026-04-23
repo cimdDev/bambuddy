@@ -42,6 +42,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/queue", tags=["queue"])
 
 
+def _normalize_queue_comment(comment: str | None) -> str | None:
+    """Normalize queue comments so empty drafts clear the stored value."""
+    if comment is None:
+        return None
+    trimmed = comment.strip()
+    return trimmed or None
+
+
 def _extract_filament_types_from_3mf(file_path: Path, plate_id: int | None = None) -> list[str]:
     """Extract unique filament types from a 3MF file.
 
@@ -210,6 +218,7 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "started_at": item.started_at,
         "completed_at": item.completed_at,
         "error_message": item.error_message,
+        "comment": item.comment,
         "created_at": item.created_at,
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
@@ -355,6 +364,8 @@ async def add_to_queue(
     current_user: User | None = RequirePermissionIfAuthEnabled(Permission.QUEUE_CREATE),
 ):
     """Add an item to the print queue."""
+    normalized_comment = _normalize_queue_comment(data.comment)
+
     # Normalize target_model (e.g., "Bambu Lab X1E" / "C13" -> "X1E")
     target_model_norm = None
     if data.target_model:
@@ -541,6 +552,7 @@ async def add_to_queue(
             project_id=data.project_id,
             position=max_pos + 1 + i,
             status="pending",
+            comment=normalized_comment,
             created_by_id=current_user.id if current_user else None,
             batch_id=batch_id,
             print_time_seconds=cached_print_time,
@@ -814,10 +826,12 @@ async def update_queue_item(
         if item.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own queue items")
 
-    if item.status != "pending":
-        raise HTTPException(400, "Can only update pending items")
-
     update_data = data.model_dump(exclude_unset=True)
+    if "comment" in update_data:
+        update_data["comment"] = _normalize_queue_comment(update_data["comment"])
+
+    if item.status != "pending" and set(update_data) != {"comment"}:
+        raise HTTPException(400, "Can only update pending items")
 
     # Normalize target_model if being updated
     if "target_model" in update_data and update_data["target_model"]:

@@ -46,6 +46,7 @@ class PrintQueueItemCreate(BaseModel):
     quantity: int = 1
     # Project to associate the resulting archive with
     project_id: int | None = None
+    comment: str | None = None
 
 
 class PrintQueueItemUpdate(BaseModel):
@@ -69,6 +70,7 @@ class PrintQueueItemUpdate(BaseModel):
     use_ams: bool | None = None
     # Auto-print G-code injection
     gcode_injection: bool | None = None
+    comment: str | None = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -104,6 +106,7 @@ class PrintQueueItemResponse(BaseModel):
     started_at: UTCDatetime
     completed_at: UTCDatetime
     error_message: str | None
+    comment: str | None
     created_at: UTCDatetime
 
     # Nested info for UI (populated in route)
