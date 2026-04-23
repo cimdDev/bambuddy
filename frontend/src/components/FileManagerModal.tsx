@@ -369,6 +369,8 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
     onSuccess: ({ result, openAfter }, variables) => {
       queryClient.invalidateQueries({ queryKey: ['printerFiles', printerId] });
       queryClient.invalidateQueries({ queryKey: ['library-files'] });
+      queryClient.invalidateQueries({ queryKey: ['library-folders'] });
+      queryClient.invalidateQueries({ queryKey: ['library-stats'] });
       setSelectedFiles(new Set());
 
       if (result.imported.length > 0) {
@@ -897,7 +899,7 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
           onSuccess={() => {
             setScheduleFile(null);
             queryClient.invalidateQueries({ queryKey: ['library-files'] });
-            queryClient.invalidateQueries({ queryKey: ['printQueue'] });
+            queryClient.invalidateQueries({ queryKey: ['queue'] });
           }}
         />
       )}
