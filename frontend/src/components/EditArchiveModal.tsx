@@ -50,6 +50,11 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
   const [failureReason, setFailureReason] = useState(archive.failure_reason || '');
   const [status, setStatus] = useState(archive.status);
   const [quantity, setQuantity] = useState(archive.quantity ?? 1);
+  const [privateJob, setPrivateJob] = useState(Boolean(archive.private_job));
+  const [privateMaterial, setPrivateMaterial] = useState(Boolean(archive.private_material));
+  const [privateMaterialPartial, setPrivateMaterialPartial] = useState(
+    Boolean(archive.private_material_partial) && !Boolean(archive.private_material)
+  );
   const [photos, setPhotos] = useState<string[]>(archive.photos || []);
   const [externalUrl, setExternalUrl] = useState(archive.external_url || '');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -175,6 +180,9 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
       notes: notes || undefined,
       tags: tags || undefined,
       quantity: quantity,
+      private_job: privateJob,
+      private_material: privateMaterial,
+      private_material_partial: privateJob && !privateMaterial ? privateMaterialPartial : false,
       external_url: externalUrl || null,
     };
 
@@ -282,6 +290,82 @@ export function EditArchiveModal({ archive, onClose, existingTags = [] }: EditAr
             <p className="text-xs text-bambu-gray mt-1">
               {t('editArchive.itemsPrintedHelp')}
             </p>
+          </div>
+
+          <div className="rounded-lg border border-bambu-dark-tertiary bg-bambu-dark/40 p-3 space-y-3">
+            <div>
+              <p className="text-sm text-white">{t('editArchive.accounting.title')}</p>
+              <p className="text-xs text-bambu-gray mt-1">{t('editArchive.accounting.help')}</p>
+            </div>
+
+            <label className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm text-white">{t('queue.accounting.privateJob')}</p>
+                <p className="text-xs text-bambu-gray">{t('editArchive.accounting.privateJobHelp')}</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={privateJob}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setPrivateJob(checked);
+                  if (!checked) {
+                    setPrivateMaterial(false);
+                    setPrivateMaterialPartial(false);
+                  }
+                }}
+                className="h-4 w-4 rounded border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+              />
+            </label>
+
+            {privateJob && (
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-bambu-gray">
+                  {t('queue.accounting.privateMaterial')}
+                </p>
+                <div className="grid gap-2">
+                  <label className="flex items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="private-material"
+                      checked={!privateMaterial && !privateMaterialPartial}
+                      onChange={() => {
+                        setPrivateMaterial(false);
+                        setPrivateMaterialPartial(false);
+                      }}
+                      className="h-4 w-4 border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+                    />
+                    {t('queue.accounting.companyMaterial')}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="private-material"
+                      checked={privateMaterialPartial}
+                      onChange={() => {
+                        setPrivateMaterial(false);
+                        setPrivateMaterialPartial(true);
+                      }}
+                      className="h-4 w-4 border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+                    />
+                    {t('queue.accounting.privateMaterialPartial')}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="private-material"
+                      checked={privateMaterial}
+                      onChange={() => {
+                        setPrivateMaterial(true);
+                        setPrivateMaterialPartial(false);
+                      }}
+                      className="h-4 w-4 border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+                    />
+                    {t('queue.accounting.privateMaterialFull')}
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}

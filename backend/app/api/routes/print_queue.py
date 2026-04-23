@@ -209,6 +209,9 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "completed_at": item.completed_at,
         "error_message": item.error_message,
         "created_at": item.created_at,
+        "private_job": item.private_job,
+        "private_material": item.private_material,
+        "private_material_partial": item.private_material_partial,
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
         "created_by_username": item.created_by.username if item.created_by else None,
@@ -420,6 +423,9 @@ async def add_to_queue(
 
     # Validate quantity
     quantity = max(1, data.quantity)
+    private_job = data.private_job
+    private_material = data.private_material if private_job else False
+    private_material_partial = data.private_material_partial if private_job and not private_material else False
 
     # Create batch if quantity > 1
     batch = None
@@ -516,6 +522,9 @@ async def add_to_queue(
             use_ams=data.use_ams,
             gcode_injection=data.gcode_injection,
             project_id=data.project_id,
+            private_job=private_job,
+            private_material=private_material,
+            private_material_partial=private_material_partial,
             position=max_pos + 1 + i,
             status="pending",
             created_by_id=current_user.id if current_user else None,
@@ -833,6 +842,14 @@ async def update_queue_item(
         update_data["filament_overrides"] = (
             json.dumps(update_data["filament_overrides"]) if update_data["filament_overrides"] else None
         )
+
+    next_private_job = update_data.get("private_job", item.private_job)
+    next_private_material = update_data.get("private_material", item.private_material)
+    if not next_private_job:
+        update_data["private_material"] = False
+        update_data["private_material_partial"] = False
+    elif next_private_material:
+        update_data["private_material_partial"] = False
 
     for field, value in update_data.items():
         setattr(item, field, value)
