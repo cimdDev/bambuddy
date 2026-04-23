@@ -45,6 +45,7 @@ import {
   Square,
   Pause,
   Play,
+  Coins,
   X,
   Fan,
   Wind,
@@ -76,6 +77,8 @@ import { useNavigate } from 'react-router-dom';
 import { api, discoveryApi, firmwareApi, withStreamToken, ApiError } from '../api/client';
 import { formatDateOnly, formatETA, formatDuration, parseUTCDate } from '../utils/date';
 import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment, HMSError, InventorySpool, SmartPlug, PrinterDiagnosticResult } from '../api/client';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -1774,6 +1777,10 @@ function PrinterCard({
     queryKey: ['queue', printer.id, 'pending'],
     queryFn: () => api.getQueue(printer.id, 'pending'),
   });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
   // Filter queue items by filament compatibility (same logic as PrinterQueueWidget)
   // so the badge only shows on printers that can actually run the queued jobs.
   // An empty Set means no filaments are loaded — jobs requiring specific types are incompatible.
@@ -1833,6 +1840,8 @@ function PrinterCard({
           ? canModify('library', 'update', currentQueueItem.created_by_id)
           : false
     : false;
+  const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -3064,6 +3073,21 @@ function PrinterCard({
                                 queryClient.invalidateQueries({ queryKey: ['printingArchive', printer.id, archiveId] });
                               }}
                             />
+                          )}
+                          {(currentQueueItem?.private_job || currentQueueCost != null) && (
+                            <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-bambu-gray">
+                              {currentQueueItem?.private_job && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                                  {t('queue.accounting.privateJob')}
+                                </span>
+                              )}
+                              {currentQueueCost != null && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
+                                  <Coins className="w-3 h-3" />
+                                  {formatCurrencyAmount(currentQueueCost, currencySymbol)}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </>
                       ) : (

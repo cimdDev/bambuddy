@@ -1,11 +1,13 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Clock, Calendar, ChevronRight, AlertTriangle, Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { formatRelativeTime } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { filterCompatibleQueueItems } from '../utils/printer';
 import { SlicerUserBadge } from './SlicerUserBadge';
 import { SlicerUserEditModal } from './SlicerUserEditModal';
@@ -14,20 +16,23 @@ interface PrinterQueueWidgetProps {
   printerId: number;
   printerModel?: string | null;
   loadedFilamentTypes?: Set<string>;
-  loadedFilaments?: Set<string>;  // "TYPE:rrggbb" pairs for filament override color matching
+  loadedFilaments?: Set<string>;
 }
 
 export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentTypes, loadedFilaments }: PrinterQueueWidgetProps) {
   const { t } = useTranslation();
   const { canModify } = useAuth();
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
     refetchInterval: 30000,
   });
 
-  // Filter queue to items this printer can actually print (filament type + color check)
   const compatibleQueue = queue ? filterCompatibleQueueItems(queue, loadedFilamentTypes, loadedFilaments) : undefined;
   const totalPending = compatibleQueue?.length || 0;
 
@@ -37,6 +42,8 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
 
   const nextItem = compatibleQueue?.[0];
   const editingItem = compatibleQueue?.find((item) => item.id === editingItemId) || null;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
 
   const canEditSlicerUser = (item?: typeof nextItem) => {
     if (!item) return false;
@@ -97,11 +104,6 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
     );
   };
 
-  // Passive next-in-queue preview. Plate-clear acknowledgment is handled by the
-  // card-level "Mark plate as cleared" button (PrintersPage.tsx). Having a
-  // second button in this widget caused the two controls to overlap whenever
-  // the plate-clear gate was up with auto-dispatch items queued — both POSTed
-  // to the same /clear-plate endpoint, so the widget button was pure noise.
   return (
     <>
       <Link
@@ -118,6 +120,17 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 {renderSlicerUserBadge(nextItem)}
+                {nextItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
+                )}
+                {nextCost != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
+                    <Coins className="w-3 h-3" />
+                    {formatCurrencyAmount(nextCost, currencySymbol)}
+                  </span>
+                )}
               </div>
             </div>
           </div>

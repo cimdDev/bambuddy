@@ -91,6 +91,11 @@ class PrintQueueItem(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    # Lightweight private-job accounting
+    private_job: Mapped[bool] = mapped_column(Boolean, default=False)
+    private_material: Mapped[bool] = mapped_column(Boolean, default=False)
+    private_material_partial: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # User tracking (who added this to the queue)
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

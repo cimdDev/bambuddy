@@ -261,6 +261,9 @@ def archive_to_response(
         "tags": archive.tags,
         "notes": archive.notes,
         "cost": archive.cost,
+        "private_job": archive.private_job,
+        "private_material": archive.private_material,
+        "private_material_partial": archive.private_material_partial,
         "photos": archive.photos,
         "failure_reason": archive.failure_reason,
         "quantity": archive.quantity,
@@ -451,6 +454,10 @@ async def list_archives_slim(
             PrintLogEntry.filament_color,
             PrintLogEntry.status,
             PrintLogEntry.cost,
+            PrintArchive.private_job,
+            PrintArchive.private_material,
+            PrintArchive.private_material_partial,
+            PrintArchive.quantity,
             PrintLogEntry.created_at,
         )
         .outerjoin(PrintArchive, PrintArchive.id == PrintLogEntry.archive_id)
@@ -489,7 +496,10 @@ async def list_archives_slim(
             "started_at": r.started_at,
             "completed_at": r.completed_at,
             "cost": r.cost,
-            "quantity": 1,
+            "private_job": bool(r.private_job),
+            "private_material": bool(r.private_material),
+            "private_material_partial": bool(r.private_material_partial),
+            "quantity": r.quantity or 1,
             "created_at": r.created_at,
         }
         for r in rows
@@ -1369,6 +1379,14 @@ async def update_archive(
         updates["slicer_user"] = updates["slicer_user"].strip() if updates["slicer_user"] else None
     if "slicer_user_email" in updates:
         updates["slicer_user_email"] = updates["slicer_user_email"].strip() if updates["slicer_user_email"] else None
+
+    next_private_job = updates.get("private_job", archive.private_job)
+    next_private_material = updates.get("private_material", archive.private_material)
+    if not next_private_job:
+        updates["private_material"] = False
+        updates["private_material_partial"] = False
+    elif next_private_material:
+        updates["private_material_partial"] = False
 
     for field, value in updates.items():
         setattr(archive, field, value)

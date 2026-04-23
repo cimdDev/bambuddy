@@ -10,9 +10,11 @@ import {
   Printer,
   Timer,
   Layers,
+  Coins,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { type TimeFormat, formatDuration, formatRelativeTime } from '../utils/date';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, Permission } from '../api/client';
 import { Button } from './Button';
 import { SlicerUserBadge } from './SlicerUserBadge';
@@ -29,6 +31,8 @@ export function CompactHistoryRow({
   item,
   onRequeue,
   onRemove,
+  defaultCostPerKg,
+  currencySymbol,
   timeFormat = 'system',
   hasPermission,
   canModify,
@@ -37,6 +41,8 @@ export function CompactHistoryRow({
   item: PrintQueueItem;
   onRequeue: () => void;
   onRemove: () => void;
+  defaultCostPerKg: number;
+  currencySymbol: string;
   timeFormat?: TimeFormat;
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
@@ -52,6 +58,12 @@ export function CompactHistoryRow({
     : item.library_file_id
       ? canModify('library', 'update', item.created_by_id)
       : false;
+  const privateMaterialUsage = item.private_material
+    ? 'private_full'
+    : item.private_material_partial
+      ? 'private_partial'
+      : 'company';
+  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
 
   const thumbnailUrl = item.archive_thumbnail
     ? api.getArchiveThumbnail(item.archive_id!)
@@ -68,12 +80,10 @@ export function CompactHistoryRow({
 
   return (
     <>
-      <div className={`flex items-center gap-2 sm:gap-3 px-3 py-2 bg-bambu-dark-secondary rounded-lg border border-bambu-dark-tertiary border-l-[3px] ${config.border}`}>
-        {/* Status icon */}
-        <StatusIcon className={`w-4 h-4 shrink-0 ${config.color}`} />
+      <div className={`flex items-start gap-2 sm:gap-3 px-3 py-2 bg-bambu-dark-secondary rounded-lg border border-bambu-dark-tertiary border-l-[3px] ${config.border}`}>
+        <StatusIcon className={`w-4 h-4 shrink-0 mt-1 ${config.color}`} />
 
-        {/* Thumbnail */}
-        <div className="w-8 h-8 shrink-0 bg-bambu-dark rounded overflow-hidden">
+        <div className="w-8 h-8 shrink-0 bg-bambu-dark rounded overflow-hidden mt-0.5">
           {thumbnailUrl ? (
             <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -83,69 +93,91 @@ export function CompactHistoryRow({
           )}
         </div>
 
-        {/* File name */}
-        <span className="text-sm text-white font-medium truncate min-w-0 flex-1">
-          {displayName}
-        </span>
-
-        {/* Printer */}
-        {item.printer_name && (
-          <span className="hidden sm:flex items-center gap-1 text-xs text-bambu-gray shrink-0">
-            <Printer className="w-3 h-3" />
-            <span className="truncate max-w-[100px]">{item.printer_name}</span>
+        <div className="min-w-0 flex-1">
+          <span className="text-sm text-white font-medium truncate min-w-0 block">
+            {displayName}
           </span>
-        )}
-
-        {/* Duration */}
-        {item.print_time_seconds && (
-          <span className="hidden sm:flex items-center gap-1 text-xs text-bambu-gray shrink-0">
-            <Timer className="w-3 h-3" />
-            {formatDuration(item.print_time_seconds)}
-          </span>
-        )}
-
-        {slicerUser ? (
-          canEditSlicerUser ? (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={openSlicerUserEditor}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') openSlicerUserEditor(e);
-              }}
-              className="hidden sm:inline-flex rounded-full shrink-0"
-              title={t('queue.editSlicerUser.editExisting')}
-            >
-              <SlicerUserBadge user={slicerUser} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+            {item.printer_name && (
+              <span className="inline-flex items-center gap-1 text-xs text-bambu-gray">
+                <Printer className="w-3 h-3" />
+                <span className="truncate max-w-[100px]">{item.printer_name}</span>
+              </span>
+            )}
+            {item.print_time_seconds && (
+              <span className="inline-flex items-center gap-1 text-xs text-bambu-gray">
+                <Timer className="w-3 h-3" />
+                {formatDuration(item.print_time_seconds)}
+              </span>
+            )}
+            {itemCost != null && (
+              <span className="inline-flex items-center gap-1 text-xs text-bambu-gray">
+                <Coins className="w-3 h-3" />
+                {formatCurrencyAmount(itemCost, currencySymbol)}
+              </span>
+            )}
+            <span className="text-xs text-bambu-gray">
+              {formatRelativeTime(completedTime, timeFormat, t)}
             </span>
-          ) : (
-            <SlicerUserBadge user={slicerUser} className="hidden sm:inline-flex shrink-0" />
-          )
-        ) : (
-          <span
-            role={canEditSlicerUser ? 'button' : undefined}
-            tabIndex={canEditSlicerUser ? 0 : undefined}
-            onClick={canEditSlicerUser ? openSlicerUserEditor : undefined}
-            onKeyDown={canEditSlicerUser ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') openSlicerUserEditor(e);
-            } : undefined}
-            className="hidden sm:inline-flex shrink-0"
-            title={canEditSlicerUser ? t('queue.editSlicerUser.addMissing') : t('queue.badges.slicerUserMissingWarning')}
-          >
-            <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
-              <AlertCircle className="w-3 h-3" />
-              {t('queue.badges.slicerUserMissingWarning')}
-            </span>
-          </span>
-        )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {item.private_job && (
+              <>
+                <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20">
+                  {t('queue.accounting.privateJob')}
+                </span>
+                <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border ${
+                  privateMaterialUsage === 'private_full'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    : privateMaterialUsage === 'private_partial'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                }`}>
+                  {privateMaterialUsage === 'private_full'
+                    ? t('queue.accounting.privateMaterialFull')
+                    : privateMaterialUsage === 'private_partial'
+                      ? t('queue.accounting.privateMaterialPartial')
+                      : t('queue.accounting.companyMaterial')}
+                </span>
+              </>
+            )}
+            {slicerUser ? (
+              canEditSlicerUser ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={openSlicerUserEditor}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') openSlicerUserEditor(e);
+                  }}
+                  className="rounded-full"
+                  title={t('queue.editSlicerUser.editExisting')}
+                >
+                  <SlicerUserBadge user={slicerUser} />
+                </span>
+              ) : (
+                <SlicerUserBadge user={slicerUser} />
+              )
+            ) : (
+              <span
+                role={canEditSlicerUser ? 'button' : undefined}
+                tabIndex={canEditSlicerUser ? 0 : undefined}
+                onClick={canEditSlicerUser ? openSlicerUserEditor : undefined}
+                onKeyDown={canEditSlicerUser ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') openSlicerUserEditor(e);
+                } : undefined}
+                title={canEditSlicerUser ? t('queue.editSlicerUser.addMissing') : t('queue.badges.slicerUserMissingWarning')}
+              >
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
+                  <AlertCircle className="w-3 h-3" />
+                  {t('queue.badges.slicerUserMissingWarning')}
+                </span>
+              </span>
+            )}
+          </div>
+        </div>
 
-        {/* Completed time */}
-        <span className="text-xs text-bambu-gray shrink-0">
-          {formatRelativeTime(completedTime, timeFormat, t)}
-        </span>
-
-        {/* Actions */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
           <Button
             variant="ghost"
             size="sm"

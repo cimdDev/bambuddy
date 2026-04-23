@@ -46,6 +46,9 @@ class PrintQueueItemCreate(BaseModel):
     quantity: int = 1
     # Project to associate the resulting archive with
     project_id: int | None = None
+    private_job: bool = False
+    private_material: bool = False
+    private_material_partial: bool = False
 
 
 class PrintQueueItemUpdate(BaseModel):
@@ -69,6 +72,9 @@ class PrintQueueItemUpdate(BaseModel):
     use_ams: bool | None = None
     # Auto-print G-code injection
     gcode_injection: bool | None = None
+    private_job: bool | None = None
+    private_material: bool | None = None
+    private_material_partial: bool | None = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -105,6 +111,9 @@ class PrintQueueItemResponse(BaseModel):
     completed_at: UTCDatetime
     error_message: str | None
     created_at: UTCDatetime
+    private_job: bool = False
+    private_material: bool = False
+    private_material_partial: bool = False
 
     # Nested info for UI (populated in route)
     archive_name: str | None = None
