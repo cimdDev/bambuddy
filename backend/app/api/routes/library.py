@@ -206,7 +206,7 @@ def _clean_3mf_metadata(obj):
     return obj
 
 
-async def save_3mf_bytes_to_library(
+async def save_file_bytes_to_library(
     db: AsyncSession,
     *,
     file_bytes: bytes,
@@ -216,7 +216,7 @@ async def save_3mf_bytes_to_library(
     source_url: str | None = None,
     owner_id: int | None = None,
 ) -> tuple[LibraryFile, bool]:
-    """Save a 3MF blob into the library and return ``(library_file, was_existing)``.
+    """Save a file blob into the library and return ``(library_file, was_existing)``.
 
     Used by routes that receive a 3MF in-process rather than as a multipart
     upload (currently: MakerWorld import; reusable for any future source that
@@ -225,9 +225,9 @@ async def save_3mf_bytes_to_library(
     row is returned and the bytes are NOT re-saved (MakerWorld signed URLs
     change each download, so hash-based dedupe alone would miss re-imports).
 
-    Parses 3MF metadata + thumbnail the same way the multipart upload route
-    does, via :class:`ThreeMFParser`. Paths are stored as relative so the
-    library is portable across installs.
+    Parses metadata and thumbnails using the same rules as the multipart
+    upload route. Paths are stored as relative so the library is portable
+    across installs.
     """
     # Source-URL-based dedupe: return the existing row untouched.
     if source_url:
@@ -246,9 +246,11 @@ async def save_3mf_bytes_to_library(
 
     file_hash = calculate_file_hash(file_path)
 
-    # Extract metadata + thumbnail from the 3MF.
+    # Extract metadata + thumbnail using the same rules as multipart upload.
     metadata: dict | None = None
     thumbnail_path: str | None = None
+    thumbnails_dir = get_library_thumbnails_dir()
+
     if ext == ".3mf":
         try:
             parser = ThreeMFParser(str(file_path))
@@ -256,9 +258,8 @@ async def save_3mf_bytes_to_library(
             thumb_data = raw_metadata.get("_thumbnail_data")
             thumb_ext = raw_metadata.get("_thumbnail_ext", ".png")
             if thumb_data:
-                thumbs_dir = get_library_thumbnails_dir()
                 thumb_filename = f"{uuid.uuid4().hex}{thumb_ext}"
-                thumb_path = thumbs_dir / thumb_filename
+                thumb_path = thumbnails_dir / thumb_filename
                 with open(thumb_path, "wb") as fh:
                     fh.write(thumb_data)
                 thumbnail_path = str(thumb_path)
@@ -268,6 +269,20 @@ async def save_3mf_bytes_to_library(
             # still land in the library so the user can see / delete it rather
             # than failing the whole request.
             logger.warning("Failed to parse 3MF %s: %s", filename, exc)
+    elif ext == ".gcode":
+        try:
+            thumb_data = extract_gcode_thumbnail(file_path)
+            if thumb_data:
+                thumb_path = thumbnails_dir / f"{uuid.uuid4().hex}.png"
+                with open(thumb_path, "wb") as fh:
+                    fh.write(thumb_data)
+                thumbnail_path = str(thumb_path)
+        except Exception as exc:
+            logger.warning("Failed to extract G-code thumbnail for %s: %s", filename, exc)
+    elif ext in IMAGE_EXTENSIONS:
+        thumbnail_path = create_image_thumbnail(file_path, thumbnails_dir)
+    elif ext == ".stl":
+        thumbnail_path = generate_stl_thumbnail(file_path, thumbnails_dir)
 
     library_file = LibraryFile(
         folder_id=folder_id,
@@ -286,6 +301,29 @@ async def save_3mf_bytes_to_library(
     await db.commit()
     await db.refresh(library_file)
     return library_file, False
+
+
+async def save_3mf_bytes_to_library(
+    db: AsyncSession,
+    *,
+    file_bytes: bytes,
+    filename: str,
+    folder_id: int | None = None,
+    source_type: str | None = None,
+    source_url: str | None = None,
+    owner_id: int | None = None,
+) -> tuple[LibraryFile, bool]:
+    """Backward-compatible wrapper for routes that specifically import 3MFs."""
+
+    return await save_file_bytes_to_library(
+        db,
+        file_bytes=file_bytes,
+        filename=filename,
+        folder_id=folder_id,
+        source_type=source_type,
+        source_url=source_url,
+        owner_id=owner_id,
+    )
 
 
 def extract_gcode_thumbnail(file_path: Path) -> bytes | None:

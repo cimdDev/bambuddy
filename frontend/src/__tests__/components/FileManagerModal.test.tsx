@@ -6,9 +6,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { render } from '../utils';
-import { FileManagerModal } from '../../components/FileManagerModal';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
+
+vi.mock('../../components/PrintModal', () => ({
+  PrintModal: ({ mode, archiveName }: { mode: string; archiveName: string }) => (
+    <div>{mode === 'add-to-queue' ? `Queue Modal ${archiveName}` : `Print Modal ${archiveName}`}</div>
+  ),
+}));
+
+import { FileManagerModal } from '../../components/FileManagerModal';
 
 const mockFiles = [
   {
@@ -60,6 +67,21 @@ describe('FileManagerModal', () => {
       }),
       http.delete('/api/v1/printers/:id/files', () => {
         return HttpResponse.json({ success: true });
+      }),
+      http.post('/api/v1/printers/:id/files/import', async ({ request }) => {
+        const body = await request.json() as { paths?: string[] };
+        const path = body.paths?.[0] ?? '/unknown';
+        return HttpResponse.json({
+          imported: [
+            {
+              path,
+              filename: path.split('/').pop() ?? 'imported.gcode',
+              library_file_id: 99,
+            },
+          ],
+          failed: [],
+          delete_failed: [],
+        });
       })
     );
   });
@@ -315,6 +337,68 @@ describe('FileManagerModal', () => {
 
       // Check that options exist
       expect(screen.getByText('Name (A-Z)')).toBeInTheDocument();
+    });
+
+    it('defaults to newest-first sorting', () => {
+      render(
+        <FileManagerModal
+          printerId={1}
+          printerName="X1 Carbon"
+          onClose={mockOnClose}
+        />
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('date-desc');
+    });
+  });
+
+  describe('sd-card actions', () => {
+    it('imports selected printer files into Bambuddy', async () => {
+      render(
+        <FileManagerModal
+          printerId={1}
+          printerName="X1 Carbon"
+          onClose={mockOnClose}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('benchy.3mf')).toBeInTheDocument();
+      });
+
+      const checkboxes = screen.getAllByRole('button').filter((btn) =>
+        btn.querySelector('svg')?.classList.contains('lucide-square')
+      );
+      fireEvent.click(checkboxes[0]);
+      fireEvent.click(screen.getByRole('button', { name: /Import to Bambuddy/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Imported 1 file(s) into Bambuddy')).toBeInTheDocument();
+      });
+    });
+
+    it('imports a printable file and opens the print flow', async () => {
+      render(
+        <FileManagerModal
+          printerId={1}
+          printerName="X1 Carbon"
+          onClose={mockOnClose}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('print_job.gcode')).toBeInTheDocument();
+      });
+
+      const checkboxes = screen.getAllByRole('button').filter((btn) =>
+        btn.querySelector('svg')?.classList.contains('lucide-square')
+      );
+      fireEvent.click(checkboxes[1]);
+      fireEvent.click(screen.getByRole('button', { name: /^Print$/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Print Modal print_job.gcode')).toBeInTheDocument();
+      });
     });
   });
 

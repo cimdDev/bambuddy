@@ -342,6 +342,23 @@ export interface PrinterCreate {
   plate_detection_roi?: PlateDetectionROI;
 }
 
+export interface PrinterFileImportItem {
+  path: string;
+  filename: string;
+  library_file_id: number;
+}
+
+export interface PrinterFileImportFailure {
+  path: string;
+  error: string;
+}
+
+export interface PrinterFileImportResponse {
+  imported: PrinterFileImportItem[];
+  failed: PrinterFileImportFailure[];
+  delete_failed: PrinterFileImportFailure[];
+}
+
 // Plate Detection
 export interface PlateDetectionROI {
   x: number;  // X start % (0.0-1.0)
@@ -3048,6 +3065,11 @@ export const api = {
   deletePrinterFile: (printerId: number, path: string) =>
     request<{ status: string; path: string }>(`/printers/${printerId}/files?path=${encodeURIComponent(path)}`, {
       method: 'DELETE',
+    }),
+  importPrinterFiles: (printerId: number, paths: string[], deleteSource = false) =>
+    request<PrinterFileImportResponse>(`/printers/${printerId}/files/import`, {
+      method: 'POST',
+      body: JSON.stringify({ paths, delete_source: deleteSource }),
     }),
   getPrinterStorage: (printerId: number) =>
     request<{ used_bytes: number | null; free_bytes: number | null }>(`/printers/${printerId}/storage`),

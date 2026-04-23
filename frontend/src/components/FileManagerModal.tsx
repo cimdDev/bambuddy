@@ -21,6 +21,9 @@ import {
   Square,
   MinusSquare,
   Box,
+  Copy,
+  MoveRight,
+  Printer as PrinterIcon,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { parseUTCDate } from '../utils/date';
@@ -31,6 +34,8 @@ import { GcodeViewer } from './GcodeViewer';
 import type { PlateMetadata } from '../types/plates';
 import { useToast } from '../contexts/ToastContext';
 import { formatFileSize } from '../utils/file';
+import { useAuth } from '../contexts/AuthContext';
+import { PrintModal } from './PrintModal';
 
 interface FileManagerModalProps {
   printerId: number;
@@ -279,17 +284,29 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'date-desc', label: 'Date (newest)' },
 ];
 
+function isPrintablePrinterFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.endsWith('.gcode') || lower.includes('.gcode.');
+}
+
 export function FileManagerModal({ printerId, printerName, onClose }: FileManagerModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState('/');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>('name-asc');
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number } | null>(null);
   const [viewerFile, setViewerFile] = useState<{ path: string; name: string } | null>(null);
+  const [printFile, setPrintFile] = useState<{ id: number; filename: string } | null>(null);
+  const [scheduleFile, setScheduleFile] = useState<{ id: number; filename: string } | null>(null);
+
+  const canImport = hasPermission('library:upload');
+  const canPrint = hasPermission('printers:control');
+  const canQueue = hasPermission('queue:create');
 
   // Close on Escape key
   useEffect(() => {
@@ -312,6 +329,12 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
     staleTime: 30000, // Cache for 30 seconds
   });
 
+  const selectedPath = selectedFiles.size === 1 ? Array.from(selectedFiles)[0] : null;
+  const selectedFile = selectedPath
+    ? data?.files?.find((file) => file.path === selectedPath && !file.is_directory) ?? null
+    : null;
+  const hasSinglePrintableSelection = !!selectedFile && isPrintablePrinterFile(selectedFile.name);
+
   const deleteMutation = useMutation({
     mutationFn: async (paths: string[]) => {
       // Delete files one by one
@@ -327,6 +350,61 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
     },
     onError: (error: Error) => {
       showToast(t('printerFiles.toast.deleteFailed', { error: error.message }), 'error');
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async ({
+      paths,
+      deleteSource,
+      openAfter,
+    }: {
+      paths: string[];
+      deleteSource: boolean;
+      openAfter: 'print' | 'queue' | null;
+    }) => {
+      const result = await api.importPrinterFiles(printerId, paths, deleteSource);
+      return { result, openAfter };
+    },
+    onSuccess: ({ result, openAfter }, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['printerFiles', printerId] });
+      queryClient.invalidateQueries({ queryKey: ['library-files'] });
+      setSelectedFiles(new Set());
+
+      if (result.imported.length > 0) {
+        const successKey = openAfter
+          ? openAfter === 'print'
+            ? 'printReady'
+            : 'queueReady'
+          : variables.deleteSource
+            ? result.delete_failed.length > 0
+              ? 'movedPartial'
+              : 'moved'
+            : result.delete_failed.length > 0
+            ? 'movedPartial'
+            : 'imported';
+        showToast(t(`printerFiles.toast.${successKey}`, { count: result.imported.length }));
+      }
+
+      if (result.failed.length > 0) {
+        showToast(t('printerFiles.toast.importFailedCount', { count: result.failed.length }), 'error');
+      }
+
+      if (result.delete_failed.length > 0) {
+        showToast(t('printerFiles.toast.moveDeleteFailed', { count: result.delete_failed.length }), 'error');
+      }
+
+      if (openAfter && result.imported[0]) {
+        const imported = result.imported[0];
+        if (openAfter === 'print') {
+          setPrintFile({ id: imported.library_file_id, filename: imported.filename });
+        } else {
+          setScheduleFile({ id: imported.library_file_id, filename: imported.filename });
+        }
+      }
+    },
+    onError: (error: Error) => {
+      showToast(t('printerFiles.toast.importFailed', { error: error.message }), 'error');
     },
   });
 
@@ -406,6 +484,15 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
   const handleDelete = () => {
     if (selectedFiles.size === 0) return;
     setFilesToDelete(Array.from(selectedFiles));
+  };
+
+  const runImportAction = (deleteSource: boolean, openAfter: 'print' | 'queue' | null = null) => {
+    if (selectedFiles.size === 0) return;
+    importMutation.mutate({
+      paths: Array.from(selectedFiles),
+      deleteSource,
+      openAfter,
+    });
   };
 
   // Quick navigation buttons for common directories
@@ -678,6 +765,54 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
           <div className="flex gap-2">
             <Button
               variant="secondary"
+              disabled={selectedFiles.size === 0 || !canImport || importMutation.isPending}
+              onClick={() => runImportAction(false)}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+              {t('printerFiles.importButton')}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={selectedFiles.size === 0 || !canImport || importMutation.isPending}
+              onClick={() => runImportAction(true)}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <MoveRight className="w-4 h-4" />
+              )}
+              {t('printerFiles.moveButton')}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!hasSinglePrintableSelection || !canImport || !canPrint || importMutation.isPending}
+              onClick={() => runImportAction(false, 'print')}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <PrinterIcon className="w-4 h-4" />
+              )}
+              {t('printerFiles.printButton')}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!hasSinglePrintableSelection || !canImport || !canQueue || importMutation.isPending}
+              onClick={() => runImportAction(false, 'queue')}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <PrinterIcon className="w-4 h-4" />
+              )}
+              {t('printerFiles.scheduleButton')}
+            </Button>
+            <Button
+              variant="secondary"
               disabled={selectedFiles.size === 0 || downloadProgress !== null}
               onClick={handleDownload}
             >
@@ -734,6 +869,36 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
           filePath={viewerFile.path}
           filename={viewerFile.name}
           onClose={() => setViewerFile(null)}
+        />
+      )}
+
+      {printFile && (
+        <PrintModal
+          mode="reprint"
+          libraryFileId={printFile.id}
+          archiveName={printFile.filename}
+          initialSelectedPrinterIds={[printerId]}
+          onClose={() => setPrintFile(null)}
+          onSuccess={() => {
+            setPrintFile(null);
+            queryClient.invalidateQueries({ queryKey: ['library-files'] });
+            queryClient.invalidateQueries({ queryKey: ['archives'] });
+          }}
+        />
+      )}
+
+      {scheduleFile && (
+        <PrintModal
+          mode="add-to-queue"
+          libraryFileId={scheduleFile.id}
+          archiveName={scheduleFile.filename}
+          initialSelectedPrinterIds={[printerId]}
+          onClose={() => setScheduleFile(null)}
+          onSuccess={() => {
+            setScheduleFile(null);
+            queryClient.invalidateQueries({ queryKey: ['library-files'] });
+            queryClient.invalidateQueries({ queryKey: ['printQueue'] });
+          }}
         />
       )}
     </div>
