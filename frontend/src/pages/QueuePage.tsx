@@ -1492,7 +1492,9 @@ export function QueuePage() {
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
                         canModify={canModify}
-                        onUpdateAccounting={(patch) => updateAccountingMutation.mutateAsync({ itemId: item.id, patch })}
+                        onUpdateAccounting={async (patch) => {
+                          await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                        }}
                         defaultCostPerKg={defaultCostPerKg}
                         currencySymbol={currencySymbol}
                         t={t}
