@@ -87,6 +87,8 @@ import { getPrinterImage, getWifiStrength, filterCompatibleQueueItems } from '..
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
+import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 
 // Color names resolve via getColorName() which reads the backend color_catalog
 // (loaded once by ColorCatalogProvider). No hardcoded tables here — see #857.
@@ -1669,18 +1671,34 @@ function PrinterCard({
   const { data: printingQueueItems } = useQuery({
     queryKey: ['queue', printer.id, 'printing'],
     queryFn: () => api.getQueue(printer.id, 'printing'),
-    enabled: status?.state === 'RUNNING',
+    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
   // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
   const { data: reprintUser } = useQuery({
     queryKey: ['currentPrintUser', printer.id],
     queryFn: () => api.getCurrentPrintUser(printer.id),
-    enabled: status?.state === 'RUNNING',
+    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
   // Combine both sources: queue item user takes precedence, then reprint user
   const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
+  const archiveId = (() => {
+    const raw = printingQueueItems?.[0]?.archive_id;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  })();
+  const printingArchiveQuery = useQuery({
+    queryKey: ['printingArchive', printer.id, archiveId],
+    queryFn: () => api.getArchive(archiveId!),
+    enabled: (status?.state === 'RUNNING' || status?.state === 'PAUSE') && archiveId !== undefined,
+  });
+  const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? printingArchiveQuery.data?.slicer_user_email ?? null;
+  const currentMissingSlicerUser = !currentSlicerUser;
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
+  const canEditCurrentSlicerUser = printingArchiveQuery.data
+    ? canModify('archives', 'update', printingArchiveQuery.data.created_by_id)
+    : false;
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -2772,9 +2790,61 @@ function PrinterCard({
                             <p className="text-sm text-bambu-gray">{getStatusDisplay(status.state, status.stg_cur_name)}</p>
                             {plateStatusPill}
                           </div>
-                          <p className="text-white text-sm mb-2 truncate">
-                            {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t, activePlateLabel)}
-                          </p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-white text-sm truncate min-w-0 flex-1">
+                              {formatPrintName(status.subtask_name || status.current_print || null, status.gcode_file, t, activePlateLabel)}
+                            </p>
+                            {(currentMissingSlicerUser || currentSlicerUser) && (
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {currentSlicerUser && (
+                                  canEditCurrentSlicerUser ? (
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => setShowSlicerUserEdit(true)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          setShowSlicerUserEdit(true);
+                                        }
+                                      }}
+                                      className="rounded-full"
+                                      title={t('queue.editSlicerUser.editExisting')}
+                                    >
+                                      <SlicerUserBadge user={currentSlicerUser} />
+                                    </span>
+                                  ) : (
+                                    <SlicerUserBadge user={currentSlicerUser} />
+                                  )
+                                )}
+                                {currentMissingSlicerUser && (
+                                  canEditCurrentSlicerUser ? (
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => setShowSlicerUserEdit(true)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          setShowSlicerUserEdit(true);
+                                        }
+                                      }}
+                                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20"
+                                      title={t('queue.editSlicerUser.addMissing')}
+                                    >
+                                      <AlertTriangle className="w-3 h-3" />
+                                      {t('queue.badges.slicerUserMissingWarning')}
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                                      <AlertTriangle className="w-3 h-3" />
+                                      {t('queue.badges.slicerUserMissingWarning')}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
                               <div
@@ -2809,6 +2879,12 @@ function PrinterCard({
                               </span>
                             )}
                           </div>
+                          {showSlicerUserEdit && printingArchiveQuery.data && (
+                            <SlicerUserEditModal
+                              item={printingArchiveQuery.data}
+                              onClose={() => setShowSlicerUserEdit(false)}
+                            />
+                          )}
                         </>
                       ) : (
                         <>

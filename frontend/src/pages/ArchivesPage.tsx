@@ -79,6 +79,8 @@ import { CompareArchivesModal } from '../components/CompareArchivesModal';
 import { PendingUploadsPanel } from '../components/PendingUploadsPanel';
 import { TagManagementModal } from '../components/TagManagementModal';
 import { PlatePickerModal } from '../components/PlatePickerModal';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
+import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 import type { PlateMetadata } from '../types/plates';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -185,6 +187,7 @@ function ArchiveCard({
   const [showDeleteSource3mfConfirm, setShowDeleteSource3mfConfirm] = useState(false);
   const [showDeleteF3dConfirm, setShowDeleteF3dConfirm] = useState(false);
   const [showDeleteTimelapseConfirm, setShowDeleteTimelapseConfirm] = useState(false);
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [currentPlateIndex, setCurrentPlateIndex] = useState<number | null>(null);
   const [showPlateNav, setShowPlateNav] = useState(false);
@@ -204,6 +207,7 @@ function ArchiveCard({
   // Use pre-computed duplicate sequence and original archive ID from list response
   const duplicateSequence = archive.duplicate_sequence ?? 0;
   const originalArchiveId = archive.original_archive_id ?? null;
+  const canEditSlicerUser = canModify('archives', 'update', archive.created_by_id);
 
   const plates = platesData?.plates ?? [];
   const isMultiPlate = platesData?.is_multi_plate ?? false;
@@ -1065,6 +1069,51 @@ function ArchiveCard({
         <div className="flex items-center justify-between text-xs text-bambu-gray border-t border-bambu-dark-tertiary pt-3">
           <span>{formatDateTime(archive.created_at, timeFormat)}</span>
           <div className="flex items-center gap-2">
+            {(archive.slicer_user || archive.slicer_user_email) ? (
+              canEditSlicerUser ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setShowSlicerUserEdit(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setShowSlicerUserEdit(true);
+                    }
+                  }}
+                  className="rounded-full"
+                  title={t('queue.editSlicerUser.editExisting')}
+                >
+                  <SlicerUserBadge user={archive.slicer_user || archive.slicer_user_email || ''} />
+                </span>
+              ) : (
+                <SlicerUserBadge user={archive.slicer_user || archive.slicer_user_email || ''} />
+              )
+            ) : (
+              canEditSlicerUser ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setShowSlicerUserEdit(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setShowSlicerUserEdit(true);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20"
+                  title={t('queue.editSlicerUser.addMissing')}
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  {t('queue.badges.slicerUserMissingWarning')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                  <AlertCircle className="w-3 h-3" />
+                  {t('queue.badges.slicerUserMissingWarning')}
+                </span>
+              )
+            )}
             {archive.created_by_username && (
               <span className="flex items-center gap-1" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
                 <User className="w-3 h-3" />
@@ -1074,6 +1123,13 @@ function ArchiveCard({
             <span>{formatFileSize(archive.file_size)}</span>
           </div>
         </div>
+
+        {showSlicerUserEdit && (
+          <SlicerUserEditModal
+            item={archive}
+            onClose={() => setShowSlicerUserEdit(false)}
+          />
+        )}
 
         {/* Actions */}
         <div className="flex gap-1 mt-3">
@@ -1479,6 +1535,7 @@ function ArchiveListRow({
   const [showDeleteSource3mfConfirm, setShowDeleteSource3mfConfirm] = useState(false);
   const [showDeleteF3dConfirm, setShowDeleteF3dConfirm] = useState(false);
   const [showDeleteTimelapseConfirm, setShowDeleteTimelapseConfirm] = useState(false);
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const source3mfInputRef = useRef<HTMLInputElement>(null);
   const f3dInputRef = useRef<HTMLInputElement>(null);
@@ -1488,6 +1545,7 @@ function ArchiveListRow({
   // Use pre-computed duplicate sequence and original archive ID from list response
   const duplicateSequence = archive.duplicate_sequence ?? 0;
   const originalArchiveId = archive.original_archive_id ?? null;
+  const canEditSlicerUser = canModify('archives', 'update', archive.created_by_id);
 
   // 3D Preview click handler. Multi-plate archives show the plate picker
   // first; single-plate archives navigate straight into the viewer.
@@ -2014,6 +2072,57 @@ function ArchiveListRow({
         </div>
         <div className="col-span-2 text-sm text-bambu-gray">
           <div>{formatDateOnly(archive.created_at)}</div>
+          {(archive.slicer_user || archive.slicer_user_email) ? (
+            canEditSlicerUser ? (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowSlicerUserEdit(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowSlicerUserEdit(true);
+                  }
+                }}
+                className="rounded-full"
+                title={t('queue.editSlicerUser.editExisting')}
+              >
+                <SlicerUserBadge
+                  user={archive.slicer_user || archive.slicer_user_email || ''}
+                  className="opacity-100"
+                />
+              </span>
+            ) : (
+              <SlicerUserBadge
+                user={archive.slicer_user || archive.slicer_user_email || ''}
+                className="opacity-100"
+              />
+            )
+          ) : (
+            canEditSlicerUser ? (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowSlicerUserEdit(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowSlicerUserEdit(true);
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 mt-0.5"
+                title={t('queue.editSlicerUser.addMissing')}
+              >
+                <AlertCircle className="w-3 h-3" />
+                {t('queue.badges.slicerUserMissingWarning')}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 mt-0.5" title={t('queue.badges.slicerUserMissingWarning')}>
+                <AlertCircle className="w-3 h-3" />
+                {t('queue.badges.slicerUserMissingWarning')}
+              </span>
+            )
+          )}
           {archive.created_by_username && (
             <div className="flex items-center gap-1 text-xs opacity-75" title={t('archives.card.uploadedBy', { name: archive.created_by_username })}>
               <User className="w-3 h-3" />
@@ -2024,6 +2133,12 @@ function ArchiveListRow({
         <div className="col-span-1 text-sm text-bambu-gray">
           {formatFileSize(archive.file_size)}
         </div>
+        {showSlicerUserEdit && (
+          <SlicerUserEditModal
+            item={archive}
+            onClose={() => setShowSlicerUserEdit(false)}
+          />
+        )}
         <div className="col-span-2 flex justify-end gap-1">
           {isSlicedFile(archive) && (
             <Button
@@ -2717,7 +2832,11 @@ export function ArchivesPage() {
       }
 
       // Search filter
-      const matchesSearch = (a.print_name || a.filename).toLowerCase().includes(search.toLowerCase());
+      const searchQuery = search.toLowerCase();
+      const matchesSearch =
+        (a.print_name || a.filename).toLowerCase().includes(searchQuery) ||
+        (a.slicer_user && a.slicer_user.toLowerCase().includes(searchQuery)) ||
+        (a.slicer_user_email && a.slicer_user_email.toLowerCase().includes(searchQuery));
 
       // Material filter
       const matchesMaterial = !filterMaterial ||
