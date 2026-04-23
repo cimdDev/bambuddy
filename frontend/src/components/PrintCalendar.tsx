@@ -1,13 +1,15 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
+import type { CSSProperties } from 'react';
 
 import { localDateKey } from '../utils/date';
 
 interface PrintCalendarProps {
   printDates: string[]; // Array of ISO date strings
+  dayBucketCounts?: Record<string, { psi: number; private: number; partial: number }>;
   months?: number; // How many months to show (default 3)
 }
 
-export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
+export function PrintCalendar({ printDates, dayBucketCounts, months = 3 }: PrintCalendarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -79,13 +81,37 @@ export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
 
   const maxCount = Math.max(1, ...Object.values(printCounts));
 
-  const getColor = (count: number) => {
+  const getIntensityClass = (count: number) => {
     if (count === 0) return 'bg-bambu-dark';
     const intensity = count / maxCount;
     if (intensity <= 0.25) return 'bg-bambu-green/30';
     if (intensity <= 0.5) return 'bg-bambu-green/50';
     if (intensity <= 0.75) return 'bg-bambu-green/75';
     return 'bg-bambu-green';
+  };
+
+  const getBucketStyle = (dateStr: string, count: number): CSSProperties | undefined => {
+    if (count === 0 || !dayBucketCounts) return undefined;
+    const buckets = dayBucketCounts[dateStr];
+    if (!buckets) return undefined;
+
+    const total = buckets.psi + buckets.private + buckets.partial;
+    if (total <= 0) return undefined;
+
+    const psiPct = (buckets.psi / total) * 100;
+    const privatePct = (buckets.private / total) * 100;
+    const partialPct = Math.max(0, 100 - psiPct - privatePct);
+    const intensity = Math.min(1, Math.max(0.25, count / maxCount));
+
+    return {
+      background: `linear-gradient(90deg,
+        rgba(0,174,66,${intensity}) 0%,
+        rgba(0,174,66,${intensity}) ${psiPct}%,
+        rgba(59,130,246,${intensity}) ${psiPct}%,
+        rgba(59,130,246,${intensity}) ${psiPct + privatePct}%,
+        rgba(245,158,11,${intensity}) ${psiPct + privatePct}%,
+        rgba(245,158,11,${intensity}) ${psiPct + privatePct + partialPct}%)`,
+    };
   };
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -161,11 +187,12 @@ export function PrintCalendar({ printDates, months = 3 }: PrintCalendarProps) {
                   const count = printCounts[dateStr] || 0;
                   const isToday = dateStr === localDateKey(new Date());
 
+                  const bucketStyle = getBucketStyle(dateStr, count);
                   return (
                     <div
                       key={dayOfWeek}
-                      className={`rounded-sm ${getColor(count)} ${isToday ? 'ring-1 ring-white' : ''}`}
-                      style={{ width: cellSize, height: cellSize }}
+                      className={`rounded-sm ${bucketStyle ? '' : getIntensityClass(count)} ${isToday ? 'ring-1 ring-white' : ''}`}
+                      style={{ width: cellSize, height: cellSize, ...bucketStyle }}
                       title={`${day.toLocaleDateString()}: ${count} print${count !== 1 ? 's' : ''}`}
                     />
                   );
