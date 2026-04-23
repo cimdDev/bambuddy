@@ -1,10 +1,37 @@
 services:
   bambuddy:
-    image: ghcr.io/maziggy/bambuddy:latest
-    build: .
+    image: ${BAMBUDDY_IMAGE_NAME:-bambuddy-custom}:${BAMBUDDY_IMAGE_TAG:-dev}
+    build:
+      context: .
+      tags:
+        - ${BAMBUDDY_IMAGE_NAME:-bambuddy-custom}:${BAMBUDDY_IMAGE_TAG:-dev}
     # Usage:
-    #   docker compose up -d          → pulls pre-built image from ghcr.io
-    #   docker compose up -d --build  → builds locally from source
+    #   Upstream pinned release:
+    #     BAMBUDDY_IMAGE_NAME=ghcr.io/maziggy/bambuddy BAMBUDDY_IMAGE_TAG=0.2.3 docker compose pull
+    #     BAMBUDDY_IMAGE_NAME=ghcr.io/maziggy/bambuddy BAMBUDDY_IMAGE_TAG=0.2.3 docker compose up -d
+    #
+    #   Local custom patch build on top of a specific upstream version:
+    #     git checkout <your clean patch branch>
+    #     export BAMBUDDY_IMAGE_TAG=0.2.3-p1
+    #     docker compose build
+    #     docker compose down
+    #     docker compose up -d
+    #     Example next patch:
+    #       export BAMBUDDY_IMAGE_TAG=0.2.3-p2
+    #       docker compose build
+    #       docker compose down
+    #       docker compose up -d
+    #
+    #   Safe one-liner command (stops on failure):
+    #     export BAMBUDDY_IMAGE_TAG=0.2.3-p1 && docker compose build && docker compose down && docker compose up -d
+    #
+    #   Roll back to a previously built local image:
+    #     BAMBUDDY_IMAGE_TAG=0.2.3-p1 docker compose up -d
+    #
+    # Notes:
+    #   - Avoid using 'latest' for anything you may want to roll back to later.
+    #   - Keep the upstream version in the tag and append your own patch suffix
+    #     such as 0.2.3-p1, 0.2.3-p2, 0.2.3b1-p1, etc.
     container_name: bambuddy
     # Run as current user to avoid permission issues with mounted volumes
     # Override with: PUID=$(id -u) PGID=$(id -g) docker compose up -d
