@@ -185,6 +185,17 @@ def _stored_file_path(abs_path: Path, is_external: bool) -> str:
     return str(abs_path) if is_external else to_relative_path(abs_path)
 
 
+def _cleanup_library_artifacts(*paths: Path | str | None) -> None:
+    """Best-effort removal for partially written library files and thumbnails."""
+    for path in paths:
+        if not path:
+            continue
+        try:
+            Path(path).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Failed to clean up partial library artifact at %s", path)
+
+
 def _clean_3mf_metadata(obj):
     """Strip bytes and thumbnail-carrier keys so the payload is JSON-storable.
 
@@ -241,66 +252,71 @@ async def save_file_bytes_to_library(
     ext = os.path.splitext(filename)[1].lower() or ".3mf"
     unique_filename = f"{uuid.uuid4().hex}{ext}"
     file_path = get_library_files_dir() / unique_filename
-    with open(file_path, "wb") as fh:
-        fh.write(file_bytes)
-
-    file_hash = calculate_file_hash(file_path)
-
-    # Extract metadata + thumbnail using the same rules as multipart upload.
-    metadata: dict | None = None
     thumbnail_path: str | None = None
-    thumbnails_dir = get_library_thumbnails_dir()
 
-    if ext == ".3mf":
-        try:
-            parser = ThreeMFParser(str(file_path))
-            raw_metadata = parser.parse()
-            thumb_data = raw_metadata.get("_thumbnail_data")
-            thumb_ext = raw_metadata.get("_thumbnail_ext", ".png")
-            if thumb_data:
-                thumb_filename = f"{uuid.uuid4().hex}{thumb_ext}"
-                thumb_path = thumbnails_dir / thumb_filename
-                with open(thumb_path, "wb") as fh:
-                    fh.write(thumb_data)
-                thumbnail_path = str(thumb_path)
-            metadata = _clean_3mf_metadata(raw_metadata) or None
-        except Exception as exc:
-            # Matches the multipart upload route's behaviour — a bad 3MF should
-            # still land in the library so the user can see / delete it rather
-            # than failing the whole request.
-            logger.warning("Failed to parse 3MF %s: %s", filename, exc)
-    elif ext == ".gcode":
-        try:
-            thumb_data = extract_gcode_thumbnail(file_path)
-            if thumb_data:
-                thumb_path = thumbnails_dir / f"{uuid.uuid4().hex}.png"
-                with open(thumb_path, "wb") as fh:
-                    fh.write(thumb_data)
-                thumbnail_path = str(thumb_path)
-        except Exception as exc:
-            logger.warning("Failed to extract G-code thumbnail for %s: %s", filename, exc)
-    elif ext in IMAGE_EXTENSIONS:
-        thumbnail_path = create_image_thumbnail(file_path, thumbnails_dir)
-    elif ext == ".stl":
-        thumbnail_path = generate_stl_thumbnail(file_path, thumbnails_dir)
+    try:
+        with open(file_path, "wb") as fh:
+            fh.write(file_bytes)
 
-    library_file = LibraryFile(
-        folder_id=folder_id,
-        filename=filename,
-        file_path=to_relative_path(file_path),
-        file_type=ext[1:] if ext else "unknown",
-        file_size=len(file_bytes),
-        file_hash=file_hash,
-        thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
-        file_metadata=metadata,
-        source_type=source_type,
-        source_url=source_url,
-        created_by_id=owner_id,
-    )
-    db.add(library_file)
-    await db.commit()
-    await db.refresh(library_file)
-    return library_file, False
+        file_hash = calculate_file_hash(file_path)
+
+        # Extract metadata + thumbnail using the same rules as multipart upload.
+        metadata: dict | None = None
+        thumbnails_dir = get_library_thumbnails_dir()
+
+        if ext == ".3mf":
+            try:
+                parser = ThreeMFParser(str(file_path))
+                raw_metadata = parser.parse()
+                thumb_data = raw_metadata.get("_thumbnail_data")
+                thumb_ext = raw_metadata.get("_thumbnail_ext", ".png")
+                if thumb_data:
+                    thumb_filename = f"{uuid.uuid4().hex}{thumb_ext}"
+                    thumb_path = thumbnails_dir / thumb_filename
+                    with open(thumb_path, "wb") as fh:
+                        fh.write(thumb_data)
+                    thumbnail_path = str(thumb_path)
+                metadata = _clean_3mf_metadata(raw_metadata) or None
+            except Exception as exc:
+                # Matches the multipart upload route's behaviour — a bad 3MF should
+                # still land in the library so the user can see / delete it rather
+                # than failing the whole request.
+                logger.warning("Failed to parse 3MF %s: %s", filename, exc)
+        elif ext == ".gcode":
+            try:
+                thumb_data = extract_gcode_thumbnail(file_path)
+                if thumb_data:
+                    thumb_path = thumbnails_dir / f"{uuid.uuid4().hex}.png"
+                    with open(thumb_path, "wb") as fh:
+                        fh.write(thumb_data)
+                    thumbnail_path = str(thumb_path)
+            except Exception as exc:
+                logger.warning("Failed to extract G-code thumbnail for %s: %s", filename, exc)
+        elif ext in IMAGE_EXTENSIONS:
+            thumbnail_path = create_image_thumbnail(file_path, thumbnails_dir)
+        elif ext == ".stl":
+            thumbnail_path = generate_stl_thumbnail(file_path, thumbnails_dir)
+
+        library_file = LibraryFile(
+            folder_id=folder_id,
+            filename=filename,
+            file_path=to_relative_path(file_path),
+            file_type=ext[1:] if ext else "unknown",
+            file_size=len(file_bytes),
+            file_hash=file_hash,
+            thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
+            file_metadata=metadata,
+            source_type=source_type,
+            source_url=source_url,
+            created_by_id=owner_id,
+        )
+        db.add(library_file)
+        await db.commit()
+        return library_file, False
+    except Exception:
+        await db.rollback()
+        _cleanup_library_artifacts(file_path, thumbnail_path)
+        raise
 
 
 async def save_3mf_bytes_to_library(
