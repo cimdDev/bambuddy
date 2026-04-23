@@ -72,6 +72,7 @@ import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
+import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 
 type QueueAccountingPatch = {
   private_job?: boolean;
@@ -305,6 +306,7 @@ function SortableQueueItem({
   onRequeue,
   onStart,
   onUpdateAccounting,
+  onUpdateComment,
   timeFormat = 'system',
   isSelected = false,
   onToggleSelect,
@@ -324,6 +326,7 @@ function SortableQueueItem({
   onRequeue: () => void;
   onStart: () => void;
   onUpdateAccounting?: (patch: QueueAccountingPatch) => Promise<void>;
+  onUpdateComment?: (comment: string | null) => Promise<void>;
   timeFormat?: TimeFormat;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -397,6 +400,9 @@ function SortableQueueItem({
       ? 'private_partial'
       : 'company';
   const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
+  const canEditComment = !!onUpdateComment && canModify('queue', 'update', item.created_by_id);
+  const hasComment = Boolean(item.comment?.trim());
+  const showCommentEditor = hasComment || canEditComment;
 
   const isMobileSelectable = isPending && onToggleSelect;
 
@@ -716,6 +722,25 @@ function SortableQueueItem({
               </span>
             )}
           </div>
+
+          {showCommentEditor && (
+            <div className="mt-2 sm:mt-2.5" onClick={(e) => e.stopPropagation()}>
+              <QueueItemCommentEditor
+                comment={item.comment}
+                canEdit={canEditComment}
+                onSave={onUpdateComment}
+                label={t('queue.comment.label')}
+                addLabel={t('queue.comment.add')}
+                editLabel={t('queue.comment.edit')}
+                placeholder={t('queue.comment.placeholder')}
+                savingLabel={t('common.saving')}
+                compact
+                noMargin
+                bare
+                rightAlignAddButton
+              />
+            </div>
+          )}
 
           {/* Progress bar for printing items - TODO: integrate with WebSocket */}
           {isPrinting && status && (() => {
@@ -1082,6 +1107,15 @@ export function QueuePage() {
       setSelectedItems([]);
       setShowBulkEditModal(false);
       showToast(result.message);
+    },
+    onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
     onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
   });
@@ -1466,6 +1500,7 @@ export function QueuePage() {
                     onStop={() => setConfirmAction({ type: 'stop', item })}
                     onRequeue={() => {}}
                     onStart={() => {}}
+                    onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
                     timeFormat={timeFormat}
                     hasPermission={hasPermission}
                     canModify={canModify}
@@ -1587,6 +1622,7 @@ export function QueuePage() {
                         onStop={() => {}}
                         onRequeue={() => {}}
                         onStart={() => startMutation.mutate({ id: item.id })}
+                        onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
                         timeFormat={timeFormat}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
@@ -1651,6 +1687,7 @@ export function QueuePage() {
                       item={item}
                       onRemove={() => setConfirmAction({ type: 'remove', item })}
                       onRequeue={() => setRequeueItem(item)}
+                      onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}

@@ -1855,6 +1855,7 @@ export interface PrintQueueItem {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  comment: string | null;
   created_at: string;
   private_job?: boolean | null;
   private_material?: boolean | null;
@@ -1930,6 +1931,7 @@ export interface PrintQueueItemCreate {
   private_job?: boolean | null;
   private_material?: boolean | null;
   private_material_partial?: boolean | null;
+  comment?: string | null;
 }
 
 export interface PrintQueueItemUpdate {

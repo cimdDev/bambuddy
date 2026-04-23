@@ -1063,6 +1063,12 @@ export default {
       privateMaterialFull: 'Voll Privatmaterial',
       totalCost: 'Kosten: {{amount}}',
     },
+    comment: {
+      label: 'Kommentar',
+      add: 'Kommentar hinzufügen',
+      edit: 'Kommentar bearbeiten',
+      placeholder: 'Kommentar zur Warteschlange hinzufügen...',
+    },
     // Empty state
     empty: {
       title: 'Keine Drucke geplant',

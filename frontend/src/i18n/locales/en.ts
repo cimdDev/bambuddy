@@ -1062,6 +1062,12 @@ export default {
       privateMaterialFull: 'Private material full',
       totalCost: 'Cost: {{amount}}',
     },
+    comment: {
+      label: 'Comment',
+      add: 'Add comment',
+      edit: 'Edit comment',
+      placeholder: 'Add a queue comment...',
+    },
     // Empty state
     empty: {
       title: 'No prints scheduled',
