@@ -1315,7 +1315,9 @@ export function QueuePage() {
                     onStop={() => setConfirmAction({ type: 'stop', item })}
                     onRequeue={() => {}}
                     onStart={() => {}}
-                    onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
+                    onUpdateComment={async (comment) => {
+                      await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
+                    }}
                     timeFormat={timeFormat}
                     hasPermission={hasPermission}
                     canModify={canModify}
@@ -1432,7 +1434,9 @@ export function QueuePage() {
                         onStop={() => {}}
                         onRequeue={() => {}}
                         onStart={() => startMutation.mutate({ id: item.id })}
-                        onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
+                        onUpdateComment={async (comment) => {
+                          await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
+                        }}
                         timeFormat={timeFormat}
                         isSelected={selectedItems.includes(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
@@ -1492,7 +1496,9 @@ export function QueuePage() {
                       item={item}
                       onRemove={() => setConfirmAction({ type: 'remove', item })}
                       onRequeue={() => setRequeueItem(item)}
-                      onUpdateComment={(comment) => updateCommentMutation.mutateAsync({ itemId: item.id, comment })}
+                      onUpdateComment={async (comment) => {
+                        await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
+                      }}
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}
