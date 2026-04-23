@@ -500,7 +500,9 @@ function TimeAccuracyWidget({
   );
 }
 
-function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[]; dateFrom: string; dateTo: string }) {
+function HourlyHeatmap({ archives, dateFrom, dateTo }: { archives: ArchiveSlim[]; dateFrom: string; dateTo: string }) {
+  const { t } = useTranslation();
+  type HourCell = { psi: number; private: number; partial: number; total: number };
   const { days, hourlyCounts, maxCount } = useMemo(() => {
     const start = new Date(dateFrom + 'T00:00:00');
     const end = new Date(dateTo + 'T00:00:00');
@@ -517,27 +519,38 @@ function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[];
     }
 
     // Count prints per (day, hour)
-    const counts: Record<string, number> = {};
+    const counts: Record<string, HourCell> = {};
     let max = 0;
-    printDates.forEach(d => {
-      const date = parseUTCDate(d);
+    archives.forEach(a => {
+      const date = parseUTCDate(a.created_at);
       if (!date) return;
       const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       const k = `${dayKey}-${date.getHours()}`;
-      counts[k] = (counts[k] || 0) + 1;
-      if (counts[k] > max) max = counts[k];
+      const next = counts[k] || { psi: 0, private: 0, partial: 0, total: 0 };
+      if (a.private_material) next.private += 1;
+      else if (a.private_material_partial) next.partial += 1;
+      else next.psi += 1;
+      next.total += 1;
+      counts[k] = next;
+      if (next.total > max) max = next.total;
     });
 
     return { days, hourlyCounts: counts, maxCount: Math.max(1, max) };
-  }, [printDates, dateFrom, dateTo]);
+  }, [archives, dateFrom, dateTo]);
 
-  const getColor = (count: number) => {
+  const getColor = (cell: HourCell) => {
+    const count = cell.total;
     if (count === 0) return 'bg-bambu-dark';
+    const dominant = [
+      { key: 'psi', value: cell.psi, color: 'bg-bambu-green' },
+      { key: 'private', value: cell.private, color: 'bg-blue-500' },
+      { key: 'partial', value: cell.partial, color: 'bg-amber-500' },
+    ].sort((a, b) => b.value - a.value)[0];
     const intensity = count / maxCount;
-    if (intensity <= 0.25) return 'bg-bambu-green/30';
-    if (intensity <= 0.5) return 'bg-bambu-green/50';
-    if (intensity <= 0.75) return 'bg-bambu-green/75';
-    return 'bg-bambu-green';
+    if (intensity <= 0.25) return `${dominant.color}/30`;
+    if (intensity <= 0.5) return `${dominant.color}/50`;
+    if (intensity <= 0.75) return `${dominant.color}/75`;
+    return dominant.color;
   };
 
   const cellSize = 20;
@@ -571,11 +584,12 @@ function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[];
               {day.label}
             </div>
             {Array.from({ length: 24 }, (_, hour) => {
-              const count = hourlyCounts[`${day.key}-${hour}`] || 0;
+              const cell = hourlyCounts[`${day.key}-${hour}`] || { psi: 0, private: 0, partial: 0, total: 0 };
+              const count = cell.total;
               return (
                 <div
                   key={hour}
-                  className={`rounded-sm ${getColor(count)}`}
+                  className={`rounded-sm ${getColor(cell)}`}
                   style={{ width: cellSize, height: cellSize }}
                   title={`${day.label} ${HOUR_LABELS[hour]}: ${count} print${count !== 1 ? 's' : ''}`}
                 />
@@ -591,27 +605,46 @@ function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[];
         <div className="flex" style={{ gap }}>
           <div className="rounded-sm bg-bambu-dark" style={{ width: cellSize, height: cellSize }} />
           <div className="rounded-sm bg-bambu-green/30" style={{ width: cellSize, height: cellSize }} />
-          <div className="rounded-sm bg-bambu-green/50" style={{ width: cellSize, height: cellSize }} />
-          <div className="rounded-sm bg-bambu-green/75" style={{ width: cellSize, height: cellSize }} />
+          <div className="rounded-sm bg-blue-500/50" style={{ width: cellSize, height: cellSize }} />
+          <div className="rounded-sm bg-amber-500/75" style={{ width: cellSize, height: cellSize }} />
           <div className="rounded-sm bg-bambu-green" style={{ width: cellSize, height: cellSize }} />
         </div>
         <span>More</span>
+      </div>
+      <div className="flex items-center gap-3 mt-2 text-bambu-gray text-xs">
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-bambu-green" />{t('stats.psiLabel')}</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-500" />{t('stats.privateLabel')}</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500" />{t('stats.partialLabel')}</span>
       </div>
     </div>
   );
 }
 
 function PrintActivityWidget({
-  printDates,
+  archives,
   size = 2,
   dateFrom,
   dateTo,
 }: {
-  printDates: string[];
+  archives: ArchiveSlim[];
   size?: 1 | 2 | 4;
   dateFrom?: string;
   dateTo?: string;
 }) {
+  const printDates = useMemo(() => archives.map(a => a.created_at), [archives]);
+  const dayBucketCounts = useMemo(() => {
+    const counts: Record<string, { psi: number; private: number; partial: number }> = {};
+    archives.forEach((a) => {
+      const day = (a.created_at || '').split('T')[0];
+      if (!day) return;
+      if (!counts[day]) counts[day] = { psi: 0, private: 0, partial: 0 };
+      if (a.private_material) counts[day].private += 1;
+      else if (a.private_material_partial) counts[day].partial += 1;
+      else counts[day].psi += 1;
+    });
+    return counts;
+  }, [archives]);
+
   const spanDays = useMemo(() => {
     if (dateFrom && dateTo) {
       return Math.max((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000, 0) + 1;
@@ -623,7 +656,7 @@ function PrintActivityWidget({
   }, [dateFrom, dateTo]);
 
   if (spanDays <= 7 && dateFrom && dateTo) {
-    return <HourlyHeatmap printDates={printDates} dateFrom={dateFrom} dateTo={dateTo} />;
+    return <HourlyHeatmap archives={archives} dateFrom={dateFrom} dateTo={dateTo} />;
   }
 
   // Calculate months from the timeframe span, fall back to size-based default for all-time
@@ -631,7 +664,7 @@ function PrintActivityWidget({
   const months = spanDays === Infinity
     ? sizeDefault
     : Math.max(1, Math.ceil(spanDays / 30));
-  return <PrintCalendar printDates={printDates} months={months} />;
+  return <PrintCalendar printDates={printDates} dayBucketCounts={dayBucketCounts} months={months} />;
 }
 
 function PrinterStatsWidget({
@@ -1212,7 +1245,6 @@ export function StatsPage() {
 
   const currency = getCurrencySymbol(settings?.currency || 'USD');
   const printerMap = new Map(printers?.map((p) => [String(p.id), p.name]) || []);
-  const printDates = useMemo(() => archives?.map((a) => a.created_at) || [], [archives]);
 
   if (isLoading) {
     return (
@@ -1253,7 +1285,7 @@ export function StatsPage() {
     {
       id: 'print-activity',
       title: t('stats.printActivity'),
-      component: (size) => <PrintActivityWidget printDates={printDates} size={size} dateFrom={effectiveDateRange.dateFrom} dateTo={effectiveDateRange.dateTo} />,
+      component: (size) => <PrintActivityWidget archives={archives || []} size={size} dateFrom={effectiveDateRange.dateFrom} dateTo={effectiveDateRange.dateTo} />,
       defaultSize: 2,
     },
     {
