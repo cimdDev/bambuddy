@@ -35,6 +35,7 @@ import {
   Square,
   Pause,
   Play,
+  Coins,
   X,
   Fan,
   Wind,
@@ -60,6 +61,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { api, discoveryApi, firmwareApi, withStreamToken } from '../api/client';
 import { formatDateOnly, formatETA, formatDuration, parseUTCDate } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment, HMSError } from '../api/client';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
@@ -86,6 +89,7 @@ import { getGlobalTrayId, getFillBarColor, getSpoolmanFillLevel, getFallbackSpoo
 import { getPrinterImage, getWifiStrength, filterCompatibleQueueItems } from '../utils/printer';
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
+import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
@@ -597,28 +601,6 @@ function ThermometerFull({ className }: { className?: string }) {
   );
 }
 
-// Nozzle icon - schematic hot-end view (filament body + heater block + tip).
-// Added for visual parity with the thermometer icons on the dual-nozzle card
-// that previously had no icon at all (#1115, design by @m4rtini2).
-function NozzleIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9.2" y="3.4" width="5.6" height="8.1" />
-      <rect x="6" y="11.5" width="12.1" height="3.7" />
-      <path d="M 7.3 15.2 L 12.1 19.6 L 16.7 15.2" />
-    </svg>
-  );
-}
-
 // Heater thermometer icon - filled when heating, outline when off
 interface HeaterThermometerProps {
   className?: string;
@@ -917,10 +899,8 @@ function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
       } else if (!status.connected) {
         offline++;
       } else {
-        // Count printers with active HMS errors as problems
-        const knownHmsCount =
-          status.hms_errors ? filterKnownHMSErrors(status.hms_errors).length : 0;
-        if (knownHmsCount > 0) {
+        // Count printers with HMS errors
+        if (status.hms_errors && filterKnownHMSErrors(status.hms_errors).length > 0) {
           error++;
         }
         switch (status.state) {
@@ -941,16 +921,7 @@ function StatusSummaryBar({ printers }: { printers: Printer[] | undefined }) {
             finished++;
             break;
           case 'FAILED':
-            // FAILED is the printer's terminal gcode_state after a print stops —
-            // including user cancellations, where there's no actual fault. Only
-            // count it as a "problem" when an HMS error is also active; otherwise
-            // it's just a print that ended unsuccessfully and the plate needs
-            // clearing (same as FINISH from the operator's perspective).
-            if (knownHmsCount > 0) {
-              // Already counted above
-            } else {
-              finished++;
-            }
+            error++;
             break;
           default:
             idle++;
@@ -1037,11 +1008,7 @@ function classifyPrinterStatus(
     case 'RUNNING': return 'printing';
     case 'PAUSE':   return 'paused';
     case 'FINISH':  return 'finished';
-    // FAILED without an active HMS error is the printer's terminal state after
-    // any unsuccessful end — including user-cancellations. Treat the same as
-    // FINISH for grouping/badging purposes; only escalate to "error" when an
-    // HMS code is actually attached (handled by the early-return above).
-    case 'FAILED':  return 'finished';
+    case 'FAILED':  return 'error';
     default:        return 'idle';
   }
 }
@@ -1659,6 +1626,10 @@ function PrinterCard({
     queryKey: ['queue', printer.id, 'pending'],
     queryFn: () => api.getQueue(printer.id, 'pending'),
   });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
   // Filter queue items by filament compatibility (same logic as PrinterQueueWidget)
   // so the badge only shows on printers that can actually run the queued jobs.
   // An empty Set means no filaments are loaded — jobs requiring specific types are incompatible.
@@ -1673,6 +1644,7 @@ function PrinterCard({
     queryFn: () => api.getQueue(printer.id, 'printing'),
     enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
+  const activeQueuePrintItem = printingQueueItems?.[0] ?? null;
 
   // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
   const { data: reprintUser } = useQuery({
@@ -1718,6 +1690,12 @@ function PrinterCard({
           ? canModify('library', 'update', currentQueueItem.created_by_id)
           : false
     : false;
+  const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const canEditCurrentQueueAccounting = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
+  const canEditCurrentPrintComment = !!activeQueuePrintItem && canModify('queue', 'update', activeQueuePrintItem.created_by_id);
+  const hasCurrentPrintComment = Boolean(activeQueuePrintItem?.comment?.trim());
+  const showCurrentPrintComment = !!activeQueuePrintItem && (hasCurrentPrintComment || canEditCurrentPrintComment);
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -1766,6 +1744,17 @@ function PrinterCard({
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
     },
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToDelete'), 'error'),
+  });
+
+  const updateCurrentQueueAccountingMutation = useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: { private_job?: boolean | null; private_material?: boolean | null; private_material_partial?: boolean | null } }) =>
+      api.updateQueueItem(itemId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'printing'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+      queryClient.invalidateQueries({ queryKey: ['archives'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('queue.toast.updateFailed'), 'error'),
   });
 
   const connectMutation = useMutation({
@@ -1882,6 +1871,18 @@ function PrinterCard({
       queryClient.invalidateQueries({ queryKey: ['queue', printer.id] });
     },
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToSendCommand'), 'error'),
+  });
+
+  const updateQueueCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'printing'] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdate'), 'error'),
   });
 
   // Chamber light mutation with optimistic update
@@ -2726,16 +2727,35 @@ function PrinterCard({
             {viewMode === 'compact' ? (
               <div className="mt-2">
                 {(status.state === 'RUNNING' || status.state === 'PAUSE') ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-1.5">
-                      <div
-                        className={`${status.state === 'PAUSE' ? 'bg-status-warning' : 'bg-bambu-green'} h-1.5 rounded-full transition-all`}
-                        style={{ width: `${status.progress || 0}%` }}
+                  <div className="space-y-1.5">
+                    {showCurrentPrintComment && activeQueuePrintItem && (
+                      <QueueItemCommentEditor
+                        comment={activeQueuePrintItem.comment}
+                        canEdit={canEditCurrentPrintComment}
+                        onSave={async (comment) => {
+                          await updateQueueCommentMutation.mutateAsync({ itemId: activeQueuePrintItem.id, comment });
+                        }}
+                        label={t('queue.comment.label')}
+                        addLabel={t('queue.comment.add')}
+                        placeholder={t('queue.comment.placeholder')}
+                        savingLabel={t('common.saving')}
+                        compact
+                        noMargin
+                        bare
+                        rightAlignAddButton
                       />
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-1.5">
-                      <span className="text-xs text-white">{Math.round(status.progress || 0)}%</span>
-                      {plateStatusPill}
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-1.5">
+                        <div
+                          className={`${status.state === 'PAUSE' ? 'bg-status-warning' : 'bg-bambu-green'} h-1.5 rounded-full transition-all`}
+                          style={{ width: `${status.progress || 0}%` }}
+                        />
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-1.5">
+                        <span className="text-xs text-white">{Math.round(status.progress || 0)}%</span>
+                        {plateStatusPill}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2864,7 +2884,26 @@ function PrinterCard({
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-sm">
+                          {showCurrentPrintComment && activeQueuePrintItem && (
+                            <div className="mt-2">
+                              <QueueItemCommentEditor
+                                comment={activeQueuePrintItem.comment}
+                                canEdit={canEditCurrentPrintComment}
+                                onSave={async (comment) => {
+                                  await updateQueueCommentMutation.mutateAsync({ itemId: activeQueuePrintItem.id, comment });
+                                }}
+                                label={t('queue.comment.label')}
+                                addLabel={t('queue.comment.add')}
+                                placeholder={t('queue.comment.placeholder')}
+                                savingLabel={t('common.saving')}
+                                compact
+                                noMargin
+                                bare
+                                rightAlignAddButton
+                              />
+                            </div>
+                          )}
+                          <div className={`flex items-center justify-between text-sm ${showCurrentPrintComment ? 'mt-2' : ''}`}>
                             <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
                               <div
                                 className={`${status.state === 'PAUSE' ? 'bg-status-warning' : 'bg-bambu-green'} h-2 rounded-full transition-all`}
@@ -2895,6 +2934,74 @@ function PrinterCard({
                               <span className="flex items-center gap-1" title={`Started by ${currentPrintUser}`}>
                                 <User className="w-3 h-3" />
                                 {currentPrintUser}
+                              </span>
+                            )}
+                            {currentQueueItem && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const nextPrivateJob = !currentQueueItem.private_job;
+                                  updateCurrentQueueAccountingMutation.mutate({
+                                    itemId: currentQueueItem.id,
+                                    patch: {
+                                      private_job: nextPrivateJob,
+                                      private_material: nextPrivateJob ? currentQueueItem.private_material : false,
+                                      private_material_partial: nextPrivateJob ? currentQueueItem.private_material_partial : false,
+                                    },
+                                  });
+                                }}
+                                disabled={!canEditCurrentQueueAccounting}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                                  currentQueueItem.private_job
+                                    ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                    : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={t('queue.accounting.privateJob')}
+                              >
+                                {t('queue.accounting.privateJob')}
+                              </button>
+                            )}
+                            {currentQueueItem?.private_job && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const nextUsage = currentQueueItem.private_material
+                                    ? 'company'
+                                    : currentQueueItem.private_material_partial
+                                      ? 'private_full'
+                                      : 'private_partial';
+                                  updateCurrentQueueAccountingMutation.mutate({
+                                    itemId: currentQueueItem.id,
+                                    patch: {
+                                      private_job: true,
+                                      private_material: nextUsage === 'private_full',
+                                      private_material_partial: nextUsage === 'private_partial',
+                                    },
+                                  });
+                                }}
+                                disabled={!canEditCurrentQueueAccounting}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                                  currentQueueItem.private_material
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                    : currentQueueItem.private_material_partial
+                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={t('queue.accounting.privateMaterial')}
+                              >
+                                {currentQueueItem.private_material
+                                  ? t('queue.accounting.privateMaterialFull')
+                                  : currentQueueItem.private_material_partial
+                                    ? t('queue.accounting.privateMaterialPartial')
+                                    : t('queue.accounting.companyMaterial')}
+                              </button>
+                            )}
+                            {currentQueueCost != null && (
+                              <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
+                                <Coins className="w-3 h-3" />
+                                {formatCurrencyAmount(currentQueueCost, currencySymbol)}
                               </span>
                             )}
                           </div>
@@ -3017,8 +3124,7 @@ function PrinterCard({
                       filamentInfo={filamentInfo}
                     >
                       <div className="text-center px-3 py-1.5 bg-bambu-dark rounded-lg h-full flex flex-col justify-center items-center cursor-default" title={t('printers.activeNozzle', { nozzle: activeNozzle === 'L' ? t('common.left') : t('common.right') })}>
-                        <NozzleIcon className="w-3.5 h-3.5 mb-0.5 text-amber-400" />
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[11px] font-bold ${activeNozzle === 'L' ? 'text-amber-400' : 'text-gray-500'}`}>
                             L{leftNozzleSlot?.nozzle_diameter ? ` ${leftNozzleSlot.nozzle_diameter}` : ''}
                           </span>
@@ -3667,7 +3773,7 @@ function PrinterCard({
                                               color_name: assignment.spool.color_name,
                                               remainingWeightGrams: Math.max(0, Math.round(assignment.spool.label_weight - assignment.spool.weight_used)),
                                             } : null,
-                                            onAssignSpool: () => setAssignSpoolModal({
+                                            onAssignSpool: filamentData.vendor !== 'Bambu Lab' ? () => setAssignSpoolModal({
                                               printerId: printer.id,
                                               amsId: ams.id,
                                               trayId: slotIdx,
@@ -3678,8 +3784,8 @@ function PrinterCard({
                                                 color: filamentData.colorHex || '',
                                                 location: `${getAmsLabel(ams.id, ams.tray.length)} Slot ${slotIdx + 1}`,
                                               },
-                                            }),
-                                            onUnassignSpool: assignment ? () => onUnassignSpool?.(printer.id, ams.id, slotIdx) : undefined,
+                                            }) : undefined,
+                                            onUnassignSpool: assignment && filamentData.vendor !== 'Bambu Lab' ? () => onUnassignSpool?.(printer.id, ams.id, slotIdx) : undefined,
                                           };
                                         })()}
                                         configureSlot={{
@@ -3973,7 +4079,7 @@ function PrinterCard({
                                           color_name: assignment.spool.color_name,
                                           remainingWeightGrams: Math.max(0, Math.round(assignment.spool.label_weight - assignment.spool.weight_used)),
                                         } : null,
-                                        onAssignSpool: () => setAssignSpoolModal({
+                                        onAssignSpool: filamentData.vendor !== 'Bambu Lab' ? () => setAssignSpoolModal({
                                           printerId: printer.id,
                                           amsId: ams.id,
                                           trayId: htSlotId,
@@ -3984,8 +4090,8 @@ function PrinterCard({
                                             color: filamentData.colorHex || '',
                                             location: getAmsLabel(ams.id, ams.tray.length),
                                           },
-                                        }),
-                                        onUnassignSpool: assignment ? () => onUnassignSpool?.(printer.id, ams.id, htSlotId) : undefined,
+                                        }) : undefined,
+                                        onUnassignSpool: assignment && filamentData.vendor !== 'Bambu Lab' ? () => onUnassignSpool?.(printer.id, ams.id, htSlotId) : undefined,
                                       };
                                     })()}
                                     configureSlot={{

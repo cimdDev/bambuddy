@@ -66,6 +66,9 @@ class PrintArchive(Base):
     tags: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     cost: Mapped[float | None] = mapped_column(Float)
+    private_job: Mapped[bool] = mapped_column(Boolean, default=False)
+    private_material: Mapped[bool] = mapped_column(Boolean, default=False)
+    private_material_partial: Mapped[bool] = mapped_column(Boolean, default=False)
     photos: Mapped[list | None] = mapped_column(JSON)  # List of photo filenames
     failure_reason: Mapped[str | None] = mapped_column(String(100))  # For failed prints
     quantity: Mapped[int] = mapped_column(Integer, default=1)  # Number of items printed

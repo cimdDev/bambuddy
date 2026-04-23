@@ -754,6 +754,7 @@ export default {
       failed: 'fehlgeschlagen',
       duplicate: 'Duplikat',
       duplicateTitle: 'Dieses Modell wurde bereits zuvor gedruckt',
+      privateJob: 'Privatdruck',
       openSource3mf: 'Quell-3MF in Bambu Studio öffnen (Rechtsklick für mehr Optionen)',
       downloadF3d: 'Fusion 360 Designdatei herunterladen',
       viewTimelapse: 'Zeitraffer ansehen',
@@ -986,6 +987,14 @@ export default {
       saved: 'Userbadge aktualisiert',
       required: 'Bitte ein Userbadge eingeben',
       unsupported: 'Dieses Element kann nicht aktualisiert werden',
+    },
+    accounting: {
+      privateJob: 'Privatdruck',
+      privateMaterial: 'Material',
+      companyMaterial: 'Firmenmaterial',
+      privateMaterialPartial: 'Teilweise Privatmaterial',
+      privateMaterialFull: 'Voll Privatmaterial',
+      totalCost: 'Kosten: {{amount}}',
     },
     // Empty state
     empty: {
@@ -3790,6 +3799,11 @@ export default {
     photosHelp: 'Klicken Sie auf + um Fotos Ihres Druckergebnisses hinzuzufügen',
     printResult: 'Druckergebnis',
     saving: 'Wird gespeichert...',
+    accounting: {
+      title: 'Kostenklassifizierung',
+      help: 'Ordnet ein, ob dieser Druck privat war und wie die Materialkosten kategorisiert werden sollen.',
+      privateJobHelp: 'Deaktiviert bedeutet normaler produktiver/Firmen-Druck.',
+    },
     // Failure reasons
     failureReasons: {
       adhesionFailure: 'Haftungsfehler',

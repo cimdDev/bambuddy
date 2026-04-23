@@ -1,12 +1,16 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Clock, Calendar, ChevronRight, AlertTriangle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Clock, Calendar, ChevronRight, AlertTriangle, Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { formatRelativeTime } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { filterCompatibleQueueItems } from '../utils/printer';
+import { QueueItemCommentEditor } from './QueueItemCommentEditor';
 import { SlicerUserBadge } from './SlicerUserBadge';
 import { SlicerUserEditModal } from './SlicerUserEditModal';
 
@@ -14,21 +18,44 @@ interface PrinterQueueWidgetProps {
   printerId: number;
   printerModel?: string | null;
   loadedFilamentTypes?: Set<string>;
-  loadedFilaments?: Set<string>;  // "TYPE:rrggbb" pairs for filament override color matching
+  loadedFilaments?: Set<string>;
 }
 
-export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentTypes, loadedFilaments }: PrinterQueueWidgetProps) {
+export function PrinterQueueWidget({
+  printerId,
+  printerModel,
+  loadedFilamentTypes,
+  loadedFilaments,
+}: PrinterQueueWidgetProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const { canModify } = useAuth();
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
     refetchInterval: 30000,
   });
 
-  // Filter queue to items this printer can actually print (filament type + color check)
-  const compatibleQueue = queue ? filterCompatibleQueueItems(queue, loadedFilamentTypes, loadedFilaments) : undefined;
+  const updateCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printerId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printerId, 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdate'), 'error'),
+  });
+
+  const compatibleQueue = queue
+    ? filterCompatibleQueueItems(queue, loadedFilamentTypes, loadedFilaments)
+    : undefined;
   const totalPending = compatibleQueue?.length || 0;
 
   if (totalPending === 0) {
@@ -37,6 +64,11 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
 
   const nextItem = compatibleQueue?.[0];
   const editingItem = compatibleQueue?.find((item) => item.id === editingItemId) || null;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+  const canEditComment = !!nextItem && canModify('queue', 'update', nextItem.created_by_id);
+  const hasComment = Boolean(nextItem?.comment?.trim());
+  const showCommentEditor = !!nextItem && (hasComment || canEditComment);
 
   const canEditSlicerUser = (item?: typeof nextItem) => {
     if (!item) return false;
@@ -50,9 +82,9 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
 
     const slicerUser = item.slicer_user || item.slicer_user_email || null;
     const editable = canEditSlicerUser(item);
-    const openEditor = (e: MouseEvent | KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    const openEditor = (event: MouseEvent | KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
       setEditingItemId(item.id);
     };
 
@@ -63,8 +95,8 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
           role="button"
           tabIndex={0}
           onClick={openEditor}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') openEditor(e);
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') openEditor(event);
           }}
           className="rounded-full"
           title={t('queue.editSlicerUser.editExisting')}
@@ -76,7 +108,7 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
 
     const warning = (
       <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
-        <AlertTriangle className="w-3 h-3" />
+        <AlertTriangle className="h-3 w-3" />
         {t('queue.badges.slicerUserMissingWarning')}
       </span>
     );
@@ -87,8 +119,8 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
         role="button"
         tabIndex={0}
         onClick={openEditor}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') openEditor(e);
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') openEditor(event);
         }}
         title={t('queue.editSlicerUser.addMissing')}
       >
@@ -97,44 +129,82 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
     );
   };
 
-  // Passive next-in-queue preview. Plate-clear acknowledgment is handled by the
-  // card-level "Mark plate as cleared" button (PrintersPage.tsx). Having a
-  // second button in this widget caused the two controls to overlap whenever
-  // the plate-clear gate was up with auto-dispatch items queued — both POSTed
-  // to the same /clear-plate endpoint, so the widget button was pure noise.
   return (
     <>
-      <Link
-        to="/queue"
-        className="block mb-3 p-3 bg-bambu-dark rounded-lg hover:bg-bambu-dark-tertiary transition-colors"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+      <div className="mb-3 rounded-lg bg-bambu-dark p-3">
+        <div className="space-y-2">
+          <div className="flex items-start gap-3 min-w-0">
+            <Calendar className="h-5 w-5 flex-shrink-0 text-yellow-400" />
             <div className="min-w-0 flex-1">
               <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
-              <p className="text-sm text-white truncate">
-                {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                {renderSlicerUserBadge(nextItem)}
+              <div className="mt-0.5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-white">
+                    {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {renderSlicerUserBadge(nextItem)}
+                    {nextItem?.private_job && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2 py-0.5 text-xs text-fuchsia-300">
+                        {t('queue.accounting.privateJob')}
+                      </span>
+                    )}
+                    {nextCost != null && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-bambu-dark-tertiary px-2 py-0.5 text-xs text-bambu-gray-light">
+                        <Coins className="h-3 w-3" />
+                        {formatCurrencyAmount(nextCost, currencySymbol)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {showCommentEditor && nextItem && (
+                  <div className="w-full min-w-0 sm:w-auto sm:max-w-[280px] sm:flex-shrink-0">
+                    <QueueItemCommentEditor
+                      comment={nextItem.comment}
+                      canEdit={canEditComment}
+                      onSave={async (comment) => {
+                        await updateCommentMutation.mutateAsync({ itemId: nextItem.id, comment });
+                      }}
+                      label={t('queue.comment.label')}
+                      addLabel={t('queue.comment.add')}
+                      placeholder={t('queue.comment.placeholder')}
+                      savingLabel={t('common.saving')}
+                      compact
+                      noMargin
+                      bare
+                      rightAlignAddButton
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-xs text-bambu-gray flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {nextItem?.scheduled_time ? formatRelativeTime(nextItem.scheduled_time, 'system', t) : t('time.waiting')}
-            </span>
-            {totalPending > 1 && (
-              <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded">
-                +{totalPending - 1}
+
+          <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="flex items-center gap-1 text-xs text-bambu-gray">
+                <Clock className="h-3 w-3" />
+                {nextItem?.scheduled_time
+                  ? formatRelativeTime(nextItem.scheduled_time, 'system', t)
+                  : t('time.waiting')}
               </span>
-            )}
-            <ChevronRight className="w-4 h-4 text-bambu-gray" />
+              {totalPending > 1 && (
+                <span className="rounded bg-yellow-400/20 px-1.5 py-0.5 text-xs text-yellow-400">
+                  +{totalPending - 1}
+                </span>
+              )}
+              <Link
+                to="/queue"
+                className="rounded p-1 transition-colors hover:bg-bambu-dark-tertiary"
+                aria-label={t('queue.nextInQueue')}
+                title={t('queue.nextInQueue')}
+              >
+                <ChevronRight className="h-4 w-4 text-bambu-gray" />
+              </Link>
+            </div>
           </div>
         </div>
-      </Link>
+      </div>
       {editingItem && (
         <SlicerUserEditModal
           item={editingItem}

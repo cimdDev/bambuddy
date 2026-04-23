@@ -437,6 +437,9 @@ export interface Archive {
   tags: string | null;
   notes: string | null;
   cost: number | null;
+  private_job: boolean;
+  private_material: boolean;
+  private_material_partial: boolean;
   photos: string[] | null;
   failure_reason: string | null;
   quantity: number;
@@ -460,6 +463,9 @@ export interface ArchiveSlim {
   started_at: string | null;
   completed_at: string | null;
   cost: number | null;
+  private_job: boolean;
+  private_material: boolean;
+  private_material_partial: boolean;
   quantity: number;
   slicer_user?: string | null;
   slicer_user_email?: string | null;
@@ -1472,6 +1478,9 @@ export interface PrintQueueItem {
   completed_at: string | null;
   error_message: string | null;
   created_at: string;
+  private_job?: boolean;
+  private_material?: boolean;
+  private_material_partial?: boolean;
   archive_name?: string | null;
   archive_thumbnail?: string | null;
   library_file_name?: string | null;
@@ -1536,6 +1545,9 @@ export interface PrintQueueItemCreate {
   quantity?: number;
   // Project to associate the resulting archive with
   project_id?: number;
+  private_job?: boolean;
+  private_material?: boolean;
+  private_material_partial?: boolean;
 }
 
 export interface PrintQueueItemUpdate {
@@ -1559,6 +1571,9 @@ export interface PrintQueueItemUpdate {
   use_ams?: boolean;
   // Auto-print G-code injection
   gcode_injection?: boolean;
+  private_job?: boolean | null;
+  private_material?: boolean | null;
+  private_material_partial?: boolean | null;
 }
 
 export interface PrintQueueBulkUpdate {
@@ -3103,6 +3118,9 @@ export const api = {
     tags?: string;
     notes?: string;
     cost?: number;
+    private_job?: boolean;
+    private_material?: boolean;
+    private_material_partial?: boolean;
     failure_reason?: string | null;
     status?: string;
     quantity?: number;
