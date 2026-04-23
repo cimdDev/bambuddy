@@ -48,6 +48,7 @@ import {
   User,
   Pause,
   Weight,
+  Coins,
   ChevronDown,
   ChevronRight,
   List,
@@ -57,6 +58,8 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { type TimeFormat, formatETA, formatDuration, formatRelativeTime, parseUTCDate } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission } from '../api/client';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -67,6 +70,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
 import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
+
+type QueueAccountingPatch = {
+  private_job?: boolean;
+  private_material?: boolean;
+  private_material_partial?: boolean;
+};
+
+type PrivateMaterialUsage = 'company' | 'private_partial' | 'private_full';
 
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
@@ -291,12 +302,15 @@ function SortableQueueItem({
   onStop,
   onRequeue,
   onStart,
+  onUpdateAccounting,
   timeFormat = 'system',
   isSelected = false,
   onToggleSelect,
   hasPermission,
   canModify,
   printerState,
+  defaultCostPerKg,
+  currencySymbol,
   t,
 }: {
   item: PrintQueueItem;
@@ -307,12 +321,15 @@ function SortableQueueItem({
   onStop: () => void;
   onRequeue: () => void;
   onStart: () => void;
+  onUpdateAccounting?: (patch: QueueAccountingPatch) => Promise<void>;
   timeFormat?: TimeFormat;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
   printerState?: string | null;
+  defaultCostPerKg: number;
+  currencySymbol: string;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   // Fetch printer status every 30 seconds while printing to monitor progress
@@ -363,6 +380,13 @@ function SortableQueueItem({
   const isPrinting = item.status === 'printing';
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
+  const canEditAccounting = isPending && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
+  const privateMaterialUsage: PrivateMaterialUsage = item.private_material
+    ? 'private_full'
+    : item.private_material_partial
+      ? 'private_partial'
+      : 'company';
+  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
 
   const isMobileSelectable = isPending && onToggleSelect;
 
@@ -514,6 +538,12 @@ function SortableQueueItem({
                 {formatWeight(item.filament_used_grams)}
               </span>
             )}
+            {itemCost != null && (
+              <span className="flex items-center gap-1 sm:gap-1.5">
+                <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                {formatCurrencyAmount(itemCost, currencySymbol)}
+              </span>
+            )}
             {item.created_by_username && (
               <span className="hidden sm:flex items-center gap-1.5" title={t('queue.addedBy', { name: item.created_by_username })}>
                 <User className="w-3.5 h-3.5" />
@@ -555,6 +585,84 @@ function SortableQueueItem({
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 flex items-center gap-1">
                 <Code className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 {t('queue.badges.gcodeInjection')}
+              </span>
+            )}
+            {canEditAccounting ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextPrivateJob = !item.private_job;
+                  void onUpdateAccounting?.({
+                    private_job: nextPrivateJob,
+                    private_material: nextPrivateJob ? item.private_material : false,
+                    private_material_partial: nextPrivateJob ? item.private_material_partial : false,
+                  });
+                }}
+                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                  item.private_job
+                    ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                    : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                }`}
+                title={t('queue.accounting.privateJob')}
+              >
+                {t('queue.accounting.privateJob')}
+              </button>
+            ) : item.private_job ? (
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20">
+                {t('queue.accounting.privateJob')}
+              </span>
+            ) : null}
+            {item.private_job && (canEditAccounting ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextUsage: PrivateMaterialUsage =
+                    privateMaterialUsage === 'company'
+                      ? 'private_partial'
+                      : privateMaterialUsage === 'private_partial'
+                        ? 'private_full'
+                        : 'company';
+                  void onUpdateAccounting?.({
+                    private_job: true,
+                    private_material: nextUsage === 'private_full',
+                    private_material_partial: nextUsage === 'private_partial',
+                  });
+                }}
+                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                  privateMaterialUsage === 'private_full'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    : privateMaterialUsage === 'private_partial'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                }`}
+                title={t('queue.accounting.privateMaterial')}
+              >
+                {privateMaterialUsage === 'private_full'
+                  ? t('queue.accounting.privateMaterialFull')
+                  : privateMaterialUsage === 'private_partial'
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
+              </button>
+            ) : (
+              <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border ${
+                privateMaterialUsage === 'private_full'
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                  : privateMaterialUsage === 'private_partial'
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                    : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+              }`}>
+                {privateMaterialUsage === 'private_full'
+                  ? t('queue.accounting.privateMaterialFull')
+                  : privateMaterialUsage === 'private_partial'
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
+              </span>
+            ))}
+            {item.private_job && itemCost != null && (
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-500/20">
+                {t('queue.accounting.totalCost', { amount: formatCurrencyAmount(itemCost, currencySymbol) })}
               </span>
             )}
           </div>
@@ -792,6 +900,8 @@ export function QueuePage() {
   });
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
+  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -881,6 +991,15 @@ export function QueuePage() {
       queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
     onError: () => showToast(t('queue.toast.reorderFailed'), 'error'),
+  });
+
+  const updateAccountingMutation = useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: QueueAccountingPatch }) =>
+      api.updateQueueItem(itemId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
   });
 
   const clearHistoryMutation = useMutation({
@@ -1295,6 +1414,8 @@ export function QueuePage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
+                    defaultCostPerKg={defaultCostPerKg}
+                    currencySymbol={currencySymbol}
                     t={t}
                   />
                 ))}
@@ -1412,6 +1533,9 @@ export function QueuePage() {
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         hasPermission={hasPermission}
                         canModify={canModify}
+                        onUpdateAccounting={(patch) => updateAccountingMutation.mutateAsync({ itemId: item.id, patch })}
+                        defaultCostPerKg={defaultCostPerKg}
+                        currencySymbol={currencySymbol}
                         t={t}
                       />
                     ))}
@@ -1469,6 +1593,8 @@ export function QueuePage() {
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}
+                      defaultCostPerKg={defaultCostPerKg}
+                      currencySymbol={currencySymbol}
                       t={t}
                     />
                   ))}

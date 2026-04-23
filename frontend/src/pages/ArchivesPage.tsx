@@ -1086,8 +1086,28 @@ function ArchiveCard({
         </div>
 
         {/* Tags & Notes */}
-        {(archive.tags || archive.notes) && (
+        {(archive.private_job || archive.tags || archive.notes) && (
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            {archive.private_job && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-fuchsia-500/20 text-fuchsia-300 rounded text-xs">
+                {t('archives.card.privateJob')}
+              </span>
+            )}
+            {archive.private_job && (
+              <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${
+                archive.private_material
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : archive.private_material_partial
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-fuchsia-500/20 text-fuchsia-300'
+              }`}>
+                {archive.private_material
+                  ? t('queue.accounting.privateMaterialFull')
+                  : archive.private_material_partial
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
+              </span>
+            )}
             {archive.notes && (
               <div
                 className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs"

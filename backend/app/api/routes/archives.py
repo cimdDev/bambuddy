@@ -259,6 +259,9 @@ def archive_to_response(
         "tags": archive.tags,
         "notes": archive.notes,
         "cost": archive.cost,
+        "private_job": archive.private_job,
+        "private_material": archive.private_material,
+        "private_material_partial": archive.private_material_partial,
         "photos": archive.photos,
         "failure_reason": archive.failure_reason,
         "quantity": archive.quantity,
@@ -449,6 +452,10 @@ async def list_archives_slim(
             PrintLogEntry.filament_color,
             PrintLogEntry.status,
             PrintLogEntry.cost,
+            PrintArchive.private_job,
+            PrintArchive.private_material,
+            PrintArchive.private_material_partial,
+            PrintArchive.quantity,
             PrintLogEntry.created_at,
         )
         .outerjoin(PrintArchive, PrintArchive.id == PrintLogEntry.archive_id)
@@ -487,7 +494,10 @@ async def list_archives_slim(
             "started_at": r.started_at,
             "completed_at": r.completed_at,
             "cost": r.cost,
-            "quantity": 1,
+            "private_job": bool(r.private_job),
+            "private_material": bool(r.private_material),
+            "private_material_partial": bool(r.private_material_partial),
+            "quantity": r.quantity or 1,
             "created_at": r.created_at,
         }
         for r in rows
@@ -1357,8 +1367,17 @@ async def update_archive(
         if archive.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own archives")
 
-    update_payload = update_data.model_dump(exclude_unset=True)
-    for field, value in update_payload.items():
+    updates = update_data.model_dump(exclude_unset=True)
+
+    next_private_job = updates.get("private_job", archive.private_job)
+    next_private_material = updates.get("private_material", archive.private_material)
+    if not next_private_job:
+        updates["private_material"] = False
+        updates["private_material_partial"] = False
+    elif next_private_material:
+        updates["private_material_partial"] = False
+
+    for field, value in updates.items():
         setattr(archive, field, value)
 
     # #1444: Mirror per-run classification fields to the most recent
@@ -1372,7 +1391,7 @@ async def update_archive(
     # the modal is implicitly showing (archive.failure_reason / status are
     # overwritten on each reprint to reflect the latest run's outcome).
     mirror_fields = {"failure_reason", "status"}
-    to_mirror = {k: v for k, v in update_payload.items() if k in mirror_fields}
+    to_mirror = {k: v for k, v in updates.items() if k in mirror_fields}
     if to_mirror:
         from backend.app.models.print_log import PrintLogEntry
 

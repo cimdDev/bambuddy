@@ -2661,6 +2661,25 @@ async def run_migrations(conn):
     # file metadata so the FileManager displays the filename, not the title (#1489).
     await _migrate_drop_library_print_name(conn)
 
+    # Migration: private-job accounting flags for queue/archive classification.
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material_partial BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "UPDATE print_queue SET private_job = COALESCE(private_job, 0)")
+    await _safe_execute(conn, "UPDATE print_queue SET private_material = COALESCE(private_material, 0)")
+    await _safe_execute(
+        conn,
+        "UPDATE print_queue SET private_material_partial = COALESCE(private_material_partial, 0)",
+    )
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material_partial BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "UPDATE print_archives SET private_job = COALESCE(private_job, 0)")
+    await _safe_execute(conn, "UPDATE print_archives SET private_material = COALESCE(private_material, 0)")
+    await _safe_execute(
+        conn,
+        "UPDATE print_archives SET private_material_partial = COALESCE(private_material_partial, 0)",
+    )
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

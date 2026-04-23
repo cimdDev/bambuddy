@@ -1957,6 +1957,11 @@ class PrintScheduler:
                 )
                 if archive:
                     item.archive_id = archive.id
+                    archive.private_job = item.private_job
+                    archive.private_material = item.private_material
+                    archive.private_material_partial = (
+                        item.private_material_partial and item.private_job and not item.private_material
+                    )
                     await db.flush()
                     logger.info(
                         "Queue item %s: Created archive %s from library file %s",
