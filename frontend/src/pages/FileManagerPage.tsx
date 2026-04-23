@@ -58,6 +58,7 @@ import { PrintModal } from '../components/PrintModal';
 import { ModelViewerModal } from '../components/ModelViewerModal';
 import { FileUploadModal } from '../components/FileUploadModal';
 import { PurgeOldFilesModal } from '../components/PurgeOldFilesModal';
+import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 import { useToast } from '../contexts/ToastContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../contexts/AuthContext';
@@ -705,6 +706,10 @@ interface FileCardProps {
 
 function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onAddToQueue, onPrint, onPreview3d, onRename, onGenerateThumbnail, thumbnailVersion, hasPermission, canModify, authEnabled, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
+  const slicerUser = file.slicer_user || file.slicer_user_email;
+  const missingSlicerUser = !slicerUser;
+  const canEditSlicerUser = canModify('library', 'update', file.created_by_id);
 
   return (
     <div
@@ -762,10 +767,69 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
             {t('fileManager.printedCount', { count: file.print_count })}
           </div>
         )}
-        {authEnabled && file.created_by_username && (
-          <div className="mt-1 text-xs text-bambu-gray flex items-center gap-1">
-            <User className="w-3 h-3" />
-            {file.created_by_username}
+        {(missingSlicerUser || slicerUser || (authEnabled && file.created_by_username)) && (
+          <div className="mt-1 text-xs text-bambu-gray flex flex-wrap items-center gap-x-2 gap-y-1">
+            {authEnabled && file.created_by_username && (
+              <span className="inline-flex items-center gap-1" title={t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}>
+                <User className="w-3 h-3" />
+                {file.created_by_username}
+              </span>
+            )}
+            {slicerUser && (
+              canEditSlicerUser ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSlicerUserEdit(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowSlicerUserEdit(true);
+                    }
+                  }}
+                  className="rounded-full"
+                  title={t('queue.editSlicerUser.editExisting')}
+                >
+                  <SlicerUserBadge user={slicerUser} />
+                </span>
+              ) : (
+                <SlicerUserBadge user={slicerUser} />
+              )
+            )}
+            {missingSlicerUser && (
+              canEditSlicerUser ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSlicerUserEdit(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowSlicerUserEdit(true);
+                    }
+                  }}
+                  title={t('queue.editSlicerUser.addMissing')}
+                >
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20">
+                    <AlertTriangle className="w-3 h-3" />
+                    {t('queue.badges.slicerUserMissingWarning')}
+                  </span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                  <AlertTriangle className="w-3 h-3" />
+                  {t('queue.badges.slicerUserMissingWarning')}
+                </span>
+              )
+            )}
           </div>
         )}
       </div>
@@ -882,6 +946,13 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
       }`}>
         {isSelected && <div className="w-2 h-2 bg-white rounded-sm" />}
       </div>
+
+      {showSlicerUserEdit && (
+        <SlicerUserEditModal
+          item={{ library_file_id: file.id, slicer_user: file.slicer_user, slicer_user_email: file.slicer_user_email }}
+          onClose={() => setShowSlicerUserEdit(false)}
+        />
+      )}
     </div>
   );
 }
@@ -905,6 +976,7 @@ export function FileManagerPage() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [editingSlicerUserFile, setEditingSlicerUserFile] = useState<LibraryFileListItem | null>(null);
   const [linkFolder, setLinkFolder] = useState<LibraryFolderTree | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'file' | 'folder' | 'bulk'; id: number; count?: number } | null>(null);
   const [printFile, setPrintFile] = useState<LibraryFileListItem | null>(null);
@@ -1054,7 +1126,9 @@ export function FileManagerPage() {
       result = result.filter(
         (f) =>
           f.filename.toLowerCase().includes(query) ||
-          (f.print_name && f.print_name.toLowerCase().includes(query))
+          (f.print_name && f.print_name.toLowerCase().includes(query)) ||
+          (f.slicer_user && f.slicer_user.toLowerCase().includes(query)) ||
+          (f.slicer_user_email && f.slicer_user_email.toLowerCase().includes(query))
       );
     }
 
@@ -1096,6 +1170,7 @@ export function FileManagerPage() {
 
     return result;
   }, [files, searchQuery, filterType, filterUsername, sortField, sortDirection]);
+  const showUserInfoColumn = authEnabled || filteredAndSortedFiles.some((f) => !!(f.slicer_user || f.slicer_user_email));
 
   // Check if disk space is low
   const isDiskSpaceLow = useMemo(() => {
@@ -1962,10 +2037,10 @@ export function FileManagerPage() {
             <div className="flex-1 lg:overflow-y-auto">
               <div className="bg-bambu-dark-secondary rounded-lg border border-bambu-dark-tertiary overflow-hidden">
                 {/* List header - hidden on mobile, show simplified on small screens */}
-                <div className={`hidden sm:grid ${authEnabled ? 'grid-cols-[auto_1fr_120px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-2 bg-bambu-dark-secondary border-b border-bambu-dark-tertiary text-xs text-bambu-gray font-medium`}>
+                <div className={`hidden sm:grid ${showUserInfoColumn ? 'grid-cols-[auto_1fr_140px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-2 bg-bambu-dark-secondary border-b border-bambu-dark-tertiary text-xs text-bambu-gray font-medium`}>
                   <div className="w-6" />
                   <div>{t('common.name')}</div>
-                  {authEnabled && <div>{t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}</div>}
+                  {showUserInfoColumn && <div>{t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}</div>}
                   <div>{t('common.type')}</div>
                   <div>{t('fileManager.size')}</div>
                   <div>{t('fileManager.prints')}</div>
@@ -1975,7 +2050,7 @@ export function FileManagerPage() {
                 {filteredAndSortedFiles.map((file) => (
                   <div
                     key={file.id}
-                    className={`grid ${authEnabled ? 'grid-cols-[auto_1fr_120px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-3 items-center border-b border-bambu-dark-tertiary last:border-b-0 cursor-pointer hover:bg-bambu-dark/50 transition-colors ${
+                    className={`grid ${showUserInfoColumn ? 'grid-cols-[auto_1fr_140px_100px_100px_100px_80px]' : 'grid-cols-[auto_1fr_100px_100px_100px_80px]'} gap-4 px-4 py-3 items-center border-b border-bambu-dark-tertiary last:border-b-0 cursor-pointer hover:bg-bambu-dark/50 transition-colors ${
                       selectedFiles.includes(file.id) ? 'bg-bambu-green/10' : ''
                     }`}
                     onClick={() => handleFileSelect(file.id)}
@@ -2021,17 +2096,79 @@ export function FileManagerPage() {
                         <div className="text-sm text-white truncate">{file.print_name || file.filename}</div>
                       </div>
                     </div>
-                    {/* Uploaded By - only show when auth is enabled */}
-                    {authEnabled && (
+                    {showUserInfoColumn && (
                       <div className="text-sm text-bambu-gray flex items-center gap-1">
-                        {file.created_by_username ? (
-                          <>
-                            <User className="w-3 h-3" />
-                            <span className="truncate">{file.created_by_username}</span>
-                          </>
-                        ) : (
-                          '-'
-                        )}
+                        {(() => {
+                          const slicerUser = file.slicer_user || file.slicer_user_email;
+                          const bambuUser = authEnabled ? file.created_by_username : null;
+                          const canEdit = canModify('library', 'update', file.created_by_id);
+                          return (
+                            <div className="min-w-0 flex flex-col">
+                              {bambuUser && (
+                                <span className="inline-flex items-center gap-1 truncate" title={t('fileManager.uploadedBy', { defaultValue: 'Uploaded By' })}>
+                                  <User className="w-3 h-3" />
+                                  <span className="truncate">{bambuUser}</span>
+                                </span>
+                              )}
+                              {slicerUser && (
+                                canEdit ? (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingSlicerUserFile(file);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditingSlicerUserFile(file);
+                                      }
+                                    }}
+                                    className="rounded-full"
+                                    title={t('queue.editSlicerUser.editExisting')}
+                                  >
+                                    <SlicerUserBadge user={slicerUser} truncate />
+                                  </span>
+                                ) : (
+                                  <SlicerUserBadge user={slicerUser} truncate />
+                                )
+                              )}
+                              {!slicerUser && (
+                                canEdit ? (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingSlicerUserFile(file);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditingSlicerUserFile(file);
+                                      }
+                                    }}
+                                    className="mt-0.5 max-w-fit"
+                                    title={t('queue.editSlicerUser.addMissing')}
+                                  >
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      {t('queue.badges.slicerUserMissingWarning')}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 mt-0.5 max-w-fit" title={t('queue.badges.slicerUserMissingWarning')}>
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {t('queue.badges.slicerUserMissingWarning')}
+                                  </span>
+                                )
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                     {/* Type */}
@@ -2303,6 +2440,17 @@ export function FileManagerPage() {
           }}
           isLoading={renameFileMutation.isPending || renameFolderMutation.isPending}
           t={t}
+        />
+      )}
+
+      {editingSlicerUserFile && (
+        <SlicerUserEditModal
+          item={{
+            library_file_id: editingSlicerUserFile.id,
+            slicer_user: editingSlicerUserFile.slicer_user,
+            slicer_user_email: editingSlicerUserFile.slicer_user_email,
+          }}
+          onClose={() => setEditingSlicerUserFile(null)}
         />
       )}
     </div>
