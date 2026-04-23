@@ -22,6 +22,9 @@ services:
     #       docker compose down
     #       docker compose up -d
     #
+    #   Safe one liner cmd (stops on failure)
+    #   export BAMBUDDY_IMAGE_TAG=0.2.2-p1 && docker compose build && docker compose down && docker compose up -d
+    #
     #   Roll back to a previously built local image:
     #     BAMBUDDY_IMAGE_TAG=0.2.2-p1 docker compose up -d
     #
