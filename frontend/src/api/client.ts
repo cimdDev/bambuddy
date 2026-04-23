@@ -3114,6 +3114,8 @@ export const api = {
     status?: string;
     quantity?: number;
     external_url?: string | null;
+    slicer_user?: string | null;
+    slicer_user_email?: string | null;
   }) =>
     request<Archive>(`/archives/${id}`, {
       method: 'PATCH',
@@ -5119,6 +5121,8 @@ export interface LibraryFileUpdate {
   folder_id?: number | null;
   project_id?: number | null;
   notes?: string | null;
+  slicer_user?: string | null;
+  slicer_user_email?: string | null;
 }
 
 export interface LibraryFileUploadResponse {

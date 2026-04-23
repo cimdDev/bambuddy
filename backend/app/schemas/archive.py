@@ -16,6 +16,8 @@ class ArchiveBase(BaseModel):
     quantity: int | None = None  # Number of items printed
     # User-defined link (Printables, Thingiverse, etc.)
     external_url: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
 
 class ArchiveUpdate(ArchiveBase):

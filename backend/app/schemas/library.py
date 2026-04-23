@@ -101,6 +101,8 @@ class FileUpdate(BaseModel):
     folder_id: int | None = None
     project_id: int | None = None
     notes: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
 
 class FileDuplicate(BaseModel):

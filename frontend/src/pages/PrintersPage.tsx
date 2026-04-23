@@ -90,6 +90,7 @@ import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors'
 import { getCurrencySymbol } from '../utils/currency';
 import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
+import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 
 // Color names resolve via getColorName() which reads the backend color_catalog
 // (loaded once by ColorCatalogProvider). No hardcoded tables here — see #857.
@@ -1348,7 +1349,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, canModify } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -1663,6 +1664,10 @@ function PrinterCard({
 
   const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? printingArchiveQuery.data?.slicer_user_email ?? null;
   const currentMissingSlicerUser = !currentSlicerUser;
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
+  const canEditCurrentSlicerUser = printingArchiveQuery.data
+    ? canModify('archives', 'update', printingArchiveQuery.data.created_by_id)
+    : false;
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -2762,13 +2767,50 @@ function PrinterCard({
                             {(currentMissingSlicerUser || currentSlicerUser || printingQueueItems?.[0]?.private_job || currentQueueCost != null) && (
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 {currentSlicerUser && (
-                                  <SlicerUserBadge user={currentSlicerUser} />
+                                  canEditCurrentSlicerUser ? (
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => setShowSlicerUserEdit(true)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          setShowSlicerUserEdit(true);
+                                        }
+                                      }}
+                                      className="rounded-full"
+                                      title={t('queue.editSlicerUser.editExisting')}
+                                    >
+                                      <SlicerUserBadge user={currentSlicerUser} />
+                                    </span>
+                                  ) : (
+                                    <SlicerUserBadge user={currentSlicerUser} />
+                                  )
                                 )}
                                 {currentMissingSlicerUser && (
-                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
-                                    <AlertTriangle className="w-3 h-3" />
-                                    {t('queue.badges.slicerUserMissingWarning')}
-                                  </span>
+                                  canEditCurrentSlicerUser ? (
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => setShowSlicerUserEdit(true)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          setShowSlicerUserEdit(true);
+                                        }
+                                      }}
+                                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20"
+                                      title={t('queue.editSlicerUser.addMissing')}
+                                    >
+                                      <AlertTriangle className="w-3 h-3" />
+                                      {t('queue.badges.slicerUserMissingWarning')}
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
+                                      <AlertTriangle className="w-3 h-3" />
+                                      {t('queue.badges.slicerUserMissingWarning')}
+                                    </span>
+                                  )
                                 )}
                                 {printingQueueItems?.[0]?.private_job && (
                                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
@@ -2817,9 +2859,33 @@ function PrinterCard({
                               </span>
                             )}
                             {currentSlicerUser && (
-                              <SlicerUserBadge user={currentSlicerUser} />
+                              canEditCurrentSlicerUser ? (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => setShowSlicerUserEdit(true)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      setShowSlicerUserEdit(true);
+                                    }
+                                  }}
+                                  className="rounded-full"
+                                  title={t('queue.editSlicerUser.editExisting')}
+                                >
+                                  <SlicerUserBadge user={currentSlicerUser} />
+                                </span>
+                              ) : (
+                                <SlicerUserBadge user={currentSlicerUser} />
+                              )
                             )}
                           </div>
+                          {showSlicerUserEdit && printingArchiveQuery.data && (
+                            <SlicerUserEditModal
+                              item={printingArchiveQuery.data}
+                              onClose={() => setShowSlicerUserEdit(false)}
+                            />
+                          )}
                         </>
                       ) : (
                         <>

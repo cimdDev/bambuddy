@@ -3,10 +3,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Upload, X, File, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
-import type { BulkUploadResult } from '../api/client';
+import type { Archive, BulkUploadResult } from '../api/client';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { useToast } from '../contexts/ToastContext';
+import { SlicerUserEditModal } from './SlicerUserEditModal';
+import { getSuggestedSlicerUser, rememberSlicerUser } from '../utils/slicerUserMemory';
 
 interface FileWithStatus {
   file: File;
@@ -30,6 +32,7 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
   );
   const [isDragging, setIsDragging] = useState(false);
   const [uploadResult, setUploadResult] = useState<BulkUploadResult | null>(null);
+  const [missingUserBadgeQueue, setMissingUserBadgeQueue] = useState<Archive[]>([]);
 
   // Close on Escape key
   useEffect(() => {
@@ -44,6 +47,30 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
     mutationFn: (filesToUpload: File[]) =>
       api.uploadArchivesBulk(filesToUpload),
     onSuccess: (result) => {
+      void (async () => {
+        const uploadedArchives = await Promise.all(
+          result.results.map(async (entry) => {
+            try {
+              return await api.getArchive(entry.id);
+            } catch {
+              return null;
+            }
+          })
+        );
+        const validArchives = uploadedArchives.filter((archive): archive is Archive => archive !== null);
+        for (const archive of validArchives) {
+          const observedUser = archive.slicer_user || archive.slicer_user_email;
+          if (observedUser) {
+            rememberSlicerUser(observedUser);
+          }
+        }
+        const missingSlicerUsers = validArchives.filter((archive) => !(archive.slicer_user || archive.slicer_user_email));
+        if (missingSlicerUsers.length > 0) {
+          setMissingUserBadgeQueue(missingSlicerUsers);
+          showToast(t('uploadModal.missingUserBadgeWarning', { count: missingSlicerUsers.length }), 'warning');
+        }
+      })();
+
       setUploadResult(result);
       queryClient.invalidateQueries({ queryKey: ['archives'] });
       queryClient.invalidateQueries({ queryKey: ['archiveStats'] });
@@ -145,148 +172,171 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;
   const isUploading = uploadMutation.isPending;
+  const currentMissingUserBadgeArchive = missingUserBadgeQueue[0] || null;
+  const suggestedSlicerUser = getSuggestedSlicerUser();
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <CardContent className="p-0 flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-bambu-dark-tertiary">
-            <h2 className="text-xl font-semibold text-white">{t('uploadModal.title')}</h2>
-            <button
-              onClick={onClose}
-              className="text-bambu-gray hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Drop Zone */}
-          <div className="p-4">
-            <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                isDragging
-                  ? 'border-bambu-green bg-bambu-green/10'
-                  : 'border-bambu-dark-tertiary hover:border-bambu-gray'
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <Upload className="w-12 h-12 mx-auto mb-4 text-bambu-gray" />
-              <p className="text-white mb-2">
-                {t('uploadModal.dragDrop')}
-              </p>
-              <p className="text-bambu-gray text-sm mb-4">{t('uploadModal.or')}</p>
-              <Button
-                variant="secondary"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
+    <>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <CardContent className="p-0 flex flex-col h-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-bambu-dark-tertiary">
+              <h2 className="text-xl font-semibold text-white">{t('uploadModal.title')}</h2>
+              <button
+                onClick={onClose}
+                className="text-bambu-gray hover:text-white transition-colors"
               >
-                {t('uploadModal.browseFiles')}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".3mf"
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          </div>
 
-          {/* Info about printer model extraction */}
-          <div className="px-4 pb-4">
-            <p className="text-xs text-bambu-gray">
-              {t('uploadModal.extractionInfo')}
-            </p>
-          </div>
-
-          {/* File List */}
-          {files.length > 0 && (
-            <div className="px-4 pb-4 max-h-60 overflow-y-auto">
-              <div className="space-y-2">
-                {files.map((f, index) => (
-                  <div
-                    key={`${f.file.name}-${index}`}
-                    className="flex items-center gap-3 p-3 bg-bambu-dark rounded-lg"
-                  >
-                    <File className="w-5 h-5 text-bambu-gray flex-shrink-0" />
-                    <span className="flex-1 text-white text-sm truncate">
-                      {f.file.name}
-                    </span>
-                    <span className="text-xs text-bambu-gray">
-                      {(f.file.size / (1024 * 1024)).toFixed(1)} MB
-                    </span>
-                    {f.status === 'pending' && (
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="text-bambu-gray hover:text-red-400 transition-colors"
-                        disabled={isUploading}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                    {f.status === 'uploading' && (
-                      <Loader2 className="w-4 h-4 text-bambu-green animate-spin" />
-                    )}
-                    {f.status === 'success' && (
-                      <CheckCircle className="w-4 h-4 text-bambu-green" />
-                    )}
-                    {f.status === 'error' && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-red-400">{f.error}</span>
-                        <AlertCircle className="w-4 h-4 text-red-400" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Upload Result Summary */}
-          {uploadResult && (
-            <div className="px-4 pb-4">
-              <div className="p-3 bg-bambu-dark rounded-lg">
-                <p className="text-sm text-white">
-                  <span className="text-bambu-green">{uploadResult.uploaded}</span> {t('uploadModal.uploaded')}
-                  {uploadResult.failed > 0 && (
-                    <>, <span className="text-red-400">{uploadResult.failed}</span> {t('uploadModal.failed')}</>
-                  )}
+            {/* Drop Zone */}
+            <div className="p-4">
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  isDragging
+                    ? 'border-bambu-green bg-bambu-green/10'
+                    : 'border-bambu-dark-tertiary hover:border-bambu-gray'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload className="w-12 h-12 mx-auto mb-4 text-bambu-gray" />
+                <p className="text-white mb-2">
+                  {t('uploadModal.dragDrop')}
                 </p>
+                <p className="text-bambu-gray text-sm mb-4">{t('uploadModal.or')}</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                >
+                  {t('uploadModal.browseFiles')}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".3mf"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
               </div>
             </div>
-          )}
 
-          {/* Footer */}
-          <div className="flex gap-3 p-4 border-t border-bambu-dark-tertiary">
-            <Button variant="secondary" onClick={onClose} className="flex-1">
-              {uploadResult ? t('common.close') : t('common.cancel')}
-            </Button>
-            {!uploadResult && (
-              <Button
-                onClick={handleUpload}
-                disabled={pendingCount === 0 || isUploading}
-                className="flex-1"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('uploadModal.uploading')}
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    {t('uploadModal.upload')} {pendingCount > 0 && `(${pendingCount})`}
-                  </>
-                )}
-              </Button>
+            {/* Info about printer model extraction */}
+            <div className="px-4 pb-4">
+              <p className="text-xs text-bambu-gray">
+                {t('uploadModal.extractionInfo')}
+              </p>
+            </div>
+
+            {/* File List */}
+            {files.length > 0 && (
+              <div className="px-4 pb-4 max-h-60 overflow-y-auto">
+                <div className="space-y-2">
+                  {files.map((f, index) => (
+                    <div
+                      key={`${f.file.name}-${index}`}
+                      className="flex items-center gap-3 p-3 bg-bambu-dark rounded-lg"
+                    >
+                      <File className="w-5 h-5 text-bambu-gray flex-shrink-0" />
+                      <span className="flex-1 text-white text-sm truncate">
+                        {f.file.name}
+                      </span>
+                      <span className="text-xs text-bambu-gray">
+                        {(f.file.size / (1024 * 1024)).toFixed(1)} MB
+                      </span>
+                      {f.status === 'pending' && (
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="text-bambu-gray hover:text-red-400 transition-colors"
+                          disabled={isUploading}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      {f.status === 'uploading' && (
+                        <Loader2 className="w-4 h-4 text-bambu-green animate-spin" />
+                      )}
+                      {f.status === 'success' && (
+                        <CheckCircle className="w-4 h-4 text-bambu-green" />
+                      )}
+                      {f.status === 'error' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-red-400">{f.error}</span>
+                          <AlertCircle className="w-4 h-4 text-red-400" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+
+            {/* Upload Result Summary */}
+            {uploadResult && (
+              <div className="px-4 pb-4">
+                <div className="p-3 bg-bambu-dark rounded-lg">
+                  <p className="text-sm text-white">
+                    <span className="text-bambu-green">{uploadResult.uploaded}</span> {t('uploadModal.uploaded')}
+                    {uploadResult.failed > 0 && (
+                      <>, <span className="text-red-400">{uploadResult.failed}</span> {t('uploadModal.failed')}</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex gap-3 p-4 border-t border-bambu-dark-tertiary">
+              <Button variant="secondary" onClick={onClose} className="flex-1">
+                {uploadResult ? t('common.close') : t('common.cancel')}
+              </Button>
+              {!uploadResult && (
+                <Button
+                  onClick={handleUpload}
+                  disabled={pendingCount === 0 || isUploading}
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {t('uploadModal.uploading')}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      {t('uploadModal.upload')} {pendingCount > 0 && `(${pendingCount})`}
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      {currentMissingUserBadgeArchive && (
+        <SlicerUserEditModal
+          key={currentMissingUserBadgeArchive.id}
+          item={currentMissingUserBadgeArchive}
+          initialValue={suggestedSlicerUser ?? undefined}
+          description={t('uploadModal.confirmMissingUserBadge', {
+            name: currentMissingUserBadgeArchive.print_name || currentMissingUserBadgeArchive.filename,
+          })}
+          hint={suggestedSlicerUser ? t('uploadModal.confirmMissingUserBadgeHint', { user: suggestedSlicerUser }) : undefined}
+          onSaved={() => {
+            setMissingUserBadgeQueue((prev) => prev.slice(1));
+          }}
+          onCancelled={() => {
+            setMissingUserBadgeQueue((prev) => prev.slice(1));
+          }}
+          onClose={() => {
+          }}
+        />
+      )}
+    </>
   );
 }

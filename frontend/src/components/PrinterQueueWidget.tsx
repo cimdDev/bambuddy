@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, Calendar, ChevronRight, Loader2, CircleCheck, Coins, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { filterCompatibleQueueItems } from '../utils/printer';
 import { getCurrencySymbol } from '../utils/currency';
 import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { SlicerUserBadge } from './SlicerUserBadge';
+import { SlicerUserEditModal } from './SlicerUserEditModal';
 
 interface PrinterQueueWidgetProps {
   printerId: number;
@@ -27,7 +28,8 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, canModify } = useAuth();
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
@@ -72,11 +74,78 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
 
   const nextAutoItem = autoDispatchQueue[0];
   const nextItem = compatibleQueue?.[0];
+  const editingItem = compatibleQueue?.find((item) => item.id === editingItemId) || null;
   const nextSlicerUser = nextItem?.slicer_user || nextItem?.slicer_user_email || null;
   const nextMissingSlicerUser = !nextSlicerUser;
   const nextComment = nextItem?.comment?.trim() || null;
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+  const canEditSlicerUser = (item?: typeof nextItem) => {
+    if (!item) return false;
+    if (item.archive_id) return canModify('archives', 'update', item.created_by_id);
+    if (item.library_file_id) return canModify('library', 'update', item.created_by_id);
+    return false;
+  };
+  const renderSlicerUserBadges = (item?: typeof nextItem) => {
+    if (!item) return null;
+
+    const slicerUser = item.slicer_user || item.slicer_user_email || null;
+    const missingSlicerUser = !slicerUser;
+    const editable = canEditSlicerUser(item);
+    const openEditor = (e: MouseEvent | KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setEditingItemId(item.id);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        openEditor(e);
+      }
+    };
+
+    return (
+      <>
+        {slicerUser && (
+          editable ? (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={openEditor}
+              onKeyDown={handleKeyDown}
+              className="rounded-full"
+              title={t('queue.editSlicerUser.editExisting')}
+            >
+              <SlicerUserBadge user={slicerUser} />
+            </span>
+          ) : (
+            <SlicerUserBadge user={slicerUser} />
+          )
+        )}
+        {missingSlicerUser && (
+          editable ? (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={openEditor}
+              onKeyDown={handleKeyDown}
+              className="inline-flex items-center gap-1 rounded-full"
+              title={t('queue.editSlicerUser.addMissing')}
+            >
+              <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
+                <AlertTriangle className="w-3 h-3" />
+                {t('queue.badges.slicerUserMissingWarning')}
+              </span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs text-red-300" title={t('queue.badges.slicerUserMissingWarning')}>
+              <AlertTriangle className="w-3 h-3" />
+              {t('queue.badges.slicerUserMissingWarning')}
+            </span>
+          )
+        )}
+      </>
+    );
+  };
   // Prompt "Clear Plate & Start Next" whenever the backend flags the printer as awaiting
   // acknowledgment. Don't gate on reported state: after Auto Off cycles the printer, it
   // boots into IDLE while still awaiting - the prompt must survive that (#961). The flag
@@ -90,128 +159,120 @@ export function PrinterQueueWidget({ printerId, printerModel, awaitingPlateClear
     const displayComment = displayItem?.comment?.trim() || null;
     const displayCost = estimatePrintCost(displayItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
     return (
-      <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
-        <div className="flex items-center gap-3 mb-2">
-          <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
-            <p className="text-sm text-white truncate">
-              {displayItem?.archive_name || displayItem?.library_file_name || `File #${displayItem?.archive_id || displayItem?.library_file_id}`}
-            </p>
-            {displayComment && (
-              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
-                {displayComment}
+      <>
+        <div className="mb-3 p-3 bg-bambu-dark rounded-lg border border-yellow-400/30">
+          <div className="flex items-center gap-3 mb-2">
+            <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
+              <p className="text-sm text-white truncate">
+                {displayItem?.archive_name || displayItem?.library_file_name || `File #${displayItem?.archive_id || displayItem?.library_file_id}`}
               </p>
-            )}
-            {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
-                {displaySlicerUser && <SlicerUserBadge user={displaySlicerUser} />}
-                {displayMissingSlicerUser && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
-                    <AlertTriangle className="w-3 h-3" />
-                    {t('queue.badges.slicerUserMissingWarning')}
-                  </span>
-                )}
-                {displayItem?.private_job && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
-                    {t('queue.accounting.privateJob')}
-                  </span>
-                )}
-                {displayCost != null && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
-                    <Coins className="w-3 h-3" />
-                    {formatCurrencyAmount(displayCost, currencySymbol)}
-                  </span>
-                )}
-              </div>
+              {displayComment && (
+                <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                  {displayComment}
+                </p>
+              )}
+              {(displayMissingSlicerUser || displaySlicerUser || displayItem?.private_job || displayCost != null) && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                  {renderSlicerUserBadges(displayItem)}
+                  {displayItem?.private_job && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                      {t('queue.accounting.privateJob')}
+                    </span>
+                  )}
+                  {displayCost != null && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                      <Coins className="w-3 h-3" />
+                      {formatCurrencyAmount(displayCost, currencySymbol)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            {totalPending > 1 && (
+              <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded flex-shrink-0">
+                +{totalPending - 1}
+              </span>
             )}
           </div>
-          {totalPending > 1 && (
-            <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded flex-shrink-0">
-              +{totalPending - 1}
-            </span>
+          {clearPlateMutation.isSuccess ? (
+            <div className="w-full py-2 px-3 rounded-lg bg-bambu-green/10 border border-bambu-green/20 text-bambu-green text-sm flex items-center justify-center gap-2">
+              <CircleCheck className="w-4 h-4" />
+              {t('queue.plateReady')}
+            </div>
+          ) : (
+            <button
+              onClick={() => clearPlateMutation.mutate()}
+              disabled={clearPlateMutation.isPending || !hasPermission('printers:clear_plate')}
+              className="w-full py-2 px-3 rounded-lg bg-bambu-green/20 border border-bambu-green/40 text-bambu-green hover:bg-bambu-green/30 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {clearPlateMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CircleCheck className="w-4 h-4" />
+              )}
+              {t('queue.clearPlate')}
+            </button>
           )}
         </div>
-        {clearPlateMutation.isSuccess ? (
-          <div className="w-full py-2 px-3 rounded-lg bg-bambu-green/10 border border-bambu-green/20 text-bambu-green text-sm flex items-center justify-center gap-2">
-            <CircleCheck className="w-4 h-4" />
-            {t('queue.plateReady')}
-          </div>
-        ) : (
-          <button
-            onClick={() => clearPlateMutation.mutate()}
-            disabled={clearPlateMutation.isPending || !hasPermission('printers:clear_plate')}
-            className="w-full py-2 px-3 rounded-lg bg-bambu-green/20 border border-bambu-green/40 text-bambu-green hover:bg-bambu-green/30 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {clearPlateMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <CircleCheck className="w-4 h-4" />
-            )}
-            {t('queue.clearPlate')}
-          </button>
-        )}
-      </div>
+        {editingItem && <SlicerUserEditModal item={editingItem} onClose={() => setEditingItemId(null)} />}
+      </>
     );
   }
 
   return (
-    <Link
-      to="/queue"
-      className="block mb-3 p-3 bg-bambu-dark rounded-lg hover:bg-bambu-dark-tertiary transition-colors"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
-            <p className="text-sm text-white truncate">
-              {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
-            </p>
-            {nextComment && (
-              <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
-                {nextComment}
+    <>
+      <Link
+        to="/queue"
+        className="block mb-3 p-3 bg-bambu-dark rounded-lg hover:bg-bambu-dark-tertiary transition-colors"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Calendar className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
+              <p className="text-sm text-white truncate">
+                {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
               </p>
+              {nextComment && (
+                <p className="text-xs text-bambu-gray-light mt-0.5 break-words">
+                  {nextComment}
+                </p>
+              )}
+              {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
+                  {renderSlicerUserBadges(nextItem)}
+                  {nextItem?.private_job && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                      {t('queue.accounting.privateJob')}
+                    </span>
+                  )}
+                  {nextCost != null && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
+                      <Coins className="w-3 h-3" />
+                      {formatCurrencyAmount(nextCost, currencySymbol)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-bambu-gray flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {nextItem?.scheduled_time ? formatRelativeTime(nextItem.scheduled_time, 'system', t) : t('time.waiting')}
+            </span>
+            {totalPending > 1 && (
+              <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded">
+                +{totalPending - 1}
+              </span>
             )}
-            {(nextMissingSlicerUser || nextSlicerUser || nextItem?.private_job || nextCost != null) && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-bambu-gray">
-                {nextSlicerUser && (
-                  <SlicerUserBadge user={nextSlicerUser} />
-                )}
-                {nextMissingSlicerUser && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20" title={t('queue.badges.slicerUserMissingWarning')}>
-                    <AlertTriangle className="w-3 h-3" />
-                    {t('queue.badges.slicerUserMissingWarning')}
-                  </span>
-                )}
-                {nextItem?.private_job && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
-                    {t('queue.accounting.privateJob')}
-                  </span>
-                )}
-                {nextCost != null && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light" title={t('common.cost', 'Cost')}>
-                    <Coins className="w-3 h-3" />
-                    {formatCurrencyAmount(nextCost, currencySymbol)}
-                  </span>
-                )}
-              </div>
-            )}
+            <ChevronRight className="w-4 h-4 text-bambu-gray" />
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-bambu-gray flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {nextItem?.scheduled_time ? formatRelativeTime(nextItem.scheduled_time, 'system', t) : t('time.waiting')}
-          </span>
-          {totalPending > 1 && (
-            <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded">
-              +{totalPending - 1}
-            </span>
-          )}
-          <ChevronRight className="w-4 h-4 text-bambu-gray" />
-        </div>
-      </div>
-    </Link>
+      </Link>
+      {editingItem && <SlicerUserEditModal item={editingItem} onClose={() => setEditingItemId(null)} />}
+    </>
   );
 }

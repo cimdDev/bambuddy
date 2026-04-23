@@ -2425,6 +2425,12 @@ async def update_file(
     if data.notes is not None:
         file.notes = data.notes if data.notes else None
 
+    if data.slicer_user is not None or data.slicer_user_email is not None:
+        metadata = dict(file.file_metadata or {})
+        metadata["slicer_user"] = data.slicer_user.strip() if data.slicer_user else None
+        metadata["slicer_user_email"] = data.slicer_user_email.strip() if data.slicer_user_email else None
+        file.file_metadata = metadata
+
     await db.commit()
     await db.refresh(file)
 

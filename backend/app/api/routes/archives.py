@@ -1244,6 +1244,10 @@ async def update_archive(
         updates["private_material_partial"] = False
     elif next_private_material:
         updates["private_material_partial"] = False
+    if "slicer_user" in updates:
+        updates["slicer_user"] = updates["slicer_user"].strip() if updates["slicer_user"] else None
+    if "slicer_user_email" in updates:
+        updates["slicer_user_email"] = updates["slicer_user_email"].strip() if updates["slicer_user_email"] else None
     for field, value in updates.items():
         setattr(archive, field, value)
 
