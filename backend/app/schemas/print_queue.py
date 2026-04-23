@@ -49,6 +49,7 @@ class PrintQueueItemCreate(BaseModel):
     private_job: bool | None = None
     private_material: bool = False
     private_material_partial: bool = False
+    comment: str | None = None
 
 
 class PrintQueueItemUpdate(BaseModel):
@@ -75,6 +76,7 @@ class PrintQueueItemUpdate(BaseModel):
     private_job: bool | None = None
     private_material: bool | None = None
     private_material_partial: bool | None = None
+    comment: str | None = None
 
 
 class PrintQueueItemResponse(BaseModel):
@@ -105,6 +107,7 @@ class PrintQueueItemResponse(BaseModel):
     started_at: UTCDatetime
     completed_at: UTCDatetime
     error_message: str | None
+    comment: str | None
     created_at: UTCDatetime
     private_job: bool = False
     private_material: bool = False

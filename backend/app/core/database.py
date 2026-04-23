@@ -1768,6 +1768,9 @@ async def run_migrations(conn):
             )
         )
 
+    # Migration: queue item operator comment.
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN comment TEXT")
+
     # Seed default settings keys that must exist on fresh install
     default_settings = [
         ("advanced_auth_enabled", "false"),
