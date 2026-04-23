@@ -741,8 +741,65 @@ async def get_archive_stats(
     )
     total_filament = filament_result.scalar() or 0
 
-    cost_result = await db.execute(select(func.sum(PrintArchive.cost)).where(*base_conditions))
-    total_cost = cost_result.scalar() or 0
+    # Accounting breakdown (PSI/company vs private classification and material ownership)
+    accounting_rows = await db.execute(
+        select(
+            PrintArchive.private_job,
+            PrintArchive.private_material,
+            PrintArchive.private_material_partial,
+            PrintArchive.filament_used_grams,
+            PrintArchive.cost,
+        ).where(*base_conditions)
+    )
+    jobs_private = 0
+    jobs_psi = 0
+    material_weight = {"psi": 0.0, "private": 0.0, "partial": 0.0}
+    material_cost = {"psi": 0.0, "private": 0.0, "partial": 0.0}
+    total_cost = 0.0
+
+    for private_job, private_material, private_material_partial, filament_used_grams, cost in accounting_rows.all():
+        if private_job:
+            jobs_private += 1
+        else:
+            jobs_psi += 1
+
+        bucket = "psi"
+        if private_material:
+            bucket = "private"
+        elif private_material_partial:
+            bucket = "partial"
+
+        cost_value = float(cost or 0)
+        material_weight[bucket] += float(filament_used_grams or 0)
+        # Fully private material is not company spend. Partial private stays in
+        # its own bucket for reporting, while private jobs using company
+        # material still count toward PSI/company spend.
+        if bucket != "private":
+            material_cost[bucket] += cost_value
+            total_cost += cost_value
+
+    def _percent(part: float, total: float) -> float:
+        if total <= 0:
+            return 0.0
+        return (part / total) * 100.0
+
+    total_jobs = jobs_psi + jobs_private
+    jobs_psi_percent = round(_percent(jobs_psi, total_jobs), 1)
+    jobs_private_percent = round(100.0 - jobs_psi_percent, 1) if total_jobs else 0.0
+
+    total_weight = material_weight["psi"] + material_weight["private"] + material_weight["partial"]
+    weight_psi_percent = round(_percent(material_weight["psi"], total_weight), 1)
+    weight_private_percent = round(_percent(material_weight["private"], total_weight), 1)
+    weight_partial_percent = (
+        round(max(0.0, 100.0 - weight_psi_percent - weight_private_percent), 1) if total_weight else 0.0
+    )
+
+    total_material_cost = material_cost["psi"] + material_cost["private"] + material_cost["partial"]
+    cost_psi_percent = round(_percent(material_cost["psi"], total_material_cost), 1)
+    cost_private_percent = round(_percent(material_cost["private"], total_material_cost), 1)
+    cost_partial_percent = (
+        round(max(0.0, 100.0 - cost_psi_percent - cost_private_percent), 1) if total_material_cost else 0.0
+    )
 
     # By filament type (split comma-separated values for multi-material prints)
     filament_type_result = await db.execute(
@@ -846,6 +903,30 @@ async def get_archive_stats(
         total_energy_kwh=round(total_energy_kwh, 3),
         total_energy_cost=round(total_energy_cost, 3),
         energy_data_warming_up=energy_data_warming_up,
+        accounting={
+            "jobs": {
+                "psi": jobs_psi,
+                "private": jobs_private,
+                "psi_percent": jobs_psi_percent,
+                "private_percent": jobs_private_percent,
+            },
+            "material_weight_grams": {
+                "psi": round(material_weight["psi"], 1),
+                "private": round(material_weight["private"], 1),
+                "partial": round(material_weight["partial"], 1),
+                "psi_percent": weight_psi_percent,
+                "private_percent": weight_private_percent,
+                "partial_percent": weight_partial_percent,
+            },
+            "material_cost": {
+                "psi": round(material_cost["psi"], 2),
+                "private": round(material_cost["private"], 2),
+                "partial": round(material_cost["partial"], 2),
+                "psi_percent": cost_psi_percent,
+                "private_percent": cost_private_percent,
+                "partial_percent": cost_partial_percent,
+            },
+        },
     )
 
 

@@ -33,6 +33,30 @@ const mockStats = {
   },
   total_energy_kwh: 45.5,
   total_energy_cost: 12.50,
+  accounting: {
+    jobs: {
+      psi: 120,
+      private: 30,
+      psi_percent: 80,
+      private_percent: 20,
+    },
+    material_weight_grams: {
+      psi: 5000,
+      private: 300,
+      partial: 200,
+      psi_percent: 90.9,
+      private_percent: 5.5,
+      partial_percent: 3.6,
+    },
+    material_cost: {
+      psi: 110.5,
+      private: 0,
+      partial: 15.0,
+      psi_percent: 88.1,
+      private_percent: 0,
+      partial_percent: 11.9,
+    },
+  },
 };
 
 const mockPrinters = [
@@ -56,6 +80,9 @@ const mockArchives = [
     print_time_seconds: 15000,
     cost: 0.75,
     quantity: 1,
+    private_job: false,
+    private_material: false,
+    private_material_partial: false,
   },
   {
     id: 2,
@@ -72,6 +99,9 @@ const mockArchives = [
     print_time_seconds: 27000,
     cost: 5.40,
     quantity: 1,
+    private_job: true,
+    private_material: false,
+    private_material_partial: false,
   },
   {
     id: 3,
@@ -88,6 +118,9 @@ const mockArchives = [
     print_time_seconds: 7200,
     cost: 0.30,
     quantity: 1,
+    private_job: true,
+    private_material: false,
+    private_material_partial: true,
   },
   {
     id: 4,
@@ -104,6 +137,9 @@ const mockArchives = [
     print_time_seconds: 20000,
     cost: 1.35,
     quantity: 1,
+    private_job: true,
+    private_material: true,
+    private_material_partial: false,
   },
 ];
 
@@ -272,6 +308,14 @@ describe('StatsPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Filament Trends')).toBeInTheDocument();
+      });
+    });
+
+    it('shows PSI/private accounting widget', async () => {
+      render(<StatsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('PSI / Private Accounting')).toBeInTheDocument();
       });
     });
 
