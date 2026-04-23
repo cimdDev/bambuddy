@@ -657,6 +657,28 @@ export interface PrintLogResponse {
   total: number;
 }
 
+export interface AccountingTwoWay {
+  psi: number;
+  private: number;
+  psi_percent: number;
+  private_percent: number;
+}
+
+export interface AccountingThreeWay {
+  psi: number;
+  private: number;
+  partial: number;
+  psi_percent: number;
+  private_percent: number;
+  partial_percent: number;
+}
+
+export interface ArchiveAccounting {
+  jobs: AccountingTwoWay;
+  material_weight_grams: AccountingThreeWay;
+  material_cost: AccountingThreeWay;
+}
+
 export interface ArchiveStats {
   total_prints: number;
   successful_prints: number;
@@ -675,6 +697,7 @@ export interface ArchiveStats {
   // snapshot history (e.g. right after upgrade, before hourly snapshots have
   // a baseline). UI should explain why the number may undercount.
   energy_data_warming_up?: boolean;
+  accounting?: ArchiveAccounting;
 }
 
 export interface TagInfo {

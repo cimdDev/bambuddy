@@ -533,6 +533,71 @@ class TestArchivesAPI:
         assert "total_prints" in result
         assert "successful_prints" in result
 
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_get_archive_stats_accounting_breakdown(
+        self, async_client: AsyncClient, archive_factory, printer_factory, db_session
+    ):
+        """Verify private-job accounting stats are bucketed correctly."""
+        printer = await printer_factory()
+        await archive_factory(
+            printer.id,
+            status="completed",
+            filament_used_grams=100.0,
+            cost=10.0,
+            private_job=False,
+            private_material=False,
+            private_material_partial=False,
+        )
+        await archive_factory(
+            printer.id,
+            status="completed",
+            filament_used_grams=50.0,
+            cost=5.0,
+            private_job=True,
+            private_material=True,
+            private_material_partial=False,
+        )
+        await archive_factory(
+            printer.id,
+            status="completed",
+            filament_used_grams=25.0,
+            cost=2.5,
+            private_job=True,
+            private_material=False,
+            private_material_partial=True,
+        )
+
+        response = await async_client.get("/api/v1/archives/stats")
+
+        assert response.status_code == 200
+        result = response.json()
+        accounting = result["accounting"]
+
+        assert accounting["jobs"] == {
+            "psi": 1,
+            "private": 2,
+            "psi_percent": 33.3,
+            "private_percent": 66.7,
+        }
+        assert accounting["material_weight_grams"] == {
+            "psi": 100.0,
+            "private": 50.0,
+            "partial": 25.0,
+            "psi_percent": 57.1,
+            "private_percent": 28.6,
+            "partial_percent": 14.3,
+        }
+        assert accounting["material_cost"] == {
+            "psi": 10.0,
+            "private": 0.0,
+            "partial": 2.5,
+            "psi_percent": 80.0,
+            "private_percent": 0.0,
+            "partial_percent": 20.0,
+        }
+        assert result["total_cost"] == 12.5
+
 
 class TestArchivesSlimAPI:
     """Integration tests for /api/v1/archives/slim endpoint."""
