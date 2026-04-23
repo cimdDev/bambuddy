@@ -241,6 +241,28 @@ class PrintOptionsResponse(BaseModel):
     filament_tangle_detect: bool = False
 
 
+class PrinterFileImportRequest(BaseModel):
+    paths: list[str] = Field(default_factory=list)
+    delete_source: bool = False
+
+
+class PrinterFileImportItem(BaseModel):
+    path: str
+    filename: str
+    library_file_id: int
+
+
+class PrinterFileImportFailure(BaseModel):
+    path: str
+    error: str
+
+
+class PrinterFileImportResponse(BaseModel):
+    imported: list[PrinterFileImportItem] = Field(default_factory=list)
+    failed: list[PrinterFileImportFailure] = Field(default_factory=list)
+    delete_failed: list[PrinterFileImportFailure] = Field(default_factory=list)
+
+
 class PrinterStatus(BaseModel):
     id: int
     name: str

@@ -8,13 +8,18 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.auth import RequireCameraStreamTokenIfAuthEnabled, RequirePermissionIfAuthEnabled
+from backend.app.core.auth import (
+    RequireCameraStreamTokenIfAuthEnabled,
+    RequirePermissionIfAuthEnabled,
+    require_permission_if_auth_enabled,
+)
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.core.permissions import Permission
 from backend.app.models.ams_label import AmsLabel
 from backend.app.models.printer import Printer
 from backend.app.models.slot_preset import SlotPresetMapping
+from backend.app.models.user import User
 from backend.app.schemas.printer import (
     AmsLabelBody,
     AMSTray,
@@ -26,11 +31,14 @@ from backend.app.schemas.printer import (
     NozzleRackSlot,
     PrinterCreate,
     PrinterDiagnosticResult,
+    PrinterFileImportRequest,
+    PrinterFileImportResponse,
     PrinterResponse,
     PrinterStatus,
     PrinterUpdate,
     PrintOptionsResponse,
 )
+from backend.app.api.routes.library import save_file_bytes_to_library
 from backend.app.services.bambu_ftp import (
     cache_3mf_download,
     delete_file_async,
@@ -1519,6 +1527,78 @@ async def delete_printer_file(
         raise HTTPException(500, f"Failed to delete file: {path}")
 
     return {"status": "deleted", "path": path}
+
+
+@router.post("/{printer_id}/files/import", response_model=PrinterFileImportResponse)
+async def import_printer_files(
+    printer_id: int,
+    body: PrinterFileImportRequest,
+    _=RequirePermissionIfAuthEnabled(Permission.PRINTERS_FILES),
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
+):
+    """Import printer-resident files into the Bambuddy library.
+
+    When ``delete_source`` is true, the route behaves like "Move to Bambuddy":
+    it keeps successful imports even if source deletion later fails.
+    """
+    if not body.paths:
+        raise HTTPException(status_code=400, detail="No printer files selected")
+
+    result = await db.execute(select(Printer).where(Printer.id == printer_id))
+    printer = result.scalar_one_or_none()
+    if not printer:
+        raise HTTPException(404, "Printer not found")
+
+    imported = []
+    failed = []
+    delete_failed = []
+
+    for path in body.paths:
+        try:
+            data = await download_file_bytes_async(printer.ip_address, printer.access_code, path, printer_model=printer.model)
+            if data is None:
+                failed.append({"path": path, "error": "File not found on printer"})
+                continue
+
+            filename = path.rsplit("/", 1)[-1] or "printer-file"
+            library_file, _was_existing = await save_file_bytes_to_library(
+                db,
+                file_bytes=data,
+                filename=filename,
+                owner_id=current_user.id if current_user else None,
+            )
+            imported.append(
+                {
+                    "path": path,
+                    "filename": library_file.filename,
+                    "library_file_id": library_file.id,
+                }
+            )
+
+            if body.delete_source:
+                deleted = await delete_file_async(
+                    printer.ip_address,
+                    printer.access_code,
+                    path,
+                    printer_model=printer.model,
+                )
+                if not deleted:
+                    delete_failed.append({"path": path, "error": "Imported, but failed to delete source file from printer"})
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.warning("Failed to import printer file %s from printer %s: %s", path, printer_id, exc)
+            failed.append({"path": path, "error": str(exc)})
+
+    if not imported and failed:
+        raise HTTPException(status_code=400, detail="Failed to import any selected printer files")
+
+    return {
+        "imported": imported,
+        "failed": failed,
+        "delete_failed": delete_failed,
+    }
 
 
 @router.get("/{printer_id}/storage")
