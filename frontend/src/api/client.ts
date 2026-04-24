@@ -1474,7 +1474,7 @@ export interface PrintQueueItem {
   completed_at: string | null;
   error_message: string | null;
   created_at: string;
-  private_job?: boolean;
+  private_job?: boolean | null;
   private_material?: boolean;
   private_material_partial?: boolean;
   archive_name?: string | null;
@@ -1539,7 +1539,7 @@ export interface PrintQueueItemCreate {
   quantity?: number;
   // Project to associate the resulting archive with
   project_id?: number;
-  private_job?: boolean;
+  private_job?: boolean | null;
   private_material?: boolean;
   private_material_partial?: boolean;
 }
@@ -4660,13 +4660,15 @@ export const api = {
   uploadLibraryFile: async (
     file: File,
     folderId?: number | null,
-    generateStlThumbnails: boolean = true
+    generateStlThumbnails: boolean = true,
+    privateJob: boolean = false
   ): Promise<LibraryFileUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     const params = new URLSearchParams();
     if (folderId) params.set('folder_id', String(folderId));
     params.set('generate_stl_thumbnails', String(generateStlThumbnails));
+    params.set('private_job', String(privateJob));
     const headers: Record<string, string> = {};
     if (authToken) {
       headers['Authorization'] = `Bearer ${authToken}`;
@@ -4687,7 +4689,8 @@ export const api = {
     folderId?: number | null,
     preserveStructure: boolean = true,
     createFolderFromZip: boolean = false,
-    generateStlThumbnails: boolean = true
+    generateStlThumbnails: boolean = true,
+    privateJob: boolean = false
   ): Promise<ZipExtractResponse> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -4696,6 +4699,7 @@ export const api = {
     params.set('preserve_structure', String(preserveStructure));
     params.set('create_folder_from_zip', String(createFolderFromZip));
     params.set('generate_stl_thumbnails', String(generateStlThumbnails));
+    params.set('private_job', String(privateJob));
     const headers: Record<string, string> = {};
     if (authToken) {
       headers['Authorization'] = `Bearer ${authToken}`;
@@ -4813,6 +4817,7 @@ export const api = {
       timelapse?: boolean;
       use_ams?: boolean;
       project_id?: number;
+      private_job?: boolean | null;
       cleanup_library_after_dispatch?: boolean;
     }
   ) =>
@@ -5162,6 +5167,7 @@ export interface LibraryFile {
   print_count: number;
   last_printed_at: string | null;
   notes: string | null;
+  private_job: boolean;
   duplicates: LibraryFileDuplicate[] | null;
   duplicate_count: number;
   // User tracking (Issue #206)
@@ -5186,6 +5192,7 @@ export interface LibraryFileListItem {
   thumbnail_path: string | null;
   print_count: number;
   duplicate_count: number;
+  private_job: boolean;
   // User tracking (Issue #206)
   created_by_id: number | null;
   created_by_username: string | null;
@@ -5201,6 +5208,7 @@ export interface LibraryFileUpdate {
   folder_id?: number | null;
   project_id?: number | null;
   notes?: string | null;
+  private_job?: boolean | null;
 }
 
 // Library trash (#1008)

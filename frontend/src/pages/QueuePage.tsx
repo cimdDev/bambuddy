@@ -378,7 +378,7 @@ function SortableQueueItem({
   const isPrinting = item.status === 'printing';
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
-  const canEditAccounting = isPending && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
+  const canEditAccounting = (isPending || isPrinting) && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
   const privateMaterialUsage: PrivateMaterialUsage = item.private_material
     ? 'private_full'
     : item.private_material_partial
@@ -1373,6 +1373,9 @@ export function QueuePage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
+                    onUpdateAccounting={async (patch) => {
+                      await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                    }}
                     defaultCostPerKg={defaultCostPerKg}
                     currencySymbol={currencySymbol}
                     t={t}

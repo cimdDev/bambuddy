@@ -763,6 +763,12 @@ class BackgroundDispatchService:
             if not archive:
                 raise RuntimeError("Failed to create archive")
 
+            private_job = bool(job.options.get("private_job", lib_file.private_job))
+            archive.private_job = private_job
+            archive.private_material = bool(job.options.get("private_material", False)) if private_job else False
+            archive.private_material_partial = (
+                bool(job.options.get("private_material_partial", False)) and private_job and not archive.private_material
+            )
             await db.flush()
 
             base_name = lib_file.filename
