@@ -708,6 +708,7 @@ export default {
       removedFromFavorites: 'Aus Favoriten entfernt',
       projectUpdated: 'Projekt aktualisiert',
       failedUpdateProject: 'Fehler beim Aktualisieren des Projekts',
+      failedUpdateArchive: 'Fehler beim Aktualisieren des Archivs',
       linkCopied: 'Link in die Zwischenablage kopiert',
       failedCopyLink: 'Fehler beim Kopieren des Links',
       photoDeleted: 'Foto gelöscht',

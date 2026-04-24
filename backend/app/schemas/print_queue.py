@@ -46,7 +46,7 @@ class PrintQueueItemCreate(BaseModel):
     quantity: int = 1
     # Project to associate the resulting archive with
     project_id: int | None = None
-    private_job: bool = False
+    private_job: bool | None = None
     private_material: bool = False
     private_material_partial: bool = False
 

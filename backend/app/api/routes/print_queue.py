@@ -446,7 +446,10 @@ async def add_to_queue(
 
     # Validate quantity
     quantity = max(1, data.quantity)
-    private_job = data.private_job
+    if data.private_job is None:
+        private_job = bool(archive.private_job) if archive else bool(library_file.private_job) if library_file else False
+    else:
+        private_job = data.private_job
     private_material = data.private_material if private_job else False
     private_material_partial = data.private_material_partial if private_job and not private_material else False
 
@@ -823,10 +826,10 @@ async def update_queue_item(
         if item.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own queue items")
 
-    if item.status != "pending":
-        raise HTTPException(400, "Can only update pending items")
-
     update_data = data.model_dump(exclude_unset=True)
+    accounting_fields = {"private_job", "private_material", "private_material_partial"}
+    if item.status != "pending" and not (item.status == "printing" and set(update_data).issubset(accounting_fields)):
+        raise HTTPException(400, "Can only update pending items")
 
     # Normalize target_model if being updated
     if "target_model" in update_data and update_data["target_model"]:
@@ -876,6 +879,14 @@ async def update_queue_item(
 
     for field, value in update_data.items():
         setattr(item, field, value)
+
+    if item.archive_id and accounting_fields.intersection(update_data):
+        archive_result = await db.execute(select(PrintArchive).where(PrintArchive.id == item.archive_id))
+        archive = archive_result.scalar_one_or_none()
+        if archive:
+            archive.private_job = item.private_job
+            archive.private_material = item.private_material
+            archive.private_material_partial = item.private_material_partial and item.private_job and not item.private_material
 
     await db.commit()
     await db.refresh(item, ["archive", "printer", "library_file", "created_by", "batch"])

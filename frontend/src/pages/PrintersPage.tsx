@@ -1494,7 +1494,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, canModify } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -1791,7 +1791,7 @@ function PrinterCard({
   const { data: printingQueueItems } = useQuery({
     queryKey: ['queue', printer.id, 'printing'],
     queryFn: () => api.getQueue(printer.id, 'printing'),
-    enabled: status?.state === 'RUNNING',
+    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
   // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
@@ -1806,6 +1806,7 @@ function PrinterCard({
   const currentQueueItem = printingQueueItems?.[0];
   const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const canEditCurrentQueueAccounting = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -1854,6 +1855,17 @@ function PrinterCard({
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
     },
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToDelete'), 'error'),
+  });
+
+  const updateCurrentQueueAccountingMutation = useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: { private_job?: boolean | null; private_material?: boolean | null; private_material_partial?: boolean | null } }) =>
+      api.updateQueueItem(itemId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'printing'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+      queryClient.invalidateQueries({ queryKey: ['archives'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('queue.toast.updateFailed'), 'error'),
   });
 
   const connectMutation = useMutation({
@@ -2976,20 +2988,75 @@ function PrinterCard({
                                 {currentPrintUser}
                               </span>
                             )}
+                            {currentQueueItem && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const nextPrivateJob = !currentQueueItem.private_job;
+                                  updateCurrentQueueAccountingMutation.mutate({
+                                    itemId: currentQueueItem.id,
+                                    patch: {
+                                      private_job: nextPrivateJob,
+                                      private_material: nextPrivateJob ? currentQueueItem.private_material : false,
+                                      private_material_partial: nextPrivateJob ? currentQueueItem.private_material_partial : false,
+                                    },
+                                  });
+                                }}
+                                disabled={!canEditCurrentQueueAccounting}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                                  currentQueueItem.private_job
+                                    ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                    : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={t('queue.accounting.privateJob')}
+                              >
+                                {t('queue.accounting.privateJob')}
+                              </button>
+                            )}
+                            {currentQueueItem?.private_job && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const nextUsage = currentQueueItem.private_material
+                                    ? 'company'
+                                    : currentQueueItem.private_material_partial
+                                      ? 'private_full'
+                                      : 'private_partial';
+                                  updateCurrentQueueAccountingMutation.mutate({
+                                    itemId: currentQueueItem.id,
+                                    patch: {
+                                      private_job: true,
+                                      private_material: nextUsage === 'private_full',
+                                      private_material_partial: nextUsage === 'private_partial',
+                                    },
+                                  });
+                                }}
+                                disabled={!canEditCurrentQueueAccounting}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                                  currentQueueItem.private_material
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                    : currentQueueItem.private_material_partial
+                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                                title={t('queue.accounting.privateMaterial')}
+                              >
+                                {currentQueueItem.private_material
+                                  ? t('queue.accounting.privateMaterialFull')
+                                  : currentQueueItem.private_material_partial
+                                    ? t('queue.accounting.privateMaterialPartial')
+                                    : t('queue.accounting.companyMaterial')}
+                              </button>
+                            )}
                           </div>
-                          {(currentQueueItem?.private_job || currentQueueCost != null) && (
+                          {currentQueueCost != null && (
                             <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-bambu-gray">
-                              {currentQueueItem?.private_job && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
-                                  {t('queue.accounting.privateJob')}
-                                </span>
-                              )}
-                              {currentQueueCost != null && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
-                                  <Coins className="w-3 h-3" />
-                                  {formatCurrencyAmount(currentQueueCost, currencySymbol)}
-                                </span>
-                              )}
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
+                                <Coins className="w-3 h-3" />
+                                {formatCurrencyAmount(currentQueueCost, currencySymbol)}
+                              </span>
                             </div>
                           )}
                         </>
