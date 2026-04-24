@@ -1681,10 +1681,11 @@ function PrinterCard({
     enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
+  const currentQueueItem = printingQueueItems?.[0];
   // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
+  const currentPrintUser = currentQueueItem?.created_by_username || reprintUser?.username;
   const archiveId = (() => {
-    const raw = printingQueueItems?.[0]?.archive_id;
+    const raw = currentQueueItem?.archive_id ?? activeArchiveId;
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? n : undefined;
   })();
@@ -1693,11 +1694,29 @@ function PrinterCard({
     queryFn: () => api.getArchive(archiveId!),
     enabled: (status?.state === 'RUNNING' || status?.state === 'PAUSE') && archiveId !== undefined,
   });
-  const currentSlicerUser = printingArchiveQuery.data?.slicer_user ?? printingArchiveQuery.data?.slicer_user_email ?? null;
-  const currentMissingSlicerUser = !currentSlicerUser;
+  const currentSlicerUser =
+    printingArchiveQuery.data?.slicer_user ??
+    printingArchiveQuery.data?.slicer_user_email ??
+    currentQueueItem?.slicer_user ??
+    currentQueueItem?.slicer_user_email ??
+    null;
+  const currentSlicerUserEditTarget = printingArchiveQuery.data
+    ? {
+        archive_id: printingArchiveQuery.data.id,
+        slicer_user: printingArchiveQuery.data.slicer_user,
+        slicer_user_email: printingArchiveQuery.data.slicer_user_email,
+      }
+    : currentQueueItem ?? null;
+  const currentMissingSlicerUser = !!currentSlicerUserEditTarget && !currentSlicerUser;
   const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
   const canEditCurrentSlicerUser = printingArchiveQuery.data
     ? canModify('archives', 'update', printingArchiveQuery.data.created_by_id)
+    : currentQueueItem
+      ? currentQueueItem.archive_id
+        ? canModify('archives', 'update', currentQueueItem.created_by_id)
+        : currentQueueItem.library_file_id
+          ? canModify('library', 'update', currentQueueItem.created_by_id)
+          : false
     : false;
 
   // Fetch last completed print for this printer
@@ -2879,10 +2898,13 @@ function PrinterCard({
                               </span>
                             )}
                           </div>
-                          {showSlicerUserEdit && printingArchiveQuery.data && (
+                          {showSlicerUserEdit && currentSlicerUserEditTarget && (
                             <SlicerUserEditModal
-                              item={printingArchiveQuery.data}
+                              item={currentSlicerUserEditTarget}
                               onClose={() => setShowSlicerUserEdit(false)}
+                              onSaved={() => {
+                                queryClient.invalidateQueries({ queryKey: ['printingArchive', printer.id, archiveId] });
+                              }}
                             />
                           )}
                         </>
