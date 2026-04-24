@@ -103,6 +103,7 @@ class FileUpdate(BaseModel):
     notes: str | None = None
     slicer_user: str | None = None
     slicer_user_email: str | None = None
+    private_job: bool | None = None
 
 
 class FileDuplicate(BaseModel):
@@ -138,6 +139,7 @@ class FileResponse(BaseModel):
     last_printed_at: datetime | None
 
     notes: str | None
+    private_job: bool = False
 
     # Duplicate detection
     duplicates: list[FileDuplicate] | None = None
@@ -174,6 +176,7 @@ class FileListResponse(BaseModel):
     thumbnail_path: str | None
     print_count: int
     duplicate_count: int = 0
+    private_job: bool = False
     # User tracking (Issue #206)
     created_by_id: int | None = None
     created_by_username: str | None = None
@@ -216,6 +219,7 @@ class FilePrintRequest(BaseModel):
     use_ams: bool = True
     # Project to associate the resulting archive with
     project_id: int | None = None
+    private_job: bool | None = None
     # When true, delete the LibraryFile row + disk file after the archive has
     # been created and the print has been dispatched. Used by the Printers-page
     # Direct-Print flow (click / drag-drop a file onto a printer card) so the

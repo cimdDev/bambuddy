@@ -390,6 +390,7 @@ function SortableQueueItem({
       ? canModify('library', 'update', item.created_by_id)
       : false;
   const canEditAccounting = isPending && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
+  const canEditAccountingWhilePrinting = (isPending || isPrinting) && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
   const privateMaterialUsage: PrivateMaterialUsage = item.private_material
     ? 'private_full'
     : item.private_material_partial
@@ -636,7 +637,7 @@ function SortableQueueItem({
                 {t('queue.badges.gcodeInjection')}
               </span>
             )}
-            {canEditAccounting ? (
+            {canEditAccountingWhilePrinting ? (
               <button
                 type="button"
                 onClick={(e) => {
@@ -662,7 +663,7 @@ function SortableQueueItem({
                 {t('queue.accounting.privateJob')}
               </span>
             ) : null}
-            {item.private_job && (canEditAccounting ? (
+            {item.private_job && (canEditAccountingWhilePrinting ? (
               <button
                 type="button"
                 onClick={(e) => {
@@ -1469,6 +1470,9 @@ export function QueuePage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
+                    onUpdateAccounting={async (patch) => {
+                      await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                    }}
                     defaultCostPerKg={defaultCostPerKg}
                     currencySymbol={currencySymbol}
                     t={t}

@@ -82,6 +82,9 @@ class LibraryFile(Base):
     # User notes
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Accounting marker inherited by queue jobs created from this file.
+    private_job: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Provenance — when the file was imported from an external source (e.g.
     # MakerWorld), ``source_type`` identifies the source and ``source_url`` is
     # the canonical public URL. Used for "already imported" detection and

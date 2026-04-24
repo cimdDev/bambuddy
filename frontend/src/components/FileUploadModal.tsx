@@ -46,6 +46,7 @@ export function FileUploadModal({ folderId, onClose, onUploadComplete, onFileUpl
   const [preserveZipStructure, setPreserveZipStructure] = useState(true);
   const [createFolderFromZip, setCreateFolderFromZip] = useState(false);
   const [generateStlThumbnails, setGenerateStlThumbnails] = useState(true);
+  const [privateJob, setPrivateJob] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,14 +86,14 @@ export function FileUploadModal({ folderId, onClose, onUploadComplete, onFileUpl
 
       try {
         if (uf.isZip) {
-          const result = await api.extractZipFile(uf.file, folderId, preserveZipStructure, createFolderFromZip, generateStlThumbnails);
+          const result = await api.extractZipFile(uf.file, folderId, preserveZipStructure, createFolderFromZip, generateStlThumbnails, privateJob);
           updateFileStatus(uf.file, {
             status: result.errors.length > 0 && result.extracted === 0 ? 'error' : 'success',
             extractedCount: result.extracted,
             error: result.errors.length > 0 ? t('fileManager.zipFilesFailed', '{{count}} files failed', { count: result.errors.length }) : undefined,
           });
         } else {
-          const result = await api.uploadLibraryFile(uf.file, folderId, generateStlThumbnails);
+          const result = await api.uploadLibraryFile(uf.file, folderId, generateStlThumbnails, privateJob);
           updateFileStatus(uf.file, { status: 'success' });
           const error = onFileUploaded?.(result);
           if (error) {
@@ -198,6 +199,16 @@ export function FileUploadModal({ folderId, onClose, onUploadComplete, onFileUpl
             className="hidden"
             onChange={handleFileSelect}
           />
+
+          <label className="flex items-center gap-2 cursor-pointer p-3 bg-bambu-dark rounded-lg border border-bambu-dark-tertiary">
+            <input
+              type="checkbox"
+              checked={privateJob}
+              onChange={(e) => setPrivateJob(e.target.checked)}
+              className="w-4 h-4 rounded border-bambu-dark-tertiary bg-bambu-dark text-bambu-green focus:ring-bambu-green"
+            />
+            <span className="text-sm text-white">{t('queue.accounting.privateJob')}</span>
+          </label>
 
           {/* ZIP Options */}
           {hasZipFiles && (
