@@ -3139,11 +3139,14 @@ function PrinterCard({
                               </button>
                             )}
                             {currentQueueCost != null && (
-                              <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
+                              <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-bambu-gray ml-auto">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
                                 <Coins className="w-3 h-3" />
                                 {formatCurrencyAmount(currentQueueCost, currencySymbol)}
                               </span>
+                              </div>
                             )}
+                          )}
                           </div>
                           {showSlicerUserEdit && currentSlicerUserEditTarget && (
                             <SlicerUserEditModal
