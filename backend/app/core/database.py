@@ -1807,6 +1807,8 @@ async def run_migrations(conn):
         conn,
         "UPDATE print_archives SET private_material_partial = COALESCE(private_material_partial, 0)",
     )
+    await _safe_execute(conn, "ALTER TABLE library_files ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "UPDATE library_files SET private_job = COALESCE(private_job, 0)")
 
 
 async def seed_notification_templates():

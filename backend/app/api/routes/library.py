@@ -130,59 +130,15 @@ def calculate_file_hash(file_path: Path) -> str:
     return sha256_hash.hexdigest()
 
 
-def _resolve_upload_destination(target_folder: LibraryFolder | None, filename: str) -> tuple[Path, bool]:
-    """Resolve the on-disk destination for an uploaded file.
-
-    Non-external target: returns ``(<library_files_dir>/<uuid><ext>, False)``.
-    Writable external target: writes to ``<external_path>/<filename>``
-    (preserves the real filename so the file is recognisable on the mount);
-    returns ``(dest, True)``. Raises ``HTTPException`` for read-only external
-    folders (403), missing/inaccessible/non-writable external paths (400), and
-    filename collisions on the external mount (409). See #1112 — previously
-    uploads to writable external folders were silently misrouted to the
-    internal library dir.
-    """
-    if target_folder is not None and target_folder.is_external:
-        if target_folder.external_readonly:
-            raise HTTPException(status_code=403, detail="Cannot upload to a read-only external folder")
-        if not target_folder.external_path:
-            raise HTTPException(status_code=400, detail="External folder has no configured path")
-        ext_dir = Path(target_folder.external_path)
-        if not ext_dir.exists() or not ext_dir.is_dir():
-            raise HTTPException(
-                status_code=400,
-                detail=f"External path is not accessible: {target_folder.external_path}",
-            )
-        if not os.access(ext_dir, os.W_OK):
-            raise HTTPException(
-                status_code=400,
-                detail=f"External path is not writable: {target_folder.external_path}",
-            )
-        # Guard against path-traversal via a pathological filename — join then
-        # verify the resolved destination is still inside the external dir.
-        dest = (ext_dir / filename).resolve()
+def _cleanup_library_artifacts(*paths: Path | str | None) -> None:
+    """Best-effort removal for partially written library files and thumbnails."""
+    for path in paths:
+        if not path:
+            continue
         try:
-            dest.relative_to(ext_dir.resolve())
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid filename")
-        if dest.exists():
-            raise HTTPException(
-                status_code=409,
-                detail=f"A file named {filename!r} already exists in the external folder",
-            )
-        return dest, True
-    ext = os.path.splitext(filename)[1].lower()
-    return get_library_files_dir() / f"{uuid.uuid4().hex}{ext}", False
-
-
-def _stored_file_path(abs_path: Path, is_external: bool) -> str:
-    """Produce the value to persist in ``LibraryFile.file_path``.
-
-    External files store the absolute mount path directly (same as scan does),
-    so ``to_absolute_path`` round-trips through its ``is_absolute()`` fast
-    path. Managed files store a path relative to ``base_dir`` for portability.
-    """
-    return str(abs_path) if is_external else to_relative_path(abs_path)
+            Path(path).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Failed to clean up partial library artifact at %s", path)
 
 
 def _clean_3mf_metadata(obj):
@@ -206,7 +162,7 @@ def _clean_3mf_metadata(obj):
     return obj
 
 
-async def save_3mf_bytes_to_library(
+async def save_file_bytes_to_library(
     db: AsyncSession,
     *,
     file_bytes: bytes,
@@ -215,8 +171,9 @@ async def save_3mf_bytes_to_library(
     source_type: str | None = None,
     source_url: str | None = None,
     owner_id: int | None = None,
+    private_job: bool = False,
 ) -> tuple[LibraryFile, bool]:
-    """Save a 3MF blob into the library and return ``(library_file, was_existing)``.
+    """Save a file blob into the library and return ``(library_file, was_existing)``.
 
     Used by routes that receive a 3MF in-process rather than as a multipart
     upload (currently: MakerWorld import; reusable for any future source that
@@ -225,9 +182,9 @@ async def save_3mf_bytes_to_library(
     row is returned and the bytes are NOT re-saved (MakerWorld signed URLs
     change each download, so hash-based dedupe alone would miss re-imports).
 
-    Parses 3MF metadata + thumbnail the same way the multipart upload route
-    does, via :class:`ThreeMFParser`. Paths are stored as relative so the
-    library is portable across installs.
+    Parses metadata and thumbnails using the same rules as the multipart
+    upload route. Paths are stored as relative so the library is portable
+    across installs.
     """
     # Source-URL-based dedupe: return the existing row untouched.
     if source_url:
@@ -241,51 +198,97 @@ async def save_3mf_bytes_to_library(
     ext = os.path.splitext(filename)[1].lower() or ".3mf"
     unique_filename = f"{uuid.uuid4().hex}{ext}"
     file_path = get_library_files_dir() / unique_filename
-    with open(file_path, "wb") as fh:
-        fh.write(file_bytes)
-
-    file_hash = calculate_file_hash(file_path)
-
-    # Extract metadata + thumbnail from the 3MF.
-    metadata: dict | None = None
     thumbnail_path: str | None = None
-    if ext == ".3mf":
-        try:
-            parser = ThreeMFParser(str(file_path))
-            raw_metadata = parser.parse()
-            thumb_data = raw_metadata.get("_thumbnail_data")
-            thumb_ext = raw_metadata.get("_thumbnail_ext", ".png")
-            if thumb_data:
-                thumbs_dir = get_library_thumbnails_dir()
-                thumb_filename = f"{uuid.uuid4().hex}{thumb_ext}"
-                thumb_path = thumbs_dir / thumb_filename
-                with open(thumb_path, "wb") as fh:
-                    fh.write(thumb_data)
-                thumbnail_path = str(thumb_path)
-            metadata = _clean_3mf_metadata(raw_metadata) or None
-        except Exception as exc:
-            # Matches the multipart upload route's behaviour — a bad 3MF should
-            # still land in the library so the user can see / delete it rather
-            # than failing the whole request.
-            logger.warning("Failed to parse 3MF %s: %s", filename, exc)
 
-    library_file = LibraryFile(
-        folder_id=folder_id,
+    try:
+        with open(file_path, "wb") as fh:
+            fh.write(file_bytes)
+
+        file_hash = calculate_file_hash(file_path)
+
+        # Extract metadata + thumbnail using the same rules as multipart upload.
+        metadata: dict | None = None
+        thumbnails_dir = get_library_thumbnails_dir()
+
+        if ext == ".3mf":
+            try:
+                parser = ThreeMFParser(str(file_path))
+                raw_metadata = parser.parse()
+                thumb_data = raw_metadata.get("_thumbnail_data")
+                thumb_ext = raw_metadata.get("_thumbnail_ext", ".png")
+                if thumb_data:
+                    thumb_filename = f"{uuid.uuid4().hex}{thumb_ext}"
+                    thumb_path = thumbnails_dir / thumb_filename
+                    with open(thumb_path, "wb") as fh:
+                        fh.write(thumb_data)
+                    thumbnail_path = str(thumb_path)
+                metadata = _clean_3mf_metadata(raw_metadata) or None
+            except Exception as exc:
+                # Matches the multipart upload route's behaviour — a bad 3MF should
+                # still land in the library so the user can see / delete it rather
+                # than failing the whole request.
+                logger.warning("Failed to parse 3MF %s: %s", filename, exc)
+        elif ext == ".gcode":
+            try:
+                thumb_data = extract_gcode_thumbnail(file_path)
+                if thumb_data:
+                    thumb_path = thumbnails_dir / f"{uuid.uuid4().hex}.png"
+                    with open(thumb_path, "wb") as fh:
+                        fh.write(thumb_data)
+                    thumbnail_path = str(thumb_path)
+            except Exception as exc:
+                logger.warning("Failed to extract G-code thumbnail for %s: %s", filename, exc)
+        elif ext in IMAGE_EXTENSIONS:
+            thumbnail_path = create_image_thumbnail(file_path, thumbnails_dir)
+        elif ext == ".stl":
+            thumbnail_path = generate_stl_thumbnail(file_path, thumbnails_dir)
+
+        library_file = LibraryFile(
+            folder_id=folder_id,
+            filename=filename,
+            file_path=to_relative_path(file_path),
+            file_type=ext[1:] if ext else "unknown",
+            file_size=len(file_bytes),
+            file_hash=file_hash,
+            thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
+            file_metadata=metadata,
+            source_type=source_type,
+            source_url=source_url,
+            created_by_id=owner_id,
+            private_job=private_job,
+        )
+        db.add(library_file)
+        await db.commit()
+        return library_file, False
+    except Exception:
+        await db.rollback()
+        _cleanup_library_artifacts(file_path, thumbnail_path)
+        raise
+
+
+async def save_3mf_bytes_to_library(
+    db: AsyncSession,
+    *,
+    file_bytes: bytes,
+    filename: str,
+    folder_id: int | None = None,
+    source_type: str | None = None,
+    source_url: str | None = None,
+    owner_id: int | None = None,
+    private_job: bool = False,
+) -> tuple[LibraryFile, bool]:
+    """Backward-compatible wrapper for routes that specifically import 3MFs."""
+
+    return await save_file_bytes_to_library(
+        db,
+        file_bytes=file_bytes,
         filename=filename,
-        file_path=to_relative_path(file_path),
-        file_type=ext[1:] if ext else "unknown",
-        file_size=len(file_bytes),
-        file_hash=file_hash,
-        thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
-        file_metadata=metadata,
+        folder_id=folder_id,
         source_type=source_type,
         source_url=source_url,
-        created_by_id=owner_id,
+        owner_id=owner_id,
+        private_job=private_job,
     )
-    db.add(library_file)
-    await db.commit()
-    await db.refresh(library_file)
-    return library_file, False
 
 
 def extract_gcode_thumbnail(file_path: Path) -> bytes | None:
@@ -1304,6 +1307,7 @@ async def list_files(
                 thumbnail_path=f.thumbnail_path,
                 print_count=f.print_count,
                 duplicate_count=hash_counts.get(f.file_hash, 0) if f.file_hash else 0,
+                private_job=bool(f.private_job),
                 created_by_id=f.created_by_id,
                 created_by_username=f.created_by.username if f.created_by else None,
                 created_at=f.created_at,
@@ -1325,6 +1329,7 @@ async def upload_file(
     file: UploadFile = File(...),
     folder_id: int | None = None,
     generate_stl_thumbnails: bool = Query(default=True),
+    private_job: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
 ):
@@ -1339,17 +1344,17 @@ async def upload_file(
         file_type = ext[1:] if ext else "unknown"
 
         # Verify folder exists if specified
-        target_folder = None
         if folder_id is not None:
             folder_result = await db.execute(select(LibraryFolder).where(LibraryFolder.id == folder_id))
             target_folder = folder_result.scalar_one_or_none()
             if not target_folder:
                 raise HTTPException(status_code=404, detail="Folder not found")
+            if target_folder.is_external and target_folder.external_readonly:
+                raise HTTPException(status_code=403, detail="Cannot upload to a read-only external folder")
 
-        # Writable external folders write through to the mount so the file is
-        # visible outside Bambuddy (#1112); everything else lands under the
-        # internal library dir with a UUID-scoped filename.
-        file_path, is_external_upload = _resolve_upload_destination(target_folder, filename)
+        # Generate unique filename for storage
+        unique_filename = f"{uuid.uuid4().hex}{ext}"
+        file_path = get_library_files_dir() / unique_filename
 
         # Save file
         content = await file.read()
@@ -1427,19 +1432,18 @@ async def upload_file(
             if generate_stl_thumbnails:
                 thumbnail_path = generate_stl_thumbnail(file_path, thumbnails_dir)
 
-        # Create database entry (managed files store relative paths for portability;
-        # external files store the absolute mount path — same shape as scan produces)
+        # Create database entry (store relative paths for portability)
         library_file = LibraryFile(
             folder_id=folder_id,
-            is_external=is_external_upload,
             filename=filename,
-            file_path=_stored_file_path(file_path, is_external_upload),
+            file_path=to_relative_path(file_path),
             file_type=file_type,
             file_size=len(content),
             file_hash=file_hash,
             thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
             file_metadata=metadata if metadata else None,
             created_by_id=current_user.id if current_user else None,
+            private_job=private_job,
         )
         db.add(library_file)
         await db.commit()
@@ -1468,6 +1472,7 @@ async def extract_zip_file(
     preserve_structure: bool = Query(default=True),
     create_folder_from_zip: bool = Query(default=False),
     generate_stl_thumbnails: bool = Query(default=True),
+    private_job: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
 ):
@@ -1493,19 +1498,6 @@ async def extract_zip_file(
             raise HTTPException(status_code=404, detail="Target folder not found")
         if target_folder.is_external and target_folder.external_readonly:
             raise HTTPException(status_code=403, detail="Cannot extract ZIP to a read-only external folder")
-        if target_folder.is_external:
-            # Writable external folders aren't supported by extract-zip because the
-            # nested-subfolder creation path would need to mkdir on the mount and
-            # create matching is_external=True LibraryFolder rows — a separate
-            # design. Direct the user at Scan, which already handles that shape
-            # (#1112).
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Cannot extract ZIP directly into an external folder. "
-                    "Extract the ZIP on the external mount and run 'Scan External Folder' instead."
-                ),
-            )
 
     # Save ZIP to temp file
     try:
@@ -1693,6 +1685,7 @@ async def extract_zip_file(
                         thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
                         file_metadata=metadata if metadata else None,
                         created_by_id=current_user.id if current_user else None,
+                        private_job=private_job,
                     )
                     db.add(library_file)
                     await db.flush()
@@ -1924,6 +1917,7 @@ async def add_files_to_queue(
                 library_file_id=file_id,
                 position=max_position,
                 status="pending",
+                private_job=lib_file.private_job,
             )
             db.add(queue_item)
 
@@ -2412,6 +2406,9 @@ async def print_library_file(
             detail="Not a sliced file. Only .gcode or .gcode.3mf files can be printed.",
         )
 
+    if body.private_job is None:
+        body.private_job = lib_file.private_job
+
     # Get the full file path
     file_path = Path(app_settings.base_dir) / lib_file.file_path
 
@@ -2553,6 +2550,7 @@ async def get_file(
         print_count=file.print_count,
         last_printed_at=file.last_printed_at,
         notes=file.notes,
+        private_job=bool(file.private_job),
         duplicates=duplicates if duplicates else None,
         duplicate_count=duplicate_count,
         created_by_id=file.created_by_id,
@@ -2631,6 +2629,9 @@ async def update_file(
         metadata["slicer_user"] = data.slicer_user.strip() if data.slicer_user else None
         metadata["slicer_user_email"] = data.slicer_user_email.strip() if data.slicer_user_email else None
         file.file_metadata = metadata
+
+    if data.private_job is not None:
+        file.private_job = data.private_job
 
     await db.commit()
     await db.refresh(file)
