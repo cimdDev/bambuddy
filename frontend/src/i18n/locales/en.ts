@@ -1045,7 +1045,7 @@ export default {
     accounting: {
       privateJob: 'Private job',
       privateMaterial: 'Material',
-      companyMaterial: 'Company material',
+      companyMaterial: 'PSI material',
       privateMaterialPartial: 'Private material partial',
       privateMaterialFull: 'Private material full',
       totalCost: 'Cost: {{amount}}',

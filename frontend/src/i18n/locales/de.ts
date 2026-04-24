@@ -1043,10 +1043,10 @@ export default {
       gcodeInjection: 'G-Code',
     },
     accounting: {
-      privateJob: 'Privatdruck',
+      privateJob: 'Privater Druck',
       privateMaterial: 'Material',
-      companyMaterial: 'Firmenmaterial',
-      privateMaterialPartial: 'Teilweise Privatmaterial',
+      companyMaterial: 'PSI material',
+      privateMaterialPartial: 'Teilweise Privatesmaterial',
       privateMaterialFull: 'Voll Privatmaterial',
       totalCost: 'Kosten: {{amount}}',
     },
