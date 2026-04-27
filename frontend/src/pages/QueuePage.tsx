@@ -367,6 +367,9 @@ function SortableQueueItem({
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
   const canEditComment = !!onUpdateComment && canModify('queue', 'update', item.created_by_id);
+  const hasComment = Boolean(item.comment?.trim());
+  // Always show comment editor when there's a comment or user can edit — regardless of print state
+  const showCommentEditor = hasComment || canEditComment;
 
   const isMobileSelectable = isPending && onToggleSelect;
 
@@ -398,8 +401,7 @@ function SortableQueueItem({
         <div className="sm:hidden absolute left-0 top-3 bottom-3 w-1 rounded-full bg-bambu-green" />
       )}
 
-      <div className="flex items-start sm:items-center gap-2 sm:gap-4 p-3 sm:p-4">
-        {/* Mobile selection indicator — left accent bar only, no tick */}
+      <div className="flex items-start gap-2 sm:gap-4 p-3 sm:p-4">
 
         {/* Selection checkbox for pending items - hidden on mobile, tap card instead */}
         {isPending && onToggleSelect && (
@@ -408,7 +410,7 @@ function SortableQueueItem({
               e.stopPropagation();
               onToggleSelect();
             }}
-            className={`hidden sm:flex items-center justify-center w-6 h-6 rounded border transition-colors shrink-0 ${
+            className={`hidden sm:flex items-center justify-center w-6 h-6 rounded border transition-colors shrink-0 mt-1 ${
               isSelected
                 ? 'bg-bambu-green border-bambu-green text-white'
                 : 'border-white/30 bg-black/30 hover:border-bambu-green/50'
@@ -423,12 +425,12 @@ function SortableQueueItem({
           <div
             {...attributes}
             {...listeners}
-            className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-bambu-dark cursor-grab active:cursor-grabbing hover:bg-bambu-dark-tertiary transition-colors touch-manipulation shrink-0"
+            className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-bambu-dark cursor-grab active:cursor-grabbing hover:bg-bambu-dark-tertiary transition-colors touch-manipulation shrink-0 mt-0.5"
           >
             <GripVertical className="w-4 h-4 text-bambu-gray" />
           </div>
         ) : position !== undefined ? (
-          <div className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-bambu-dark text-bambu-gray text-sm font-medium shrink-0">
+          <div className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-bambu-dark text-bambu-gray text-sm font-medium shrink-0 mt-0.5">
             #{position}
           </div>
         ) : (
@@ -436,7 +438,7 @@ function SortableQueueItem({
         )}
 
         {/* Thumbnail - use plate-specific thumbnail if plate_id is set */}
-        <div className="w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 bg-bambu-dark rounded-lg overflow-hidden">
+        <div className="w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 bg-bambu-dark rounded-lg overflow-hidden mt-0.5">
           {item.archive_thumbnail ? (
             <img
               src={
@@ -471,39 +473,41 @@ function SortableQueueItem({
               {item.archive_name || item.library_file_name || `File #${item.archive_id || item.library_file_id}`}
               {(platesData?.is_multi_plate ?? false) && item.plate_id !== undefined && item.plate_id !== null && ` • ${plates.find(plate => plate.index === item.plate_id)?.name || t('queue.plateNumber', { index: item.plate_id })}`}
             </p>
-            {item.archive_id ? (
-              <Link
-                to={`/archives?highlight=${item.archive_id}`}
-                className="text-bambu-gray hover:text-bambu-green transition-colors flex-shrink-0"
-                title={t('queue.viewArchive')}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-            ) : item.library_file_id ? (
-              <Link
-                to={`/library?highlight=${item.library_file_id}`}
-                className="text-bambu-gray hover:text-bambu-green transition-colors flex-shrink-0"
-                title={t('queue.viewInFileManager')}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-            ) : null}
-            {item.batch_name && (
-              <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] sm:text-xs bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
-                {item.batch_name}
-              </span>
-            )}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {item.archive_id ? (
+                <Link
+                  to={`/archives?highlight=${item.archive_id}`}
+                  className="text-bambu-gray hover:text-bambu-green transition-colors"
+                  title={t('queue.viewArchive')}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              ) : item.library_file_id ? (
+                <Link
+                  to={`/library?highlight=${item.library_file_id}`}
+                  className="text-bambu-gray hover:text-bambu-green transition-colors"
+                  title={t('queue.viewInFileManager')}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              ) : null}
+              {item.batch_name && (
+                <span className="px-1.5 py-0.5 text-[10px] sm:text-xs bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
+                  {item.batch_name}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-bambu-gray">
             <span className={`flex items-center gap-1 sm:gap-1.5 ${item.printer_id === null && !item.target_model ? 'text-orange-400' : ''} ${item.target_model && !item.printer_id ? 'text-blue-400' : ''}`}>
               <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               <span className="truncate max-w-[120px] sm:max-w-none">
-              {item.target_model && !item.printer_id
-                ? `${t('queue.filter.any')} ${item.target_model}${item.target_location ? ` @ ${item.target_location}` : ''}${item.required_filament_types?.length ? ` (${item.required_filament_types.join(', ')})` : ''}`
-                : item.printer_id === null
-                  ? t('queue.filter.unassigned')
-                  : (item.printer_name || `${t('common.printer')} #${item.printer_id}`)}
+                {item.target_model && !item.printer_id
+                  ? `${t('queue.filter.any')} ${item.target_model}${item.target_location ? ` @ ${item.target_location}` : ''}${item.required_filament_types?.length ? ` (${item.required_filament_types.join(', ')})` : ''}`
+                  : item.printer_id === null
+                    ? t('queue.filter.unassigned')
+                    : (item.printer_name || `${t('common.printer')} #${item.printer_id}`)}
               </span>
             </span>
             {item.print_time_seconds && (
@@ -536,7 +540,6 @@ function SortableQueueItem({
             )}
           </div>
 
-          {/* Options badges */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2">
             {item.manual_start && (
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-full border border-purple-500/20 flex items-center gap-1">
@@ -563,18 +566,26 @@ function SortableQueueItem({
             )}
           </div>
 
-          <QueueItemCommentEditor
-            comment={item.comment}
-            canEdit={canEditComment}
-            onSave={onUpdateComment}
-            label={t('queue.comment.label')}
-            addLabel={t('queue.comment.add')}
-            editLabel={t('queue.comment.edit')}
-            placeholder={t('queue.comment.placeholder')}
-            savingLabel={t('common.saving')}
-          />
+          {/* Comment editor — rendered here, above progress bar, for all item states */}
+          {showCommentEditor && (
+            <div className="mt-2 sm:mt-2.5" onClick={(e) => e.stopPropagation()}>
+              <QueueItemCommentEditor
+                comment={item.comment}
+                canEdit={canEditComment}
+                onSave={onUpdateComment}
+                label={t('queue.comment.label')}
+                addLabel={t('queue.comment.add')}
+                placeholder={t('queue.comment.placeholder')}
+                savingLabel={t('common.saving')}
+                compact
+                noMargin
+                bare
+                rightAlignAddButton
+              />
+            </div>
+          )}
 
-          {/* Progress bar for printing items - TODO: integrate with WebSocket */}
+          {/* Progress bar for printing items */}
           {isPrinting && status && (() => {
             // Gate progress/remaining/layer on printer actually running this print.
             // Between dispatch and RUNNING transition (H2D/P1 MQTT lag), status.progress
@@ -619,7 +630,6 @@ function SortableQueueItem({
             );
           })()}
 
-          {/* Waiting reason for model-based assignments */}
           {item.waiting_reason && item.status === 'pending' && (
             <p className="text-[10px] sm:text-xs text-purple-400 mt-1.5 sm:mt-2 flex items-start gap-1">
               <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
@@ -637,8 +647,6 @@ function SortableQueueItem({
               <span>{t('queue.filamentShort.rowBadge')}</span>
             </p>
           )}
-
-          {/* Error message */}
           {item.error_message && (
             <p className="text-[10px] sm:text-xs text-red-400 mt-1.5 sm:mt-2 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
@@ -647,11 +655,11 @@ function SortableQueueItem({
           )}
         </div>
 
-        {/* Status badge + Actions */}
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <StatusBadge status={item.status} waitingReason={item.waiting_reason} printerState={printerState} t={t} />
-
+        {/* Status badge + Actions — self-start keeps it top-aligned regardless of content height */}
+        <div className="flex flex-col items-end gap-2 shrink-0 self-start" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-0.5 sm:gap-1">
+            <StatusBadge status={item.status} waitingReason={item.waiting_reason} printerState={printerState} t={t} />
+
             {isPrinting && (
               <Button
                 variant="ghost"
