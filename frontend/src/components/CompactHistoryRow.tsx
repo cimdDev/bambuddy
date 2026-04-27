@@ -56,49 +56,64 @@ export function CompactHistoryRow({
 
   return (
     <div className={`rounded-lg border border-bambu-dark-tertiary border-l-[3px] bg-bambu-dark-secondary px-3 py-2 ${config.border}`}>
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Status icon */}
-        <StatusIcon className={`w-4 h-4 shrink-0 ${config.color}`} />
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,42%)_auto] md:items-end">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <StatusIcon className={`w-4 h-4 shrink-0 ${config.color}`} />
 
-        {/* Thumbnail */}
-        <div className="w-8 h-8 shrink-0 bg-bambu-dark rounded overflow-hidden">
-          {thumbnailUrl ? (
-            <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-bambu-gray">
-              <Layers className="w-4 h-4" />
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-white">
-            {displayName}
-          </span>
-
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            {item.printer_name && (
-              <span className="hidden sm:flex items-center gap-1 text-xs text-bambu-gray shrink-0">
-                <Printer className="w-3 h-3" />
-                <span className="truncate max-w-[100px]">{item.printer_name}</span>
-              </span>
+          <div className="w-8 h-8 shrink-0 bg-bambu-dark rounded overflow-hidden">
+            {thumbnailUrl ? (
+              <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-bambu-gray">
+                <Layers className="w-4 h-4" />
+              </div>
             )}
+          </div>
 
-            {item.print_time_seconds && (
-              <span className="hidden sm:flex items-center gap-1 text-xs text-bambu-gray shrink-0">
-                <Timer className="w-3 h-3" />
-                {formatDuration(item.print_time_seconds)}
-              </span>
-            )}
-
-            <span className="text-xs text-bambu-gray shrink-0">
-              {formatRelativeTime(completedTime, timeFormat, t)}
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-white">
+              {displayName}
             </span>
+
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {item.printer_name && (
+                <span className="hidden sm:flex items-center gap-1 text-xs text-bambu-gray shrink-0">
+                  <Printer className="w-3 h-3" />
+                  <span className="truncate max-w-[100px]">{item.printer_name}</span>
+                </span>
+              )}
+
+              {item.print_time_seconds && (
+                <span className="hidden sm:flex items-center gap-1 text-xs text-bambu-gray shrink-0">
+                  <Timer className="w-3 h-3" />
+                  {formatDuration(item.print_time_seconds)}
+                </span>
+              )}
+
+              <span className="text-xs text-bambu-gray shrink-0">
+                {formatRelativeTime(completedTime, timeFormat, t)}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="min-w-0 md:self-end">
+          <QueueItemCommentEditor
+            comment={item.comment}
+            canEdit={canEditComment}
+            onSave={onUpdateComment}
+            label={t('queue.comment.label')}
+            addLabel={t('queue.comment.add')}
+            placeholder={t('queue.comment.placeholder')}
+            savingLabel={t('common.saving')}
+            compact
+            noMargin
+            bare
+            rightAlignAddButton
+          />
+        </div>
+
+        <div className="flex items-center gap-0.5 shrink-0 md:self-end">
           <Button
             variant="ghost"
             size="sm"
@@ -121,18 +136,6 @@ export function CompactHistoryRow({
           </Button>
         </div>
       </div>
-
-      <QueueItemCommentEditor
-        comment={item.comment}
-        canEdit={canEditComment}
-        onSave={onUpdateComment}
-        label={t('queue.comment.label')}
-        addLabel={t('queue.comment.add')}
-        editLabel={t('queue.comment.edit')}
-        placeholder={t('queue.comment.placeholder')}
-        savingLabel={t('common.saving')}
-        compact
-      />
     </div>
   );
 }
