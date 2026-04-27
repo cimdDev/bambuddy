@@ -104,6 +104,7 @@ import { getPrinterImage, getWifiStrength, filterCompatibleQueueItems } from '..
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
 import { ConnectionDiagnosticModal, DiagnosticChecklist } from '../components/ConnectionDiagnostic';
+import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
@@ -1794,6 +1795,7 @@ function PrinterCard({
     queryFn: () => api.getQueue(printer.id, 'printing'),
     enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
+  const activeQueuePrintItem = printingQueueItems?.[0] ?? null;
 
   const currentQueueItem = printingQueueItems?.[0];
   const archiveId = (() => {
@@ -1833,6 +1835,12 @@ function PrinterCard({
   const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const canEditCurrentQueueAccounting = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
+
+  // Combine both sources: queue item user takes precedence, then reprint user
+  const currentPrintUser = activeQueuePrintItem?.created_by_username || reprintUser?.username;
+  const canEditCurrentPrintComment = !!activeQueuePrintItem && canModify('queue', 'update', activeQueuePrintItem.created_by_id);
+  const hasCurrentPrintComment = Boolean(activeQueuePrintItem?.comment?.trim());
+  const showCurrentPrintComment = !!activeQueuePrintItem && (hasCurrentPrintComment || canEditCurrentPrintComment);
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -2009,6 +2017,18 @@ function PrinterCard({
       queryClient.invalidateQueries({ queryKey: ['queue', printer.id] });
     },
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToSendCommand'), 'error'),
+  });
+
+  const updateQueueCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'printing'] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdate'), 'error'),
   });
 
   // Chamber light mutation with optimistic update
@@ -2895,16 +2915,35 @@ function PrinterCard({
             {viewMode === 'compact' ? (
               <div className="mt-2">
                 {(status.state === 'RUNNING' || status.state === 'PAUSE') ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-1.5">
-                      <div
-                        className={`${status.state === 'PAUSE' ? 'bg-status-warning' : 'bg-bambu-green'} h-1.5 rounded-full transition-all`}
-                        style={{ width: `${status.progress || 0}%` }}
+                  <div className="space-y-1.5">
+                    {showCurrentPrintComment && activeQueuePrintItem && (
+                      <QueueItemCommentEditor
+                        comment={activeQueuePrintItem.comment}
+                        canEdit={canEditCurrentPrintComment}
+                        onSave={async (comment) => {
+                          await updateQueueCommentMutation.mutateAsync({ itemId: activeQueuePrintItem.id, comment });
+                        }}
+                        label={t('queue.comment.label')}
+                        addLabel={t('queue.comment.add')}
+                        placeholder={t('queue.comment.placeholder')}
+                        savingLabel={t('common.saving')}
+                        compact
+                        noMargin
+                        bare
+                        rightAlignAddButton
                       />
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-1.5">
-                      <span className="text-xs text-white">{Math.round(status.progress || 0)}%</span>
-                      {plateStatusPill}
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-1.5">
+                        <div
+                          className={`${status.state === 'PAUSE' ? 'bg-status-warning' : 'bg-bambu-green'} h-1.5 rounded-full transition-all`}
+                          style={{ width: `${status.progress || 0}%` }}
+                        />
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-1.5">
+                        <span className="text-xs text-white">{Math.round(status.progress || 0)}%</span>
+                        {plateStatusPill}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -3033,7 +3072,26 @@ function PrinterCard({
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-sm">
+                          {showCurrentPrintComment && activeQueuePrintItem && (
+                            <div className="mt-2">
+                              <QueueItemCommentEditor
+                                comment={activeQueuePrintItem.comment}
+                                canEdit={canEditCurrentPrintComment}
+                                onSave={async (comment) => {
+                                  await updateQueueCommentMutation.mutateAsync({ itemId: activeQueuePrintItem.id, comment });
+                                }}
+                                label={t('queue.comment.label')}
+                                addLabel={t('queue.comment.add')}
+                                placeholder={t('queue.comment.placeholder')}
+                                savingLabel={t('common.saving')}
+                                compact
+                                noMargin
+                                bare
+                                rightAlignAddButton
+                              />
+                            </div>
+                          )}
+                          <div className={`flex items-center justify-between text-sm ${showCurrentPrintComment ? 'mt-2' : ''}`}>
                             <div className="flex-1 bg-bambu-dark-tertiary rounded-full h-2 mr-3">
                               <div
                                 className={`${status.state === 'PAUSE' ? 'bg-status-warning' : 'bg-bambu-green'} h-2 rounded-full transition-all`}
