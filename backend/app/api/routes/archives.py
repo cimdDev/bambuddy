@@ -771,12 +771,10 @@ async def get_archive_stats(
 
         cost_value = float(cost or 0)
         material_weight[bucket] += float(filament_used_grams or 0)
-        # Fully private material is not company spend. Partial private stays in
-        # its own bucket for reporting, while private jobs using company
-        # material still count toward PSI/company spend.
-        if bucket != "private":
-            material_cost[bucket] += cost_value
-            total_cost += cost_value
+        # Track all material cost buckets (PSI/company, private, and partial)
+        # so the stats split always reflects the full archive dataset.
+        material_cost[bucket] += cost_value
+        total_cost += cost_value
 
     def _percent(part: float, total: float) -> float:
         if total <= 0:
