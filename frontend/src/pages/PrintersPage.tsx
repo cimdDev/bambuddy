@@ -45,7 +45,6 @@ import {
   CheckCircle,
   CheckSquare,
   XCircle,
-  User,
   Home,
   Printer as PrinterIcon,
   Info,
@@ -1672,22 +1671,13 @@ function PrinterCard({
     return filterCompatibleQueueItems(queueItems, loadedFilamentTypes, loadedFilaments).length;
   }, [queueItems, loadedFilamentTypes, loadedFilaments]);
 
-  // Fetch currently printing queue item to show who started it (Issue #206)
+  // Fetch currently printing queue item
   const { data: printingQueueItems } = useQuery({
     queryKey: ['queue', printer.id, 'printing'],
     queryFn: () => api.getQueue(printer.id, 'printing'),
     enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
-  // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
-  const { data: reprintUser } = useQuery({
-    queryKey: ['currentPrintUser', printer.id],
-    queryFn: () => api.getCurrentPrintUser(printer.id),
-    enabled: status?.state === 'RUNNING',
-  });
-
-  // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
   const currentQueueItem = printingQueueItems?.[0];
   const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
@@ -2822,12 +2812,6 @@ function PrinterCard({
                               <span className="flex items-center gap-1">
                                 <Layers className="w-3 h-3" />
                                 {status.layer_num}/{status.total_layers}
-                              </span>
-                            )}
-                            {currentPrintUser && (
-                              <span className="flex items-center gap-1" title={`Started by ${currentPrintUser}`}>
-                                <User className="w-3 h-3" />
-                                {currentPrintUser}
                               </span>
                             )}
                             {currentQueueItem && (
