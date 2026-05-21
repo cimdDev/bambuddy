@@ -1924,6 +1924,7 @@ export interface PrintQueueItemUpdate {
   use_ams?: boolean;
   // Auto-print G-code injection
   gcode_injection?: boolean;
+  comment?: string | null;
   private_job?: boolean | null;
   private_material?: boolean | null;
   private_material_partial?: boolean | null;
