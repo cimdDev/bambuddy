@@ -588,9 +588,9 @@ export interface Archive {
   tags: string | null;
   notes: string | null;
   cost: number | null;
-  private_job: boolean;
-  private_material: boolean;
-  private_material_partial: boolean;
+  private_job: boolean | null;
+  private_material: boolean | null;
+  private_material_partial: boolean | null;
   photos: string[] | null;
   failure_reason: string | null;
   quantity: number;
