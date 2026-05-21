@@ -1830,8 +1830,8 @@ export interface PrintQueueItem {
   error_message: string | null;
   created_at: string;
   private_job?: boolean | null;
-  private_material?: boolean;
-  private_material_partial?: boolean;
+  private_material?: boolean | null;
+  private_material_partial?: boolean | null;
   archive_name?: string | null;
   archive_thumbnail?: string | null;
   // True when the linked archive has been soft-deleted; archive_name /
@@ -1899,8 +1899,8 @@ export interface PrintQueueItemCreate {
   // Project to associate the resulting archive with
   project_id?: number;
   private_job?: boolean | null;
-  private_material?: boolean;
-  private_material_partial?: boolean;
+  private_material?: boolean | null;
+  private_material_partial?: boolean | null;
 }
 
 export interface PrintQueueItemUpdate {
