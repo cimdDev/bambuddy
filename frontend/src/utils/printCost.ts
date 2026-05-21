@@ -1,16 +1,13 @@
 export function estimatePrintCost(
   filamentUsedGrams: number | null | undefined,
-  costPerKg: number | null | undefined,
+  defaultFilamentCostPerKg: number | null | undefined
 ): number | null {
-  if (filamentUsedGrams == null || filamentUsedGrams <= 0) return null;
-  if (costPerKg == null || costPerKg <= 0) return null;
-  return Math.round(((filamentUsedGrams / 1000) * costPerKg) * 100) / 100;
+  if (filamentUsedGrams == null || defaultFilamentCostPerKg == null) return null;
+  if (!Number.isFinite(filamentUsedGrams) || !Number.isFinite(defaultFilamentCostPerKg)) return null;
+  if (filamentUsedGrams < 0 || defaultFilamentCostPerKg < 0) return null;
+  return (filamentUsedGrams / 1000) * defaultFilamentCostPerKg;
 }
 
-export function formatCurrencyAmount(
-  amount: number | null | undefined,
-  currencySymbol: string,
-): string | null {
-  if (amount == null) return null;
+export function formatCurrencyAmount(amount: number, currencySymbol: string): string {
   return `${currencySymbol}${amount.toFixed(2)}`;
 }
