@@ -1041,7 +1041,6 @@ export default {
       requiresPrevious: 'Erfordert vorherigen Erfolg',
       autoPowerOff: 'Automatisch ausschalten',
       gcodeInjection: 'G-Code',
-      gcodeInjection: 'G-Code',
       slicerUserMissingWarning: 'Userbadge fehlt',
     },
     editSlicerUser: {
