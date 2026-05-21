@@ -1364,7 +1364,6 @@ async def update_archive(
         if archive.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own archives")
 
-<<<<<<< HEAD
     updates = update_data.model_dump(exclude_unset=True)
     if "slicer_user" in updates:
         updates["slicer_user"] = updates["slicer_user"].strip() if updates["slicer_user"] else None
