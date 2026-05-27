@@ -54,7 +54,6 @@ import {
   CheckCircle,
   CheckSquare,
   XCircle,
-  User,
   Home,
   Printer as PrinterIcon,
   Info,
@@ -1789,15 +1788,6 @@ function PrinterCard({
   });
   const activeQueuePrintItem = printingQueueItems?.[0] ?? null;
 
-  // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
-  const { data: reprintUser } = useQuery({
-    queryKey: ['currentPrintUser', printer.id],
-    queryFn: () => api.getCurrentPrintUser(printer.id),
-    enabled: status?.state === 'RUNNING',
-  });
-
-  // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = activeQueuePrintItem?.created_by_username || reprintUser?.username;
   const canEditCurrentPrintComment = !!activeQueuePrintItem && canModify('queue', 'update', activeQueuePrintItem.created_by_id);
   const hasCurrentPrintComment = Boolean(activeQueuePrintItem?.comment?.trim());
   const showCurrentPrintComment = !!activeQueuePrintItem && (hasCurrentPrintComment || canEditCurrentPrintComment);
@@ -3013,12 +3003,6 @@ function PrinterCard({
                               <span className="flex items-center gap-1">
                                 <Layers className="w-3 h-3" />
                                 {status.layer_num}/{status.total_layers}
-                              </span>
-                            )}
-                            {currentPrintUser && (
-                              <span className="flex items-center gap-1" title={`Started by ${currentPrintUser}`}>
-                                <User className="w-3 h-3" />
-                                {currentPrintUser}
                               </span>
                             )}
                           </div>
