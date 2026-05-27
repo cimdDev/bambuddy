@@ -72,9 +72,9 @@ import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
 
 type QueueAccountingPatch = {
-  private_job?: boolean;
-  private_material?: boolean;
-  private_material_partial?: boolean;
+  private_job?: boolean | null;
+  private_material?: boolean | null;
+  private_material_partial?: boolean | null;
 };
 
 type PrivateMaterialUsage = 'company' | 'private_partial' | 'private_full';
@@ -595,8 +595,8 @@ function SortableQueueItem({
                   const nextPrivateJob = !item.private_job;
                   void onUpdateAccounting?.({
                     private_job: nextPrivateJob,
-                    private_material: nextPrivateJob ? item.private_material : false,
-                    private_material_partial: nextPrivateJob ? item.private_material_partial : false,
+                    private_material: nextPrivateJob ? (item.private_material ?? false) : false,
+                    private_material_partial: nextPrivateJob ? (item.private_material_partial ?? false) : false,
                   });
                 }}
                 className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
