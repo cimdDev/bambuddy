@@ -1835,9 +1835,6 @@ function PrinterCard({
   const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const canEditCurrentQueueAccounting = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
-
-  // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = activeQueuePrintItem?.created_by_username || reprintUser?.username;
   const canEditCurrentPrintComment = !!activeQueuePrintItem && canModify('queue', 'update', activeQueuePrintItem.created_by_id);
   const hasCurrentPrintComment = Boolean(activeQueuePrintItem?.comment?.trim());
   const showCurrentPrintComment = !!activeQueuePrintItem && (hasCurrentPrintComment || canEditCurrentPrintComment);
@@ -3118,6 +3115,7 @@ function PrinterCard({
                                 {status.layer_num}/{status.total_layers}
                               </span>
                             )}
+<<<<<<< HEAD
                             {currentQueueItem && (
                               <button
                                 type="button"
@@ -3183,12 +3181,11 @@ function PrinterCard({
                             {currentQueueCost != null && (
                               <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-bambu-gray ml-auto">
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
-                                <Coins className="w-3 h-3" />
-                                {formatCurrencyAmount(currentQueueCost, currencySymbol)}
-                              </span>
+                                  <Coins className="w-3 h-3" />
+                                  {formatCurrencyAmount(currentQueueCost, currencySymbol)}
+                                </span>
                               </div>
                             )}
-                          )}
                           </div>
                           {showSlicerUserEdit && currentSlicerUserEditTarget && (
                             <SlicerUserEditModal
