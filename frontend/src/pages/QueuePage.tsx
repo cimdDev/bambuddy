@@ -392,7 +392,6 @@ function SortableQueueItem({
     : item.library_file_id
       ? canModify('library', 'update', item.created_by_id)
       : false;
-  const canEditAccounting = isPending && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
   const canEditAccountingWhilePrinting = (isPending || isPrinting) && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
   const privateMaterialUsage: PrivateMaterialUsage = item.private_material
     ? 'private_full'
@@ -732,7 +731,6 @@ function SortableQueueItem({
                 onSave={onUpdateComment}
                 label={t('queue.comment.label')}
                 addLabel={t('queue.comment.add')}
-                editLabel={t('queue.comment.edit')}
                 placeholder={t('queue.comment.placeholder')}
                 savingLabel={t('common.saving')}
                 compact

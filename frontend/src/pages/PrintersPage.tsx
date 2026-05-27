@@ -3115,7 +3115,6 @@ function PrinterCard({
                                 {status.layer_num}/{status.total_layers}
                               </span>
                             )}
-<<<<<<< HEAD
                             {currentQueueItem && (
                               <button
                                 type="button"
