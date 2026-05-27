@@ -41,9 +41,9 @@ import { FilamentTrends } from '../components/FilamentTrends';
 import { Dashboard, type DashboardWidget } from '../components/Dashboard';
 import { getCurrencySymbol } from '../utils/currency';
 import { formatWeight } from '../utils/weight';
-import { parseUTCDate, formatDuration } from '../utils/date';
+import { parseUTCDate, formatDuration, localDateKey } from '../utils/date';
 import { MetricToggle, type Metric } from '../components/MetricToggle';
-import { buildPrinterBreakdown, getPrinterMetricValue, getPrivateJobCostSummary } from './statsPageUtils';
+import { buildPrinterBreakdown, getPrinterMetricValue } from './statsPageUtils';
 
 // Timeframe types and helpers
 type TimeframePreset = 'today' | 'this-week' | 'this-month' | 'last-7' | 'last-30' | 'last-90' | 'this-year' | 'all-time' | 'custom';
@@ -135,11 +135,9 @@ function materialBucket(archive: ArchiveSlim): 'psi' | 'private' | 'partial' {
 // Widget Components
 function QuickStatsWidget({
   stats,
-  archives,
   currency,
 }: {
   stats: ArchiveStats | undefined;
-  archives: ArchiveSlim[];
   currency: string;
 }) {
   const { t } = useTranslation();
@@ -149,9 +147,8 @@ function QuickStatsWidget({
   const privatePrints = stats?.accounting?.jobs?.private || 0;
   const privateWeight = stats?.accounting?.material_weight_grams?.private || 0;
   const partialWeight = stats?.accounting?.material_weight_grams?.partial || 0;
-  const privateJobCostSummary = useMemo(() => getPrivateJobCostSummary(archives), [archives]);
-  const privateCost = privateJobCostSummary.companyMaterial + privateJobCostSummary.partialMaterial;
-  const partialCost = privateJobCostSummary.partialMaterial;
+  const privateCost = stats?.accounting?.material_cost?.private || 0;
+  const partialCost = stats?.accounting?.material_cost?.partial || 0;
 
   const items = [
     {
@@ -539,8 +536,7 @@ function HourlyHeatmap({ archives, dateFrom, dateTo }: { archives: ArchiveSlim[]
       const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       const k = `${dayKey}-${date.getHours()}`;
       const next = counts[k] || { psi: 0, private: 0, partial: 0, total: 0 };
-      if (a.private_material) next.private += 1;
-      else if (a.private_material_partial) next.partial += 1;
+      if (isPrivateJob(a)) next.private += 1;
       else next.psi += 1;
       next.total += 1;
       counts[k] = next;
@@ -556,7 +552,6 @@ function HourlyHeatmap({ archives, dateFrom, dateTo }: { archives: ArchiveSlim[]
     const dominant = [
       { key: 'psi', value: cell.psi, color: 'bg-bambu-green' },
       { key: 'private', value: cell.private, color: 'bg-blue-500' },
-      { key: 'partial', value: cell.partial, color: 'bg-amber-500' },
     ].sort((a, b) => b.value - a.value)[0];
     const intensity = count / maxCount;
     if (intensity <= 0.25) return `${dominant.color}/30`;
@@ -626,7 +621,6 @@ function HourlyHeatmap({ archives, dateFrom, dateTo }: { archives: ArchiveSlim[]
       <div className="flex items-center gap-3 mt-2 text-bambu-gray text-xs">
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-bambu-green" />{t('stats.psiLabel')}</span>
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-500" />{t('stats.privateLabel')}</span>
-        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500" />{t('stats.partialLabel')}</span>
       </div>
     </div>
   );
@@ -647,11 +641,10 @@ function PrintActivityWidget({
   const dayBucketCounts = useMemo(() => {
     const counts: Record<string, { psi: number; private: number; partial: number }> = {};
     archives.forEach((a) => {
-      const day = (a.created_at || '').split('T')[0];
+      const day = localDateKey(a.created_at);
       if (!day) return;
       if (!counts[day]) counts[day] = { psi: 0, private: 0, partial: 0 };
-      if (a.private_material) counts[day].private += 1;
-      else if (a.private_material_partial) counts[day].partial += 1;
+      if (isPrivateJob(a)) counts[day].private += 1;
       else counts[day].psi += 1;
     });
     return counts;
@@ -1128,10 +1121,115 @@ function RecordsWidget({ archives, currency }: { archives: ArchiveSlim[]; curren
   );
 }
 
+function UserBadgeStatsWidget({ archives }: { archives: ArchiveSlim[] }) {
+  const { t } = useTranslation();
+
+  const userRows = useMemo(() => {
+    const rows = new Map<string, {
+      key: string;
+      label: string;
+      prints: number;
+      grams: number;
+      hours: number;
+      psiPrints: number;
+      privatePrints: number;
+    }>();
+
+    archives.forEach((archive) => {
+      const key =
+        archive.slicer_user?.trim()
+        || archive.slicer_user_email?.trim()
+        || 'missing-badge';
+      const label =
+        archive.slicer_user?.trim()
+        || archive.slicer_user_email?.trim()
+        || t('stats.missingUserBadge', 'Missing Badge');
+      const row = rows.get(key) || {
+        key,
+        label,
+        prints: 0,
+        grams: 0,
+        hours: 0,
+        psiPrints: 0,
+        privatePrints: 0,
+      };
+
+      row.prints += 1;
+      row.grams += archive.filament_used_grams || 0;
+      row.hours += (archive.actual_time_seconds || archive.print_time_seconds || 0) / 3600;
+      if (archive.private_job) row.privatePrints += 1;
+      else row.psiPrints += 1;
+      rows.set(key, row);
+    });
+
+    return Array.from(rows.values())
+      .sort((a, b) => {
+        if (b.prints !== a.prints) return b.prints - a.prints;
+        if (b.grams !== a.grams) return b.grams - a.grams;
+        return a.label.localeCompare(b.label);
+      })
+      .map((row) => {
+        const ratioTotal = row.psiPrints + row.privatePrints;
+        const psiPercent = ratioTotal > 0 ? (row.psiPrints / ratioTotal) * 100 : 0;
+        const privatePercent = ratioTotal > 0 ? (row.privatePrints / ratioTotal) * 100 : 0;
+        return {
+          ...row,
+          psiPercent: Math.round(psiPercent),
+          privatePercent: Math.round(privatePercent),
+        };
+      });
+  }, [archives, t]);
+
+  if (userRows.length === 0) {
+    return <p className="text-bambu-gray text-center py-4">{t('stats.noArchiveData')}</p>;
+  }
+
+  return (
+    <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
+      {userRows.map((row) => (
+        <div key={row.key} className="bg-bambu-dark rounded-lg px-4 py-3">
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <span className="inline-flex items-center rounded-full bg-bambu-dark-secondary px-3 py-1 text-sm font-medium text-white shrink-0">
+              {row.label}
+            </span>
+            <div className="grid grid-cols-3 gap-4 flex-1 min-w-0 text-right text-sm">
+              <div>
+                <p className="text-bambu-gray">{t('stats.userPrintCount', 'Prints')}</p>
+                <p className="text-white font-semibold">{row.prints}</p>
+              </div>
+              <div>
+                <p className="text-bambu-gray">{t('stats.userWeightUsed', 'Weight')}</p>
+                <p className="text-white font-semibold">{formatWeight(row.grams)}</p>
+              </div>
+              <div>
+                <p className="text-bambu-gray">{t('stats.userTimeUsed', 'Time')}</p>
+                <p className="text-white font-semibold">{row.hours.toFixed(1)}h</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-sm text-bambu-gray mb-1">{t('stats.privatePsiRatio', 'PSI / Private Ratio')}</div>
+          <div className="h-2.5 rounded-full overflow-hidden bg-bambu-dark-tertiary flex">
+            <div style={{ width: `${row.psiPercent}%`, backgroundColor: PSI_COLOR }} />
+            <div style={{ width: `${row.privatePercent}%`, backgroundColor: PRIVATE_COLOR }} />
+          </div>
+          <p className="text-xs text-bambu-gray mt-1 leading-tight">
+            {t('stats.psiPercentPrivatePercent', {
+              psi: row.psiPercent.toFixed(0),
+              private: row.privatePercent.toFixed(0),
+            })}{' '}
+            • {row.psiPrints}/{row.privatePrints} {t('stats.psiPrivateCountLabel', 'PSI/private prints')}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function StatsPage() {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { hasPermission, authEnabled } = useAuth();
+  const { hasPermission, authEnabled, isAdmin } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [dashboardKey, setDashboardKey] = useState(0);
@@ -1279,7 +1377,7 @@ export function StatsPage() {
     {
       id: 'quick-stats',
       title: t('stats.quickStats'),
-      component: <QuickStatsWidget stats={stats} archives={archives || []} currency={currency} />,
+      component: <QuickStatsWidget stats={stats} currency={currency} />,
       defaultSize: 2,
     },
     {
@@ -1318,6 +1416,12 @@ export function StatsPage() {
       component: <RecordsWidget archives={archives || []} currency={currency} />,
       defaultSize: 1,
     },
+    ...(isAdmin ? [{
+      id: 'user-badge-stats',
+      title: t('stats.userBadgeStats', 'User Stats'),
+      component: <UserBadgeStatsWidget archives={archives || []} />,
+      defaultSize: 2,
+    } satisfies DashboardWidget] : []),
     {
       id: 'printer-stats',
       title: t('stats.printerStats'),

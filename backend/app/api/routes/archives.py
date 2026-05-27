@@ -458,6 +458,10 @@ async def list_archives_slim(
             PrintArchive.private_material,
             PrintArchive.private_material_partial,
             PrintArchive.quantity,
+            PrintArchive.slicer_user,
+            PrintArchive.slicer_user_email,
+            PrintLogEntry.created_by_id,
+            PrintLogEntry.created_by_username,
             PrintLogEntry.created_at,
         )
         .outerjoin(PrintArchive, PrintArchive.id == PrintLogEntry.archive_id)
@@ -500,6 +504,10 @@ async def list_archives_slim(
             "private_material": bool(r.private_material),
             "private_material_partial": bool(r.private_material_partial),
             "quantity": r.quantity or 1,
+            "slicer_user": r.slicer_user,
+            "slicer_user_email": r.slicer_user_email,
+            "created_by_id": r.created_by_id,
+            "created_by_username": r.created_by_username,
             "created_at": r.created_at,
         }
         for r in rows
@@ -930,9 +938,11 @@ async def get_archive_stats(
             PrintArchive.private_job,
             PrintArchive.private_material,
             PrintArchive.private_material_partial,
-            PrintArchive.filament_used_grams,
-            PrintArchive.cost,
-        ).where(*base_conditions)
+            PrintLogEntry.filament_used_grams,
+            PrintLogEntry.cost,
+        )
+        .outerjoin(PrintArchive, PrintArchive.id == PrintLogEntry.archive_id)
+        .where(*base_conditions)
     )
     jobs_private = 0
     jobs_psi = 0

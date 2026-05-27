@@ -643,6 +643,8 @@ export interface ArchiveSlim {
   quantity: number;
   slicer_user?: string | null;
   slicer_user_email?: string | null;
+  created_by_id?: number | null;
+  created_by_username?: string | null;
   created_at: string;
 }
 

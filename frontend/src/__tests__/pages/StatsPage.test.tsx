@@ -8,6 +8,7 @@ import { render } from '../utils';
 import { StatsPage } from '../../pages/StatsPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
+import { setAuthToken } from '../../api/client';
 
 // Complete mock stats matching ArchiveStats interface
 const mockStats = {
@@ -84,6 +85,7 @@ const mockArchives = [
     private_job: false,
     private_material: false,
     private_material_partial: false,
+    slicer_user: 'Badge A',
   },
   {
     id: 2,
@@ -103,6 +105,7 @@ const mockArchives = [
     private_job: true,
     private_material: false,
     private_material_partial: false,
+    slicer_user: 'Badge A',
   },
   {
     id: 3,
@@ -122,6 +125,7 @@ const mockArchives = [
     private_job: true,
     private_material: false,
     private_material_partial: true,
+    slicer_user: 'Badge B',
   },
   {
     id: 4,
@@ -141,6 +145,8 @@ const mockArchives = [
     private_job: true,
     private_material: true,
     private_material_partial: false,
+    slicer_user: null,
+    slicer_user_email: null,
   },
 ];
 
@@ -177,6 +183,7 @@ const mockFailureAnalysis = {
 
 describe('StatsPage', () => {
   beforeEach(() => {
+    setAuthToken(null);
     server.use(
       http.get('/api/v1/archives/stats', () => {
         return HttpResponse.json(mockStats);
@@ -237,6 +244,47 @@ describe('StatsPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Filament Used')).toBeInTheDocument();
         expect(screen.getByText('5.5kg')).toBeInTheDocument();
+      });
+    });
+
+    it('shows the admin-only user stats card with per-user aggregates', async () => {
+      render(<StatsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('User Stats')).toBeInTheDocument();
+        expect(screen.getByText('Badge A')).toBeInTheDocument();
+        expect(screen.getByText('Badge B')).toBeInTheDocument();
+        expect(screen.getByText(/Missing Badge/)).toBeInTheDocument();
+        expect(screen.getByText('205g')).toBeInTheDocument();
+        expect(screen.getAllByText('Prints').length).toBeGreaterThan(0);
+      });
+    });
+
+    it('hides the user stats card for non-admin users', async () => {
+      setAuthToken('test-token', 'session');
+      server.use(
+        http.get('*/api/v1/auth/status', () =>
+          HttpResponse.json({ auth_enabled: true, requires_setup: false })
+        ),
+        http.get('/api/v1/auth/me', () =>
+          HttpResponse.json({
+            id: 9,
+            username: 'operator',
+            role: 'user',
+            is_active: true,
+            is_admin: false,
+            auth_source: 'local',
+            groups: [],
+            permissions: ['stats:read', 'archives:read'],
+            created_at: '2024-01-01T00:00:00Z',
+          })
+        )
+      );
+
+      render(<StatsPage />);
+
+      await waitFor(() => {
+        expect(screen.queryByText('User Stats')).not.toBeInTheDocument();
       });
     });
   });

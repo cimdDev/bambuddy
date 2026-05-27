@@ -152,6 +152,8 @@ class ArchiveSlim(BaseModel):
     quantity: int = 1
     slicer_user: str | None = None
     slicer_user_email: str | None = None
+    created_by_id: int | None = None
+    created_by_username: str | None = None
     created_at: datetime
 
     class Config:
