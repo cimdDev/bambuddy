@@ -1,11 +1,13 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Calendar, ChevronRight, Clock } from 'lucide-react';
+import { AlertTriangle, Calendar, ChevronRight, Clock, Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { formatRelativeTime } from '../utils/date';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { filterCompatibleQueueItems } from '../utils/printer';
 import { queueItemDisplayName } from '../utils/queueItemName';
 import { SlicerUserBadge } from './SlicerUserBadge';
@@ -24,6 +26,10 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
   const { t } = useTranslation();
   const { canModify } = useAuth();
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
@@ -39,6 +45,8 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
 
   const nextItem = compatibleQueue?.[0];
   const editingItem = compatibleQueue?.find((item) => item.id === editingItemId) || null;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const nextCost = estimatePrintCost(nextItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
 
   const canEditSlicerUser = (item?: typeof nextItem) => {
     if (!item) return false;
@@ -119,6 +127,17 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 {renderSlicerUserBadge(nextItem)}
+                {nextItem?.private_job && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
+                    {t('queue.accounting.privateJob')}
+                  </span>
+                )}
+                {nextCost != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-bambu-dark-tertiary text-bambu-gray-light">
+                    <Coins className="w-3 h-3" />
+                    {formatCurrencyAmount(nextCost, currencySymbol)}
+                  </span>
+                )}
               </div>
             </div>
           </div>

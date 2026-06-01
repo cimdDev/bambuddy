@@ -540,6 +540,17 @@ function ArchiveCard({
     },
   });
 
+  const updateAccountingMutation = useMutation({
+    mutationFn: (patch: Pick<Archive, 'private_job' | 'private_material' | 'private_material_partial'>) =>
+      api.updateArchive(archive.id, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['archives'] });
+    },
+    onError: () => {
+      showToast(t('archives.toast.failedUpdateArchive'), 'error');
+    },
+  });
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
@@ -1271,8 +1282,62 @@ function ArchiveCard({
         )}
 
         {/* Tags & Notes */}
-        {(archive.tags || archive.notes) && (
+        {(archive.private_job || archive.tags || archive.notes || canModify('archives', 'update', archive.created_by_id)) && (
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextPrivateJob = !archive.private_job;
+                updateAccountingMutation.mutate({
+                  private_job: nextPrivateJob,
+                  private_material: nextPrivateJob ? archive.private_material : false,
+                  private_material_partial: nextPrivateJob ? archive.private_material_partial : false,
+                });
+              }}
+              disabled={!canModify('archives', 'update', archive.created_by_id)}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-xs transition-colors ${
+                archive.private_job
+                  ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                  : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              title={t('queue.accounting.privateJob')}
+            >
+              {t('queue.accounting.privateJob')}
+            </button>
+            {archive.private_job && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextUsage = archive.private_material
+                    ? 'company'
+                    : archive.private_material_partial
+                      ? 'private_full'
+                      : 'private_partial';
+                  updateAccountingMutation.mutate({
+                    private_job: true,
+                    private_material: nextUsage === 'private_full',
+                    private_material_partial: nextUsage === 'private_partial',
+                  });
+                }}
+                disabled={!canModify('archives', 'update', archive.created_by_id)}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-xs transition-colors ${
+                archive.private_material
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                  : archive.private_material_partial
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                    : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+                title={t('queue.accounting.privateMaterial')}
+              >
+                {archive.private_material
+                  ? t('queue.accounting.privateMaterialFull')
+                  : archive.private_material_partial
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
+              </button>
+            )}
             {archive.notes && (
               <div
                 className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded text-xs"

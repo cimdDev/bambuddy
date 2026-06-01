@@ -837,6 +837,7 @@ export default {
       removedFromFavorites: 'Removed from favorites',
       projectUpdated: 'Project updated',
       failedUpdateProject: 'Failed to update project',
+      failedUpdateArchive: 'Failed to update archive',
       linkCopied: 'Link copied to clipboard',
       failedCopyLink: 'Failed to copy link',
       photoDeleted: 'Photo deleted',
@@ -915,6 +916,7 @@ export default {
       failed: 'failed',
       duplicate: 'duplicate',
       duplicateTitle: 'This model has been printed before',
+      privateJob: 'Private job',
       openSource3mf: 'Open source 3MF in Bambu Studio (right-click for more options)',
       downloadF3d: 'Download Fusion 360 design file',
       viewTimelapse: 'View timelapse',
@@ -1320,6 +1322,14 @@ export default {
       saved: 'User badge updated',
       required: 'Please enter a user badge',
       unsupported: 'This item cannot be updated',
+    },
+    accounting: {
+      privateJob: 'Private job',
+      privateMaterial: 'Material',
+      companyMaterial: 'PSI material',
+      privateMaterialPartial: 'Private material partial',
+      privateMaterialFull: 'Private material full',
+      totalCost: 'Cost: {{amount}}',
     },
     // Empty state
     empty: {
@@ -5053,6 +5063,11 @@ export default {
     photosHelp: 'Click + to add photos of your printed result',
     printResult: 'Print result',
     saving: 'Saving...',
+    accounting: {
+      title: 'Accounting',
+      help: 'Classify whether this print was private and how its material cost should be categorized.',
+      privateJobHelp: 'Disabled means this was a normal productive/company print.',
+    },
     // Failure reasons
     failureReasons: {
       adhesionFailure: 'Adhesion failure',

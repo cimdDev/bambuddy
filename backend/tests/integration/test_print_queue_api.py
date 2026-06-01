@@ -627,6 +627,26 @@ class TestPrintQueueAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_update_printing_accounting_ignores_existing_assignment_fields(
+        self, async_client: AsyncClient, queue_item_factory, printer_factory, db_session
+    ):
+        """Verify accounting-only updates don't revalidate stale printer/model assignment."""
+        printer = await printer_factory(model="X1C")
+        item = await queue_item_factory(
+            printer_id=printer.id,
+            target_model="X1C",
+            status="printing",
+            private_job=False,
+        )
+
+        response = await async_client.patch(f"/api/v1/queue/{item.id}", json={"private_job": True})
+
+        assert response.status_code == 200
+        result = response.json()
+        assert result["private_job"] is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_delete_queue_item(self, async_client: AsyncClient, queue_item_factory, db_session):
         """Verify queue item can be deleted."""
         item = await queue_item_factory()

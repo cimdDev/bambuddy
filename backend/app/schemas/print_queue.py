@@ -123,6 +123,9 @@ class PrintQueueItemCreate(BaseModel):
     # candidates ARE the files). The scheduler resolves one onto the row at
     # dispatch, after which the item is an ordinary single-file job.
     variants: list[QueueVariantCreate] | None = None
+    private_job: bool | None = None
+    private_material: bool = False
+    private_material_partial: bool = False
 
 
 class PrintQueueItemUpdate(BaseModel):
@@ -153,6 +156,9 @@ class PrintQueueItemUpdate(BaseModel):
     # physical nozzle position IDs from BambuStudio's project_file MQTT
     # body; sent back to the printer verbatim on dispatch.
     nozzle_mapping: list[int] | None = None
+    private_job: bool | None = None
+    private_material: bool | None = None
+    private_material_partial: bool | None = None
 
 
 class QueueVariantSummary(BaseModel):
@@ -204,6 +210,9 @@ class PrintQueueItemResponse(BaseModel):
     completed_at: UTCDatetime
     error_message: str | None
     created_at: UTCDatetime
+    private_job: bool = False
+    private_material: bool = False
+    private_material_partial: bool = False
 
     # Nested info for UI (populated in route)
     archive_name: str | None = None

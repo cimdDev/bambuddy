@@ -4073,6 +4073,29 @@ async def run_migrations(conn):
     )
     await _migrate_backfill_variant_groups(conn)
 
+    # Migration: private-job accounting flags for queue/archive classification.
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN private_material_partial BOOLEAN DEFAULT 0")
+    async with conn.begin_nested():
+        await conn.execute(text("UPDATE print_queue SET private_job = COALESCE(private_job, 0)"))
+        await conn.execute(text("UPDATE print_queue SET private_material = COALESCE(private_material, 0)"))
+        await conn.execute(
+            text("UPDATE print_queue SET private_material_partial = COALESCE(private_material_partial, 0)")
+        )
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material BOOLEAN DEFAULT 0")
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN private_material_partial BOOLEAN DEFAULT 0")
+    async with conn.begin_nested():
+        await conn.execute(text("UPDATE print_archives SET private_job = COALESCE(private_job, 0)"))
+        await conn.execute(text("UPDATE print_archives SET private_material = COALESCE(private_material, 0)"))
+        await conn.execute(
+            text("UPDATE print_archives SET private_material_partial = COALESCE(private_material_partial, 0)")
+        )
+    await _safe_execute(conn, "ALTER TABLE library_files ADD COLUMN private_job BOOLEAN DEFAULT 0")
+    async with conn.begin_nested():
+        await conn.execute(text("UPDATE library_files SET private_job = COALESCE(private_job, 0)"))
+
 
 async def _migrate_backfill_variant_groups(conn) -> None:
     """Build variant groups from the slice provenance already on disk (#671 / #2570).
@@ -4191,7 +4214,6 @@ async def _migrate_rename_user_print_template_names(conn) -> None:
                 text("UPDATE notification_templates SET name = :new WHERE event_type = :et AND name = :old"),
                 {"new": new_name, "et": event_type, "old": old_name},
             )
-
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""

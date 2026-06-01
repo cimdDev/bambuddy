@@ -767,6 +767,7 @@ interface FileCardProps {
   onRename?: (file: LibraryFileListItem) => void;
   onGenerateThumbnail?: (file: LibraryFileListItem) => void;
   onTagClick?: (tagId: number) => void;
+  onTogglePrivateJob?: (file: LibraryFileListItem) => void;
   thumbnailVersion?: number;
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
@@ -775,12 +776,13 @@ interface FileCardProps {
   t: TFunction;
 }
 
-function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onPrint, onSlice, onRunPipeline, useSlicerApi, onPreview3d, onRename, onGenerateThumbnail, onTagClick, thumbnailVersion, hasPermission, canModify, authEnabled, showModified, t }: FileCardProps) {
+function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, onPrint, onSlice, onRunPipeline, useSlicerApi, onPreview3d, onRename, onGenerateThumbnail, onTagClick, onTogglePrivateJob, thumbnailVersion, hasPermission, canModify, authEnabled, showModified, t }: FileCardProps) {
   const [showActions, setShowActions] = useState(false);
   const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
   const slicerUser = file.slicer_user || file.slicer_user_email;
   const missingSlicerUser = !slicerUser;
   const canEditSlicerUser = canModify('library', 'update', file.created_by_id);
+  const canUpdate = canModify('library', 'update', file.created_by_id);
 
   return (
     <div
@@ -813,6 +815,21 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
         }`}>
           {file.file_type.toUpperCase()}
         </div>
+        {file.private_job && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (canUpdate) onTogglePrivateJob?.(file);
+            }}
+            disabled={!canUpdate}
+            title={t('queue.accounting.privateJob')}
+            className="absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border bg-fuchsia-500/90 text-white border-fuchsia-300/40 text-xs font-medium disabled:cursor-not-allowed"
+          >
+            <Lock className="w-3 h-3" />
+            {t('queue.accounting.privateJob')}
+          </button>
+        )}
       </div>
 
       {/* Info */}
@@ -936,6 +953,19 @@ function FileCard({ file, isSelected, isMobile, onSelect, onDelete, onDownload, 
               </button>
             ))}
           </div>
+        )}
+        {!file.private_job && canUpdate && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePrivateJob?.(file);
+            }}
+            className="mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white text-xs"
+            title={t('queue.accounting.privateJob')}
+          >
+            {t('queue.accounting.privateJob')}
+          </button>
         )}
       </div>
 
@@ -1566,6 +1596,15 @@ export function FileManagerPage() {
       setRenameItem(null);
       showToast(error.message, 'error');
     },
+  });
+
+  const updateFilePrivateJobMutation = useMutation({
+    mutationFn: ({ id, privateJob }: { id: number; privateJob: boolean }) =>
+      api.updateLibraryFile(id, { private_job: privateJob }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library-files'] });
+    },
+    onError: (error: Error) => showToast(error.message, 'error'),
   });
 
   const renameFolderMutation = useMutation({
@@ -2512,6 +2551,7 @@ export function FileManagerPage() {
                     onRename={(f) => setRenameItem({ type: 'file', id: f.id, name: f.filename })}
                     onGenerateThumbnail={(f) => singleThumbnailMutation.mutate(f.id)}
                     onTagClick={toggleTagFilter}
+                    onTogglePrivateJob={(file) => updateFilePrivateJobMutation.mutate({ id: file.id, privateJob: !file.private_job })}
                     thumbnailVersion={thumbnailVersions[file.id]}
                     hasPermission={hasPermission}
                     canModify={canModify}
@@ -2592,7 +2632,27 @@ export function FileManagerPage() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="text-sm text-white truncate">{file.print_name || file.filename}</div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="text-sm text-white truncate">{file.print_name || file.filename}</div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (canModify('library', 'update', file.created_by_id)) {
+                                updateFilePrivateJobMutation.mutate({ id: file.id, privateJob: !file.private_job });
+                              }
+                            }}
+                            disabled={!canModify('library', 'update', file.created_by_id)}
+                            className={`inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] transition-colors ${
+                              file.private_job
+                                ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                            } disabled:cursor-not-allowed disabled:opacity-60`}
+                            title={t('queue.accounting.privateJob')}
+                          >
+                            {t('queue.accounting.privateJob')}
+                          </button>
+                        </div>
                         {/* #2680: last-modified date under the name, toggled from
                             the toolbar. Real on-disk mtime when known, else created_at. */}
                         {showModified && (

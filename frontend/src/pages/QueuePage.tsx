@@ -49,6 +49,7 @@ import {
   User,
   Pause,
   Weight,
+  Coins,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -67,6 +68,8 @@ import { api, ApiError } from '../api/client';
 import { PipelineRunsView } from './PipelineRunsPage';
 import { type TimeFormat, formatETA, formatDuration, formatRelativeTime, parseUTCDate } from '../utils/date';
 import { getBedTypeInfo } from '../utils/bedType';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, PrintQueueBulkUpdate, Permission, CalibrationMode } from '../api/client';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -79,6 +82,14 @@ import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
+
+type QueueAccountingPatch = {
+  private_job?: boolean;
+  private_material?: boolean;
+  private_material_partial?: boolean;
+};
+
+type PrivateMaterialUsage = 'company' | 'private_partial' | 'private_full';
 
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
@@ -353,6 +364,7 @@ function SortableQueueItem({
   onStart,
   onMoveUp,
   onMoveDown,
+  onUpdateAccounting,
   timeFormat = 'system',
   isSelected = false,
   onToggleSelect,
@@ -361,6 +373,8 @@ function SortableQueueItem({
   printerState,
   showEta = false,
   etaNow,
+  defaultCostPerKg,
+  currencySymbol,
   t,
 }: {
   item: PrintQueueItem;
@@ -376,6 +390,7 @@ function SortableQueueItem({
   // is unaffected. Move one step among siblings, then persist via reorder.
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onUpdateAccounting?: (patch: QueueAccountingPatch) => Promise<void>;
   timeFormat?: TimeFormat;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -387,6 +402,8 @@ function SortableQueueItem({
   // screen quotes the same clock.
   showEta?: boolean;
   etaNow?: number;
+  defaultCostPerKg: number;
+  currencySymbol: string;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
@@ -444,6 +461,14 @@ function SortableQueueItem({
     : item.library_file_id
       ? canModify('library', 'update', item.created_by_id)
       : false;
+  const canEditAccounting = isPending && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
+  const canEditAccountingWhilePrinting = (isPending || isPrinting) && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
+  const privateMaterialUsage: PrivateMaterialUsage = item.private_material
+    ? 'private_full'
+    : item.private_material_partial
+      ? 'private_partial'
+      : 'company';
+  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
 
   // This is an "if started now" estimate, not a cumulative queue forecast, so
   // it is only shown for items the page determined could actually start now
@@ -663,6 +688,12 @@ function SortableQueueItem({
                 </span>
               );
             })()}
+            {itemCost != null && (
+              <span className="flex items-center gap-1 sm:gap-1.5">
+                <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                {formatCurrencyAmount(itemCost, currencySymbol)}
+              </span>
+            )}
             {item.created_by_username && (
               <span className="hidden sm:flex items-center gap-1.5" title={t('queue.addedBy', { name: item.created_by_username })}>
                 <User className="w-3.5 h-3.5" />
@@ -744,6 +775,84 @@ function SortableQueueItem({
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-full border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-1">
                 <Code className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 {t('queue.badges.gcodeInjection')}
+              </span>
+            )}
+            {canEditAccountingWhilePrinting ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextPrivateJob = !item.private_job;
+                  void onUpdateAccounting?.({
+                    private_job: nextPrivateJob,
+                    private_material: nextPrivateJob ? item.private_material : false,
+                    private_material_partial: nextPrivateJob ? item.private_material_partial : false,
+                  });
+                }}
+                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                  item.private_job
+                    ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                    : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                }`}
+                title={t('queue.accounting.privateJob')}
+              >
+                {t('queue.accounting.privateJob')}
+              </button>
+            ) : item.private_job ? (
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20">
+                {t('queue.accounting.privateJob')}
+              </span>
+            ) : null}
+            {item.private_job && (canEditAccountingWhilePrinting ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextUsage: PrivateMaterialUsage =
+                    privateMaterialUsage === 'company'
+                      ? 'private_partial'
+                      : privateMaterialUsage === 'private_partial'
+                        ? 'private_full'
+                        : 'company';
+                  void onUpdateAccounting?.({
+                    private_job: true,
+                    private_material: nextUsage === 'private_full',
+                    private_material_partial: nextUsage === 'private_partial',
+                  });
+                }}
+                className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
+                  privateMaterialUsage === 'private_full'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    : privateMaterialUsage === 'private_partial'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                      : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                }`}
+                title={t('queue.accounting.privateMaterial')}
+              >
+                {privateMaterialUsage === 'private_full'
+                  ? t('queue.accounting.privateMaterialFull')
+                  : privateMaterialUsage === 'private_partial'
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
+              </button>
+            ) : (
+              <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border ${
+                privateMaterialUsage === 'private_full'
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                  : privateMaterialUsage === 'private_partial'
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                    : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+              }`}>
+                {privateMaterialUsage === 'private_full'
+                  ? t('queue.accounting.privateMaterialFull')
+                  : privateMaterialUsage === 'private_partial'
+                    ? t('queue.accounting.privateMaterialPartial')
+                    : t('queue.accounting.companyMaterial')}
+              </span>
+            ))}
+            {item.private_job && itemCost != null && (
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-500/20">
+                {t('queue.accounting.totalCost', { amount: formatCurrencyAmount(itemCost, currencySymbol) })}
               </span>
             )}
           </div>
@@ -948,6 +1057,9 @@ interface QueueRowRenderProps {
   // measured from (#2740).
   etaEligibleIds: Set<number>;
   etaNow: number;
+  onUpdateAccounting?: (item: PrintQueueItem, patch: QueueAccountingPatch) => Promise<void>;
+  defaultCostPerKg: number;
+  currencySymbol: string;
   aggregateForRows: (rows: QueueRow[]) => { count: number; time: number; weight: number };
   // Mobile tap-to-reorder (#2667). onMoveUp/onMoveDown move this whole row
   // (single item or batch) one step among its siblings; onMoveBlock is the
@@ -975,6 +1087,9 @@ function QueueRowRender(props: QueueRowRenderProps) {
     t,
     etaEligibleIds,
     etaNow,
+    onUpdateAccounting,
+    defaultCostPerKg,
+    currencySymbol,
     onMoveUp,
     onMoveDown,
   } = props;
@@ -998,6 +1113,9 @@ function QueueRowRender(props: QueueRowRenderProps) {
         canModify={canModify}
         showEta={etaEligibleIds.has(row.item.id)}
         etaNow={etaNow}
+        onUpdateAccounting={onUpdateAccounting ? (patch) => onUpdateAccounting(row.item, patch) : undefined}
+        defaultCostPerKg={defaultCostPerKg}
+        currencySymbol={currencySymbol}
         t={t}
       />
     );
@@ -1025,6 +1143,9 @@ function SortableBatchRow({
   t,
   etaEligibleIds,
   etaNow,
+  onUpdateAccounting,
+  defaultCostPerKg,
+  currencySymbol,
   aggregateForRows,
   onMoveUp,
   onMoveDown,
@@ -1218,6 +1339,9 @@ function SortableBatchRow({
               canModify={canModify}
               showEta={etaEligibleIds.has(child.id)}
               etaNow={etaNow}
+              onUpdateAccounting={onUpdateAccounting ? (patch) => onUpdateAccounting(child, patch) : undefined}
+              defaultCostPerKg={defaultCostPerKg}
+              currencySymbol={currencySymbol}
               t={t}
             />
           ))}
@@ -1249,6 +1373,8 @@ interface HistorySectionProps {
   hasPermission: (p: any) => boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   canModify: (resource: any, action: any, createdById?: number | null) => boolean;
+  defaultCostPerKg: number;
+  currencySymbol: string;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -1267,6 +1393,8 @@ function HistorySection({
   toggleBatchCollapsed,
   hasPermission,
   canModify,
+  defaultCostPerKg,
+  currencySymbol,
   t,
 }: HistorySectionProps) {
   if (items.length === 0) {
@@ -1342,6 +1470,8 @@ function HistorySection({
                 timeFormat={timeFormat}
                 hasPermission={hasPermission}
                 canModify={canModify}
+                defaultCostPerKg={defaultCostPerKg}
+                currencySymbol={currencySymbol}
                 t={t}
               />
             );
@@ -1423,6 +1553,8 @@ function HistorySection({
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}
+                      defaultCostPerKg={defaultCostPerKg}
+                      currencySymbol={currencySymbol}
                       t={t}
                     />
                   ))}
@@ -1582,6 +1714,8 @@ export function QueuePage() {
   });
 
   const timeFormat: TimeFormat = settings?.time_format || 'system';
+  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],
@@ -1671,6 +1805,15 @@ export function QueuePage() {
       queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
     onError: () => showToast(t('queue.toast.reorderFailed'), 'error'),
+  });
+
+  const updateAccountingMutation = useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: QueueAccountingPatch }) =>
+      api.updateQueueItem(itemId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
   });
 
   const clearHistoryMutation = useMutation({
@@ -2603,6 +2746,8 @@ export function QueuePage() {
           toggleBatchCollapsed={toggleBatchCollapsed}
           hasPermission={hasPermission}
           canModify={canModify}
+          defaultCostPerKg={defaultCostPerKg}
+          currencySymbol={currencySymbol}
           t={t}
         />
       ) : (
@@ -2629,6 +2774,11 @@ export function QueuePage() {
                     hasPermission={hasPermission}
                     canModify={canModify}
                     printerState={item.printer_id ? printerStateMap[item.printer_id] : null}
+                    onUpdateAccounting={async (patch) => {
+                      await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                    }}
+                    defaultCostPerKg={defaultCostPerKg}
+                    currencySymbol={currencySymbol}
                     t={t}
                   />
                 ))}
@@ -2762,6 +2912,11 @@ export function QueuePage() {
                           t={t}
                           etaEligibleIds={etaEligibleIds}
                           etaNow={etaNow}
+                          onUpdateAccounting={async (item, patch) => {
+                            await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                          }}
+                          defaultCostPerKg={defaultCostPerKg}
+                          currencySymbol={currencySymbol}
                           aggregateForRows={aggregateForRows}
                           {...rowMovers(groupedRows, idx)}
                           onMoveBlock={canReorderManually ? moveBlockRelativeTo : undefined}
@@ -2802,6 +2957,11 @@ export function QueuePage() {
                                   t={t}
                                   etaEligibleIds={etaEligibleIds}
                                   etaNow={etaNow}
+                                  onUpdateAccounting={async (item, patch) => {
+                                    await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                                  }}
+                                  defaultCostPerKg={defaultCostPerKg}
+                                  currencySymbol={currencySymbol}
                                   aggregateForRows={aggregateForRows}
                                   {...rowMovers(bucket.rows, idx)}
                                   onMoveBlock={canReorderManually ? moveBlockRelativeTo : undefined}

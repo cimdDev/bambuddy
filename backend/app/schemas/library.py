@@ -124,6 +124,7 @@ class FileUpdate(BaseModel):
     notes: str | None = None
     slicer_user: str | None = None
     slicer_user_email: str | None = None
+    private_job: bool | None = None
 
 
 class FileDuplicate(BaseModel):
@@ -159,6 +160,7 @@ class FileResponse(BaseModel):
     last_printed_at: datetime | None
 
     notes: str | None
+    private_job: bool = False
 
     # Duplicate detection
     duplicates: list[FileDuplicate] | None = None
@@ -205,6 +207,7 @@ class FileListResponse(BaseModel):
     thumbnail_path: str | None
     print_count: int
     duplicate_count: int = 0
+    private_job: bool = False
     # User tracking (Issue #206)
     created_by_id: int | None = None
     created_by_username: str | None = None

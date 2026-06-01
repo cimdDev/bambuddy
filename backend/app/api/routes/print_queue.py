@@ -235,6 +235,9 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "completed_at": item.completed_at,
         "error_message": item.error_message,
         "created_at": item.created_at,
+        "private_job": item.private_job,
+        "private_material": item.private_material,
+        "private_material_partial": item.private_material_partial,
         # User tracking (Issue #206)
         "created_by_id": item.created_by_id,
         "created_by_username": item.created_by.username if item.created_by else None,
@@ -735,6 +738,12 @@ async def add_to_queue(
 
     # Validate quantity
     quantity = max(1, data.quantity)
+    if data.private_job is None:
+        private_job = bool(archive.private_job) if archive else bool(library_file.private_job) if library_file else False
+    else:
+        private_job = data.private_job
+    private_material = data.private_material if private_job else False
+    private_material_partial = data.private_material_partial if private_job and not private_material else False
 
     # Validate batch_id if provided. Client passes batch_id when adding items
     # into a pre-created batch (multi-plate auto-batch or "Group as batch" flow).
@@ -939,6 +948,9 @@ async def add_to_queue(
             gcode_injection=data.gcode_injection,
             cleanup_library_after_dispatch=data.cleanup_library_after_dispatch,
             project_id=data.project_id,
+            private_job=private_job,
+            private_material=private_material,
+            private_material_partial=private_material_partial,
             position=start_position + i,
             status="pending",
             created_by_id=current_user.id if current_user else None,
@@ -1374,7 +1386,10 @@ async def update_queue_item(
         if item.created_by_id != user.id:
             raise HTTPException(403, "You can only update your own queue items")
 
-    if item.status != "pending":
+    update_data = data.model_dump(exclude_unset=True)
+    accounting_fields = {"private_job", "private_material", "private_material_partial"}
+    is_accounting_only_update = bool(update_data) and set(update_data).issubset(accounting_fields)
+    if item.status != "pending" and not (item.status == "printing" and is_accounting_only_update):
         raise HTTPException(400, "Can only update pending items")
 
     # Dispatch claim (#2615): the row is pending but a scheduler worker has
@@ -1382,10 +1397,8 @@ async def update_queue_item(
     # reassigning printer_id) would split the queue row from the in-flight
     # archive/expected-print/physical command. Reject until dispatch finishes;
     # to move it, cancel first (the coordinated escape) and re-queue.
-    if item.dispatching_at is not None:
+    if item.status == "pending" and item.dispatching_at is not None:
         raise HTTPException(409, "Item is being dispatched — cancel it first to make changes")
-
-    update_data = data.model_dump(exclude_unset=True)
 
     # Normalize target_model if being updated (see add_to_queue for why the
     # code map has to run first).
@@ -1410,11 +1423,12 @@ async def update_queue_item(
                     "This job has printer alternatives — remove them before assigning a printer or model",
                 )
 
-    # Cannot specify both printer_id and target_model
-    new_printer_id = update_data.get("printer_id", item.printer_id)
-    new_target_model = update_data.get("target_model", item.target_model)
-    if new_printer_id and new_target_model:
-        raise HTTPException(400, "Cannot specify both printer_id and target_model")
+    # Cannot specify both printer_id and target_model when changing assignment.
+    if "printer_id" in update_data or "target_model" in update_data:
+        new_printer_id = update_data.get("printer_id", item.printer_id)
+        new_target_model = update_data.get("target_model", item.target_model)
+        if new_printer_id and new_target_model:
+            raise HTTPException(400, "Cannot specify both printer_id and target_model")
 
     # Validate new printer_id if being changed (and not None)
     if "printer_id" in update_data and update_data["printer_id"] is not None:
@@ -1475,14 +1489,31 @@ async def update_queue_item(
     # validations ran since the guard above, and a scheduler worker may have
     # claimed the row in that gap. A fresh read (item isn't dirty yet, so no
     # autoflush races the check) narrows the window to effectively nothing.
-    claimed = (
-        await db.execute(select(PrintQueueItem.dispatching_at).where(PrintQueueItem.id == item_id))
-    ).scalar_one_or_none()
-    if claimed is not None:
-        raise HTTPException(409, "Item is being dispatched — cancel it first to make changes")
+    if item.status == "pending":
+        claimed = (
+            await db.execute(select(PrintQueueItem.dispatching_at).where(PrintQueueItem.id == item_id))
+        ).scalar_one_or_none()
+        if claimed is not None:
+            raise HTTPException(409, "Item is being dispatched — cancel it first to make changes")
+
+    next_private_job = update_data.get("private_job", item.private_job)
+    next_private_material = update_data.get("private_material", item.private_material)
+    if not next_private_job:
+        update_data["private_material"] = False
+        update_data["private_material_partial"] = False
+    elif next_private_material:
+        update_data["private_material_partial"] = False
 
     for field, value in update_data.items():
         setattr(item, field, value)
+
+    if item.archive_id and accounting_fields.intersection(update_data):
+        archive_result = await db.execute(select(PrintArchive).where(PrintArchive.id == item.archive_id))
+        archive = archive_result.scalar_one_or_none()
+        if archive:
+            archive.private_job = item.private_job
+            archive.private_material = item.private_material
+            archive.private_material_partial = item.private_material_partial and item.private_job and not item.private_material
 
     await db.commit()
     await db.refresh(item, ["archive", "printer", "library_file", "created_by", "batch"])

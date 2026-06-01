@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Ban,
   CheckCircle,
+  Coins,
   Layers,
   Printer,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { type TimeFormat, formatDuration, formatRelativeTime } from '../utils/date';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import type { PrintQueueItem, Permission } from '../api/client';
 import { Button } from './Button';
 import { queueItemDisplayName } from '../utils/queueItemName';
@@ -28,7 +30,6 @@ const STATUS_CONFIG = {
   cancelled: { icon: Ban, color: 'text-gray-400', border: 'border-l-gray-500' },
 } as const;
 
-/** Bambu encodes "no filament" as transparent/zeroed RGBA. */
 function normalizeFilamentColor(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const clean = raw.startsWith('#') ? raw.slice(1) : raw;
@@ -41,6 +42,8 @@ export function CompactHistoryRow({
   item,
   onRequeue,
   onRemove,
+  defaultCostPerKg,
+  currencySymbol,
   timeFormat = 'system',
   hasPermission,
   canModify,
@@ -49,6 +52,8 @@ export function CompactHistoryRow({
   item: PrintQueueItem;
   onRequeue: () => void;
   onRemove: () => void;
+  defaultCostPerKg: number;
+  currencySymbol: string;
   timeFormat?: TimeFormat;
   hasPermission: (permission: Permission) => boolean;
   canModify: (resource: 'queue' | 'archives' | 'library', action: 'update' | 'delete' | 'reprint', createdById: number | null | undefined) => boolean;
@@ -64,6 +69,12 @@ export function CompactHistoryRow({
     : item.library_file_id
       ? canModify('library', 'update', item.created_by_id)
       : false;
+  const privateMaterialUsage = item.private_material
+    ? 'private_full'
+    : item.private_material_partial
+      ? 'private_partial'
+      : 'company';
+  const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
 
   const thumbnailUrl = item.archive_thumbnail
     ? api.getArchiveThumbnail(item.archive_id!)
@@ -123,7 +134,6 @@ export function CompactHistoryRow({
       <div className={`px-3 py-2 bg-bambu-dark-secondary rounded-lg border border-bambu-dark-tertiary border-l-[3px] ${config.border}`}>
         <div className="flex items-center gap-2 sm:gap-3">
           <StatusIcon className={`w-4 h-4 shrink-0 ${config.color}`} />
-
           <div className="relative shrink-0 history-thumb-hover">
             <div className="w-8 h-8 bg-bambu-dark rounded overflow-hidden">
               {thumbnailUrl ? (
@@ -144,18 +154,15 @@ export function CompactHistoryRow({
               </div>
             )}
           </div>
-
           <span className="text-sm text-white font-medium truncate min-w-0 flex-1">
             {displayName}
           </span>
-
           <span
             className="text-xs text-bambu-gray shrink-0"
             title={completedTime ?? undefined}
           >
             {formatRelativeTime(completedTime, timeFormat, t)}
           </span>
-
           <div className="flex items-center gap-0.5 shrink-0">
             <Button
               variant="ghost"
@@ -209,6 +216,24 @@ export function CompactHistoryRow({
             <span className="flex items-center gap-1 shrink-0">
               <Timer className="w-3 h-3" />
               {formatDuration(item.print_time_seconds)}
+            </span>
+          )}
+          {itemCost != null && (
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <Coins className="w-3 h-3" />
+              {formatCurrencyAmount(itemCost, currencySymbol)}
+            </span>
+          )}
+          {item.private_job && (
+            <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20">
+              {t('queue.accounting.privateJob')}
+            </span>
+          )}
+          {privateMaterialUsage !== 'company' && (
+            <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-300 border-amber-500/20">
+              {privateMaterialUsage === 'private_full'
+                ? t('queue.accounting.privateMaterialFull')
+                : t('queue.accounting.privateMaterialPartial')}
             </span>
           )}
           {item.created_by_username && (

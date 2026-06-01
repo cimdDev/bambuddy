@@ -465,6 +465,7 @@ async def save_3mf_bytes_to_library(
     source_type: str | None = None,
     source_url: str | None = None,
     owner_id: int | None = None,
+    private_job: bool = False,
 ) -> tuple[LibraryFile, bool]:
     """Save a 3MF blob into the library and return ``(library_file, was_existing)``.
 
@@ -542,6 +543,7 @@ async def save_3mf_bytes_to_library(
         source_type=source_type,
         source_url=source_url,
         created_by_id=owner_id,
+        private_job=private_job,
     )
     db.add(library_file)
     await db.commit()
@@ -2068,6 +2070,7 @@ async def list_files(
                 thumbnail_path=f.thumbnail_path,
                 print_count=f.print_count,
                 duplicate_count=hash_counts.get(f.file_hash, 0) if f.file_hash else 0,
+                private_job=bool(f.private_job),
                 created_by_id=f.created_by_id,
                 created_by_username=f.created_by.username if f.created_by else None,
                 created_at=f.created_at,
@@ -2093,6 +2096,7 @@ async def upload_file(
     file: UploadFile = File(...),
     folder_id: int | None = None,
     generate_stl_thumbnails: bool = Query(default=True),
+    private_job: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
 ):
@@ -2235,6 +2239,7 @@ async def upload_file(
             thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
             file_metadata=_without_print_name(metadata) if metadata else None,
             created_by_id=current_user.id if current_user else None,
+            private_job=private_job,
         )
         db.add(library_file)
         await db.commit()
@@ -2263,6 +2268,7 @@ async def extract_zip_file(
     preserve_structure: bool = Query(default=True),
     create_folder_from_zip: bool = Query(default=False),
     generate_stl_thumbnails: bool = Query(default=True),
+    private_job: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_permission_if_auth_enabled(Permission.LIBRARY_UPLOAD)),
 ):
@@ -2498,6 +2504,7 @@ async def extract_zip_file(
                         thumbnail_path=to_relative_path(thumbnail_path) if thumbnail_path else None,
                         file_metadata=_without_print_name(metadata) if metadata else None,
                         created_by_id=current_user.id if current_user else None,
+                        private_job=private_job,
                     )
                     db.add(library_file)
                     await db.flush()
@@ -2742,6 +2749,7 @@ async def add_files_to_queue(
                 or (folder_projects.get(lib_file.folder_id) if lib_file.folder_id is not None else None),
                 position=max_position,
                 status="pending",
+                private_job=lib_file.private_job,
             )
             db.add(queue_item)
 
@@ -4648,6 +4656,7 @@ async def get_file(
         print_count=file.print_count,
         last_printed_at=file.last_printed_at,
         notes=file.notes,
+        private_job=bool(file.private_job),
         duplicates=duplicates if duplicates else None,
         duplicate_count=duplicate_count,
         created_by_id=file.created_by_id,
@@ -4729,6 +4738,8 @@ async def update_file(
         metadata["slicer_user"] = data.slicer_user.strip() if data.slicer_user else None
         metadata["slicer_user_email"] = data.slicer_user_email.strip() if data.slicer_user_email else None
         file.file_metadata = metadata
+    if data.private_job is not None:
+        file.private_job = data.private_job
 
     await db.commit()
     await db.refresh(file)

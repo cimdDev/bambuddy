@@ -3469,6 +3469,11 @@ class PrintScheduler:
                 )
                 if archive:
                     item.archive_id = archive.id
+                    archive.private_job = item.private_job
+                    archive.private_material = item.private_material
+                    archive.private_material_partial = (
+                        item.private_material_partial and item.private_job and not item.private_material
+                    )
                     if item.cleanup_library_after_dispatch and not library_file.is_external:
                         item.library_file_id = None
                         cleanup_disk_paths.append(file_path)

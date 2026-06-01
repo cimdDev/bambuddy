@@ -55,6 +55,7 @@ import {
   Square,
   Pause,
   Play,
+  Coins,
   X,
   Fan,
   Wind,
@@ -93,6 +94,8 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { api, discoveryApi, firmwareApi, withStreamToken, ApiError } from '../api/client';
 import { formatDateOnly, formatETA, formatDuration, parseUTCDate } from '../utils/date';
 import type { Printer, PrinterCreate, PrinterStatus, AMSUnit, DiscoveredPrinter, FirmwareUpdateInfo, FirmwareUploadStatus, LinkedSpoolInfo, SpoolAssignment, HMSError, InventorySpool, SmartPlug, PrinterDiagnosticResult } from '../api/client';
+import { getCurrencySymbol } from '../utils/currency';
+import { estimatePrintCost, formatCurrencyAmount } from '../utils/printCost';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -2205,6 +2208,10 @@ function PrinterCard({
     queryKey: ['queue', printer.id, 'pending'],
     queryFn: () => api.getQueue(printer.id, 'pending'),
   });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
   // Filter queue items by filament compatibility (same logic as PrinterQueueWidget)
   // so the badge only shows on printers that can actually run the queued jobs.
   // An empty Set means no filaments are loaded — jobs requiring specific types are incompatible.
@@ -2264,6 +2271,9 @@ function PrinterCard({
           ? canModify('library', 'update', currentQueueItem.created_by_id)
           : false
     : false;
+  const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
+  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const canEditCurrentQueueAccounting = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({
@@ -2323,6 +2333,17 @@ function PrinterCard({
       queryClient.invalidateQueries({ queryKey: ['maintenanceOverview'] });
     },
     onError: (error: Error) => showToast(error.message || t('printers.toast.failedToDelete'), 'error'),
+  });
+
+  const updateCurrentQueueAccountingMutation = useMutation({
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: { private_job?: boolean | null; private_material?: boolean | null; private_material_partial?: boolean | null } }) =>
+      api.updateQueueItem(itemId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'printing'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+      queryClient.invalidateQueries({ queryKey: ['archives'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('queue.toast.updateFailed'), 'error'),
   });
 
   const connectMutation = useMutation({
@@ -3870,6 +3891,74 @@ function PrinterCard({
                                   <span className="flex items-center gap-1" title={`Started by ${currentPrintUser}`}>
                                     <User className="w-3 h-3" />
                                     {currentPrintUser}
+                                  </span>
+                                )}
+                                {currentQueueItem && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextPrivateJob = !currentQueueItem.private_job;
+                                      updateCurrentQueueAccountingMutation.mutate({
+                                        itemId: currentQueueItem.id,
+                                        patch: {
+                                          private_job: nextPrivateJob,
+                                          private_material: nextPrivateJob ? currentQueueItem.private_material : false,
+                                          private_material_partial: nextPrivateJob ? currentQueueItem.private_material_partial : false,
+                                        },
+                                      });
+                                    }}
+                                    disabled={!canEditCurrentQueueAccounting}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                                      currentQueueItem.private_job
+                                        ? 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                        : 'bg-bambu-dark/40 text-bambu-gray border-bambu-dark-tertiary hover:text-white'
+                                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                                    title={t('queue.accounting.privateJob')}
+                                  >
+                                    {t('queue.accounting.privateJob')}
+                                  </button>
+                                )}
+                                {currentQueueItem?.private_job && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextUsage = currentQueueItem.private_material
+                                        ? 'company'
+                                        : currentQueueItem.private_material_partial
+                                          ? 'private_full'
+                                          : 'private_partial';
+                                      updateCurrentQueueAccountingMutation.mutate({
+                                        itemId: currentQueueItem.id,
+                                        patch: {
+                                          private_job: true,
+                                          private_material: nextUsage === 'private_full',
+                                          private_material_partial: nextUsage === 'private_partial',
+                                        },
+                                      });
+                                    }}
+                                    disabled={!canEditCurrentQueueAccounting}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] transition-colors ${
+                                      currentQueueItem.private_material
+                                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                        : currentQueueItem.private_material_partial
+                                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                          : 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20'
+                                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                                    title={t('queue.accounting.privateMaterial')}
+                                  >
+                                    {currentQueueItem.private_material
+                                      ? t('queue.accounting.privateMaterialFull')
+                                      : currentQueueItem.private_material_partial
+                                        ? t('queue.accounting.privateMaterialPartial')
+                                        : t('queue.accounting.companyMaterial')}
+                                  </button>
+                                )}
+                                {currentQueueCost != null && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-bambu-dark-tertiary text-bambu-gray-light">
+                                    <Coins className="w-3 h-3" />
+                                    {formatCurrencyAmount(currentQueueCost, currencySymbol)}
                                   </span>
                                 )}
                               </>
