@@ -65,7 +65,6 @@ import {
   CheckCircle,
   CheckSquare,
   XCircle,
-  User,
   Home,
   Printer as PrinterIcon,
   Info,
@@ -2220,23 +2219,14 @@ function PrinterCard({
     return filterCompatibleQueueItems(queueItems, loadedFilamentTypes, loadedFilaments, loadedVariants).length;
   }, [queueItems, loadedFilamentTypes, loadedFilaments, loadedVariants]);
 
-  // Fetch currently printing queue item to show who started it (Issue #206)
+  // Fetch currently printing queue item
   const { data: printingQueueItems } = useQuery({
     queryKey: ['queue', printer.id, 'printing'],
     queryFn: () => api.getQueue(printer.id, 'printing'),
     enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
-  // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
-  const { data: reprintUser } = useQuery({
-    queryKey: ['currentPrintUser', printer.id],
-    queryFn: () => api.getCurrentPrintUser(printer.id),
-    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
-  });
-
   const currentQueueItem = printingQueueItems?.[0];
-  // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = currentQueueItem?.created_by_username || reprintUser?.username;
   const archiveId = (() => {
     const raw = currentQueueItem?.archive_id ?? activeArchiveId;
     const n = Number(raw);

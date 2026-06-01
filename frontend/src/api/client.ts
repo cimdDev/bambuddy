@@ -709,9 +709,9 @@ export interface Archive {
   tags: string | null;
   notes: string | null;
   cost: number | null;
-  private_job: boolean;
-  private_material: boolean;
-  private_material_partial: boolean;
+  private_job: boolean | null;
+  private_material: boolean | null;
+  private_material_partial: boolean | null;
   photos: string[] | null;
   failure_reason: string | null;
   quantity: number;
@@ -780,6 +780,28 @@ export interface PrintLogResponse {
   total: number;
 }
 
+export interface AccountingTwoWay {
+  psi: number;
+  private: number;
+  psi_percent: number;
+  private_percent: number;
+}
+
+export interface AccountingThreeWay {
+  psi: number;
+  private: number;
+  partial: number;
+  psi_percent: number;
+  private_percent: number;
+  partial_percent: number;
+}
+
+export interface ArchiveAccounting {
+  jobs: AccountingTwoWay;
+  material_weight_grams: AccountingThreeWay;
+  material_cost: AccountingThreeWay;
+}
+
 export interface ArchiveStats {
   total_prints: number;
   successful_prints: number;
@@ -798,6 +820,7 @@ export interface ArchiveStats {
   // snapshot history (e.g. right after upgrade, before hourly snapshots have
   // a baseline). UI should explain why the number may undercount.
   energy_data_warming_up?: boolean;
+  accounting?: ArchiveAccounting;
 }
 
 export interface TagInfo {

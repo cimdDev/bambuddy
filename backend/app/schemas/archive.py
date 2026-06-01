@@ -161,6 +161,28 @@ class ArchiveSlim(BaseModel):
         from_attributes = True
 
 
+class ArchiveAccountingTwoWay(BaseModel):
+    psi: int
+    private: int
+    psi_percent: float
+    private_percent: float
+
+
+class ArchiveAccountingThreeWay(BaseModel):
+    psi: float
+    private: float
+    partial: float
+    psi_percent: float
+    private_percent: float
+    partial_percent: float
+
+
+class ArchiveAccounting(BaseModel):
+    jobs: ArchiveAccountingTwoWay
+    material_weight_grams: ArchiveAccountingThreeWay
+    material_cost: ArchiveAccountingThreeWay
+
+
 class ArchiveStats(BaseModel):
     total_prints: int
     successful_prints: int
@@ -185,6 +207,7 @@ class ArchiveStats(BaseModel):
     # incomplete snapshot history — e.g. right after a fresh upgrade before the
     # hourly snapshot loop has built up a baseline. Frontend shows a tooltip.
     energy_data_warming_up: bool = False
+    accounting: ArchiveAccounting | None = None
 
 
 class ProjectPageImage(BaseModel):

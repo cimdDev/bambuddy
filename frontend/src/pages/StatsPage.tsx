@@ -35,7 +35,7 @@ import {
 import { Button } from '../components/Button';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
-import { api, type ArchiveSlim } from '../api/client';
+import { api, type ArchiveSlim, type ArchiveStats } from '../api/client';
 import { PrintCalendar } from '../components/PrintCalendar';
 import { FilamentTrends } from '../components/FilamentTrends';
 import { Dashboard, type DashboardWidget } from '../components/Dashboard';
@@ -43,6 +43,7 @@ import { getCurrencySymbol } from '../utils/currency';
 import { formatWeight } from '../utils/weight';
 import { parseUTCDate, formatDuration } from '../utils/date';
 import { MetricToggle, type Metric } from '../components/MetricToggle';
+import { buildPrinterBreakdown, getPrinterMetricValue, getPrivateJobCostSummary } from './statsPageUtils';
 
 // Timeframe types and helpers
 type TimeframePreset = 'today' | 'this-week' | 'this-month' | 'last-7' | 'last-30' | 'last-90' | 'this-year' | 'all-time' | 'custom';
@@ -117,34 +118,70 @@ const RECHARTS_TOOLTIP_STYLE = {
   borderRadius: '8px',
 };
 
+const PSI_COLOR = '#00ae42';
+const PRIVATE_COLOR = '#3b82f6';
+const PARTIAL_COLOR = '#f59e0b';
+
+function isPrivateJob(archive: ArchiveSlim): boolean {
+  return Boolean(archive.private_job);
+}
+
+function materialBucket(archive: ArchiveSlim): 'psi' | 'private' | 'partial' {
+  if (archive.private_material) return 'private';
+  if (archive.private_material_partial) return 'partial';
+  return 'psi';
+}
+
 // Widget Components
 function QuickStatsWidget({
   stats,
+  archives,
   currency,
 }: {
-  stats: {
-    total_prints: number;
-    successful_prints: number;
-    failed_prints: number;
-    total_print_time_hours: number;
-    total_filament_grams: number;
-    total_cost: number;
-    total_energy_kwh: number;
-    total_energy_cost: number;
-    energy_data_warming_up?: boolean;
-  } | undefined;
+  stats: ArchiveStats | undefined;
+  archives: ArchiveSlim[];
   currency: string;
 }) {
   const { t } = useTranslation();
 
   const warmingUp = stats?.energy_data_warming_up === true;
   const warmingUpTooltip = warmingUp ? t('stats.energyWarmingUpTooltip') : undefined;
+  const privatePrints = stats?.accounting?.jobs?.private || 0;
+  const privateWeight = stats?.accounting?.material_weight_grams?.private || 0;
+  const partialWeight = stats?.accounting?.material_weight_grams?.partial || 0;
+  const privateJobCostSummary = useMemo(() => getPrivateJobCostSummary(archives), [archives]);
+  const privateCost = privateJobCostSummary.companyMaterial + privateJobCostSummary.partialMaterial;
+  const partialCost = privateJobCostSummary.partialMaterial;
 
   const items = [
-    { icon: Package, color: 'text-bambu-green', label: t('stats.totalPrints'), value: `${stats?.total_prints || 0}` },
-    { icon: Clock, color: 'text-blue-600 dark:text-blue-400', label: t('stats.printTime'), value: `${stats?.total_print_time_hours?.toFixed(1) ?? '0'}h` },
-    { icon: Package, color: 'text-orange-600 dark:text-orange-400', label: t('stats.filamentUsed'), value: formatWeight(stats?.total_filament_grams || 0) },
-    { icon: DollarSign, color: 'text-green-600 dark:text-green-400', label: t('stats.filamentCost'), value: `${currency} ${stats?.total_cost?.toFixed(2) ?? '0.00'}` },
+    {
+      icon: Package,
+      color: 'text-bambu-green',
+      label: t('stats.totalPrints'),
+      value: `${stats?.total_prints || 0}`,
+      secondary: t('stats.privateCount', { count: privatePrints }),
+    },
+    { icon: Clock, color: 'text-blue-400', label: t('stats.printTime'), value: `${stats?.total_print_time_hours?.toFixed(1) ?? '0'}h` },
+    {
+      icon: Package,
+      color: 'text-orange-400',
+      label: t('stats.filamentUsed'),
+      value: formatWeight(stats?.total_filament_grams || 0),
+      secondary: t('stats.privateWithPartialWeight', {
+        private: formatWeight(privateWeight),
+        partial: formatWeight(partialWeight),
+      }),
+    },
+    {
+      icon: DollarSign,
+      color: 'text-green-400',
+      label: t('stats.filamentCost'),
+      value: `${currency} ${stats?.total_cost?.toFixed(2) ?? '0.00'}`,
+      secondary: t('stats.privateWithPartialCost', {
+        private: `${currency} ${privateCost.toFixed(2)}`,
+        partial: `${currency} ${partialCost.toFixed(2)}`,
+      }),
+    },
     {
       icon: Zap,
       color: 'text-yellow-600 dark:text-yellow-400',
@@ -176,6 +213,7 @@ function QuickStatsWidget({
               {item.warning && <AlertTriangle className="w-3 h-3 text-yellow-600 dark:text-yellow-400" aria-label={item.tooltip} />}
             </p>
             <p className="text-xl font-bold text-white">{item.value}</p>
+            {item.secondary && <p className="text-xs text-bambu-gray mt-0.5">{item.secondary}</p>}
           </div>
         </div>
       ))}
@@ -274,6 +312,96 @@ function SuccessRateWidget({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PrivatePsiAccountingWidget({
+  stats,
+  currency,
+}: {
+  stats: ArchiveStats | undefined;
+  currency: string;
+}) {
+  const { t } = useTranslation();
+  const accounting = stats?.accounting;
+  const jobs = accounting?.jobs;
+  const weight = accounting?.material_weight_grams;
+  const cost = accounting?.material_cost;
+
+  if (!accounting) {
+    return <p className="text-bambu-gray text-center py-4">{t('stats.noArchiveData')}</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-bambu-dark rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm text-bambu-gray">{t('stats.privatePsiJobs')}</p>
+          <p className="text-sm text-white font-medium">
+            {jobs?.private || 0}/{(jobs?.private || 0) + (jobs?.psi || 0)} {t('stats.privateLabel')}
+          </p>
+        </div>
+        <div className="h-3 rounded-full overflow-hidden bg-bambu-dark-tertiary flex">
+          <div style={{ width: `${jobs?.psi_percent || 0}%`, backgroundColor: PSI_COLOR }} />
+          <div style={{ width: `${jobs?.private_percent || 0}%`, backgroundColor: PRIVATE_COLOR }} />
+        </div>
+        <p className="text-xs text-bambu-gray mt-2">
+          {t('stats.psiPercentPrivatePercent', {
+            psi: (jobs?.psi_percent || 0).toFixed(1),
+            private: (jobs?.private_percent || 0).toFixed(1),
+          })}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-bambu-dark rounded-lg p-4">
+          <p className="text-sm text-bambu-gray mb-2">{t('stats.materialWeightSplit')}</p>
+          <div className="h-3 rounded-full overflow-hidden bg-bambu-dark-tertiary flex">
+            <div style={{ width: `${weight?.psi_percent || 0}%`, backgroundColor: PSI_COLOR }} />
+            <div style={{ width: `${weight?.private_percent || 0}%`, backgroundColor: PRIVATE_COLOR }} />
+            <div style={{ width: `${weight?.partial_percent || 0}%`, backgroundColor: PARTIAL_COLOR }} />
+          </div>
+          <p className="text-xs text-bambu-gray mt-2">
+            {t('stats.psiPrivatePartialWeightValues', {
+              psi: formatWeight(weight?.psi || 0),
+              private: formatWeight(weight?.private || 0),
+              partial: formatWeight(weight?.partial || 0),
+            })}
+          </p>
+        </div>
+
+        <div className="bg-bambu-dark rounded-lg p-4">
+          <p className="text-sm text-bambu-gray mb-2">{t('stats.materialCostSplit')}</p>
+          <div className="h-3 rounded-full overflow-hidden bg-bambu-dark-tertiary flex">
+            <div style={{ width: `${cost?.psi_percent || 0}%`, backgroundColor: PSI_COLOR }} />
+            <div style={{ width: `${cost?.private_percent || 0}%`, backgroundColor: PRIVATE_COLOR }} />
+            <div style={{ width: `${cost?.partial_percent || 0}%`, backgroundColor: PARTIAL_COLOR }} />
+          </div>
+          <p className="text-xs text-bambu-gray mt-2">
+            {t('stats.psiPrivatePartialCostValues', {
+              psi: `${currency} ${(cost?.psi || 0).toFixed(2)}`,
+              private: `${currency} ${(cost?.private || 0).toFixed(2)}`,
+              partial: `${currency} ${(cost?.partial || 0).toFixed(2)}`,
+            })}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs text-bambu-gray">
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: PSI_COLOR }} />
+          {t('stats.psiLabel')}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: PRIVATE_COLOR }} />
+          {t('stats.privateLabel')}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: PARTIAL_COLOR }} />
+          {t('stats.partialLabel')}
+        </span>
       </div>
     </div>
   );
@@ -384,7 +512,9 @@ function TimeAccuracyWidget({
   );
 }
 
-function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[]; dateFrom: string; dateTo: string }) {
+function HourlyHeatmap({ archives, dateFrom, dateTo }: { archives: ArchiveSlim[]; dateFrom: string; dateTo: string }) {
+  const { t } = useTranslation();
+  type HourCell = { psi: number; private: number; partial: number; total: number };
   const { days, hourlyCounts, maxCount } = useMemo(() => {
     const start = new Date(dateFrom + 'T00:00:00');
     const end = new Date(dateTo + 'T00:00:00');
@@ -401,27 +531,38 @@ function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[];
     }
 
     // Count prints per (day, hour)
-    const counts: Record<string, number> = {};
+    const counts: Record<string, HourCell> = {};
     let max = 0;
-    printDates.forEach(d => {
-      const date = parseUTCDate(d);
+    archives.forEach(a => {
+      const date = parseUTCDate(a.created_at);
       if (!date) return;
       const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       const k = `${dayKey}-${date.getHours()}`;
-      counts[k] = (counts[k] || 0) + 1;
-      if (counts[k] > max) max = counts[k];
+      const next = counts[k] || { psi: 0, private: 0, partial: 0, total: 0 };
+      if (a.private_material) next.private += 1;
+      else if (a.private_material_partial) next.partial += 1;
+      else next.psi += 1;
+      next.total += 1;
+      counts[k] = next;
+      if (next.total > max) max = next.total;
     });
 
     return { days, hourlyCounts: counts, maxCount: Math.max(1, max) };
-  }, [printDates, dateFrom, dateTo]);
+  }, [archives, dateFrom, dateTo]);
 
-  const getColor = (count: number) => {
+  const getColor = (cell: HourCell) => {
+    const count = cell.total;
     if (count === 0) return 'bg-bambu-dark';
+    const dominant = [
+      { key: 'psi', value: cell.psi, color: 'bg-bambu-green' },
+      { key: 'private', value: cell.private, color: 'bg-blue-500' },
+      { key: 'partial', value: cell.partial, color: 'bg-amber-500' },
+    ].sort((a, b) => b.value - a.value)[0];
     const intensity = count / maxCount;
-    if (intensity <= 0.25) return 'bg-bambu-green/30';
-    if (intensity <= 0.5) return 'bg-bambu-green/50';
-    if (intensity <= 0.75) return 'bg-bambu-green/75';
-    return 'bg-bambu-green';
+    if (intensity <= 0.25) return `${dominant.color}/30`;
+    if (intensity <= 0.5) return `${dominant.color}/50`;
+    if (intensity <= 0.75) return `${dominant.color}/75`;
+    return dominant.color;
   };
 
   const cellSize = 20;
@@ -455,11 +596,12 @@ function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[];
               {day.label}
             </div>
             {Array.from({ length: 24 }, (_, hour) => {
-              const count = hourlyCounts[`${day.key}-${hour}`] || 0;
+              const cell = hourlyCounts[`${day.key}-${hour}`] || { psi: 0, private: 0, partial: 0, total: 0 };
+              const count = cell.total;
               return (
                 <div
                   key={hour}
-                  className={`rounded-sm ${getColor(count)}`}
+                  className={`rounded-sm ${getColor(cell)}`}
                   style={{ width: cellSize, height: cellSize }}
                   title={`${day.label} ${HOUR_LABELS[hour]}: ${count} print${count !== 1 ? 's' : ''}`}
                 />
@@ -475,27 +617,46 @@ function HourlyHeatmap({ printDates, dateFrom, dateTo }: { printDates: string[];
         <div className="flex" style={{ gap }}>
           <div className="rounded-sm bg-bambu-dark" style={{ width: cellSize, height: cellSize }} />
           <div className="rounded-sm bg-bambu-green/30" style={{ width: cellSize, height: cellSize }} />
-          <div className="rounded-sm bg-bambu-green/50" style={{ width: cellSize, height: cellSize }} />
-          <div className="rounded-sm bg-bambu-green/75" style={{ width: cellSize, height: cellSize }} />
+          <div className="rounded-sm bg-blue-500/50" style={{ width: cellSize, height: cellSize }} />
+          <div className="rounded-sm bg-amber-500/75" style={{ width: cellSize, height: cellSize }} />
           <div className="rounded-sm bg-bambu-green" style={{ width: cellSize, height: cellSize }} />
         </div>
         <span>More</span>
+      </div>
+      <div className="flex items-center gap-3 mt-2 text-bambu-gray text-xs">
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-bambu-green" />{t('stats.psiLabel')}</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-500" />{t('stats.privateLabel')}</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500" />{t('stats.partialLabel')}</span>
       </div>
     </div>
   );
 }
 
 function PrintActivityWidget({
-  printDates,
+  archives,
   size = 2,
   dateFrom,
   dateTo,
 }: {
-  printDates: string[];
+  archives: ArchiveSlim[];
   size?: 1 | 2 | 4;
   dateFrom?: string;
   dateTo?: string;
 }) {
+  const printDates = useMemo(() => archives.map(a => a.created_at), [archives]);
+  const dayBucketCounts = useMemo(() => {
+    const counts: Record<string, { psi: number; private: number; partial: number }> = {};
+    archives.forEach((a) => {
+      const day = (a.created_at || '').split('T')[0];
+      if (!day) return;
+      if (!counts[day]) counts[day] = { psi: 0, private: 0, partial: 0 };
+      if (a.private_material) counts[day].private += 1;
+      else if (a.private_material_partial) counts[day].partial += 1;
+      else counts[day].psi += 1;
+    });
+    return counts;
+  }, [archives]);
+
   const spanDays = useMemo(() => {
     if (dateFrom && dateTo) {
       return Math.max((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000, 0) + 1;
@@ -507,7 +668,7 @@ function PrintActivityWidget({
   }, [dateFrom, dateTo]);
 
   if (spanDays <= 7 && dateFrom && dateTo) {
-    return <HourlyHeatmap printDates={printDates} dateFrom={dateFrom} dateTo={dateTo} />;
+    return <HourlyHeatmap archives={archives} dateFrom={dateFrom} dateTo={dateTo} />;
   }
 
   // Calculate months from the timeframe span, fall back to size-based default for all-time
@@ -515,15 +676,13 @@ function PrintActivityWidget({
   const months = spanDays === Infinity
     ? sizeDefault
     : Math.max(1, Math.ceil(spanDays / 30));
-  return <PrintCalendar printDates={printDates} months={months} />;
+  return <PrintCalendar printDates={printDates} dayBucketCounts={dayBucketCounts} months={months} />;
 }
 
 function PrinterStatsWidget({
-  stats,
   archives,
   printerMap,
 }: {
-  stats: { prints_by_printer: Record<string, number> } | undefined;
   archives: ArchiveSlim[];
   printerMap: Map<string, string>;
 }) {
@@ -533,39 +692,27 @@ function PrinterStatsWidget({
 
   // Per-printer data
   const printerData = useMemo(() => {
-    const map = new Map<string, { prints: number; weight: number; time: number }>();
-    if (stats?.prints_by_printer) {
-      Object.entries(stats.prints_by_printer).forEach(([id, count]) => {
-        const entry = map.get(id) || { prints: 0, weight: 0, time: 0 };
-        entry.prints = count;
-        map.set(id, entry);
-      });
-    }
-    archives.forEach(a => {
-      if (!a.printer_id) return;
-      const id = String(a.printer_id);
-      const entry = map.get(id) || { prints: 0, weight: 0, time: 0 };
-      entry.weight += a.filament_used_grams || 0;
-      entry.time += a.actual_time_seconds || a.print_time_seconds || 0;
-      if (!stats?.prints_by_printer) entry.prints++;
-      map.set(id, entry);
-    });
-    return Array.from(map.entries())
-      .map(([id, v]) => ({
-        name: printerMap.get(id) || `${t('common.printer')} ${id}`,
-        value: printerMetric === 'prints' ? v.prints :
-               printerMetric === 'weight' ? Math.round(v.weight) :
-               Math.round((v.time / 3600) * 10) / 10,
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [stats, archives, printerMap, printerMetric, t]);
+    return Array.from(buildPrinterBreakdown(archives).entries())
+      .map(([id, v]) => {
+        const values = getPrinterMetricValue(v, printerMetric);
+        return {
+          name: printerMap.get(id) || `${t('common.printer')} ${id}`,
+          psi: values.psi,
+          private: values.private,
+          partial: values.partial,
+          total: values.psi + values.private + values.partial,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [archives, printerMap, printerMetric, t]);
 
   // Hourly distribution (time of day)
   const hourlyData = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, i) => ({
       hour: i,
       label: HOUR_LABELS[i],
-      total: 0,
+      psi: 0,
+      private: 0,
       failures: 0,
     }));
 
@@ -574,7 +721,8 @@ function PrinterStatsWidget({
       const date = parseUTCDate(a.started_at);
       if (!date) return;
       const h = date.getHours();
-      hours[h].total++;
+      if (isPrivateJob(a)) hours[h].private++;
+      else hours[h].psi++;
       if (a.status === 'failed') {
         hours[h].failures++;
       }
@@ -585,13 +733,14 @@ function PrinterStatsWidget({
 
   // Duration distribution
   const durationData = useMemo(() => {
-    const counts = DURATION_BUCKETS.map(b => ({ name: b.key, count: 0 }));
+    const counts = DURATION_BUCKETS.map(b => ({ name: b.key, psi: 0, private: 0 }));
     archives.forEach(a => {
       const seconds = a.actual_time_seconds || a.print_time_seconds;
       if (!seconds || seconds <= 0) return;
       for (let i = 0; i < DURATION_BUCKETS.length; i++) {
         if (seconds <= DURATION_BUCKETS[i].max) {
-          counts[i].count++;
+          if (isPrivateJob(a)) counts[i].private++;
+          else counts[i].psi++;
           break;
         }
       }
@@ -601,15 +750,23 @@ function PrinterStatsWidget({
 
   // Habits (avg per day-of-week)
   const habitsData = useMemo(() => {
-    const dayValues = [0, 0, 0, 0, 0, 0, 0];
+    const dayValues = DAY_LABELS.map(() => ({ psi: 0, private: 0, partial: 0 }));
     const weeksSet = new Set<string>();
     archives.forEach(a => {
       const date = parseUTCDate(a.created_at) || new Date(a.created_at);
       let day = date.getDay() - 1;
       if (day < 0) day = 6;
-      if (habitsMetric === 'prints') dayValues[day]++;
-      else if (habitsMetric === 'weight') dayValues[day] += a.filament_used_grams || 0;
-      else dayValues[day] += (a.actual_time_seconds || a.print_time_seconds || 0) / 3600;
+      if (habitsMetric === 'prints') {
+        if (isPrivateJob(a)) dayValues[day].private++;
+        else dayValues[day].psi++;
+      } else if (habitsMetric === 'weight') {
+        const bucket = materialBucket(a);
+        dayValues[day][bucket] += a.filament_used_grams || 0;
+      } else {
+        const hours = (a.actual_time_seconds || a.print_time_seconds || 0) / 3600;
+        if (isPrivateJob(a)) dayValues[day].private += hours;
+        else dayValues[day].psi += hours;
+      }
       const weekStart = new Date(date);
       weekStart.setDate(date.getDate() - ((date.getDay() + 6) % 7));
       weeksSet.add(`${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`);
@@ -617,16 +774,16 @@ function PrinterStatsWidget({
     const numWeeks = Math.max(weeksSet.size, 1);
     return DAY_LABELS.map((name, i) => ({
       name,
-      avg: Math.round((dayValues[i] / numWeeks) * 10) / 10,
+      psi: Math.round((dayValues[i].psi / numWeeks) * 10) / 10,
+      private: Math.round((dayValues[i].private / numWeeks) * 10) / 10,
+      partial: Math.round((dayValues[i].partial / numWeeks) * 10) / 10,
     }));
   }, [archives, habitsMetric]);
 
   const metricStyle = (m: Metric) => ({
     unit: m === 'weight' ? 'g' : m === 'time' ? 'h' : '',
-    color: m === 'weight' ? '#00ae42' : m === 'time' ? '#3b82f6' : '#f59e0b',
   });
   const ps = metricStyle(printerMetric);
-  const pLabel = printerMetric === 'weight' ? t('stats.filamentByWeight') : printerMetric === 'time' ? t('stats.hours') : t('common.prints');
   const hs = metricStyle(habitsMetric);
   const hLabel = habitsMetric === 'weight' ? t('stats.avgWeight') : habitsMetric === 'time' ? t('stats.avgTime') : t('stats.avgPrints');
 
@@ -646,12 +803,16 @@ function PrinterStatsWidget({
               <YAxis type="category" dataKey="name" stroke="#9ca3af" tick={{ fontSize: 11 }} width={100} />
               <Tooltip
                 contentStyle={RECHARTS_TOOLTIP_STYLE}
-                formatter={(v: number | undefined) => [
+                formatter={(v: number | undefined, name?: string) => [
                   printerMetric === 'weight' ? formatWeight(Number(v ?? 0)) : `${v ?? 0}${ps.unit}`,
-                  pLabel,
+                  name || 'Value',
                 ]}
               />
-              <Bar dataKey="value" fill={ps.color} radius={[0, 4, 4, 0]} />
+              <Bar dataKey="psi" stackId="printer" name={t('stats.psiLabel')} fill={PSI_COLOR} radius={[0, 0, 0, 0]} />
+              <Bar dataKey="private" stackId="printer" name={t('stats.privateLabel')} fill={PRIVATE_COLOR} radius={[0, 0, 0, 0]} />
+              {printerMetric === 'weight' && (
+                <Bar dataKey="partial" stackId="printer" name={t('stats.partialLabel')} fill={PARTIAL_COLOR} radius={[0, 4, 4, 0]} />
+              )}
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -670,7 +831,8 @@ function PrinterStatsWidget({
                 <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} />
-                <Bar dataKey="count" name={t('common.prints')} fill="#00ae42" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="psi" stackId="duration" name={t('stats.psiLabel')} fill={PSI_COLOR} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="private" stackId="duration" name={t('stats.privateLabel')} fill={PRIVATE_COLOR} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -691,7 +853,11 @@ function PrinterStatsWidget({
                 <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} unit={hs.unit} />
                 <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(v: number | undefined) => [`${v ?? 0}${hs.unit}`, hLabel]} />
-                <Bar dataKey="avg" fill={hs.color} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="psi" stackId="habits" name={t('stats.psiLabel')} fill={PSI_COLOR} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="private" stackId="habits" name={t('stats.privateLabel')} fill={PRIVATE_COLOR} radius={[0, 0, 0, 0]} />
+                {habitsMetric === 'weight' && (
+                  <Bar dataKey="partial" stackId="habits" name={t('stats.partialLabel')} fill={PARTIAL_COLOR} radius={[4, 4, 0, 0]} />
+                )}
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -709,8 +875,8 @@ function PrinterStatsWidget({
                 <XAxis dataKey="label" stroke="#9ca3af" tick={{ fontSize: 10 }} interval={5} />
                 <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip contentStyle={RECHARTS_TOOLTIP_STYLE} />
-                <Bar dataKey="total" name={t('stats.totalPrints')} fill="#00ae42" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="failures" name={t('stats.failed')} fill="#ef4444" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="psi" stackId="timeofday" name={t('stats.psiLabel')} fill={PSI_COLOR} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="private" stackId="timeofday" name={t('stats.privateLabel')} fill={PRIVATE_COLOR} radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -1101,7 +1267,6 @@ export function StatsPage() {
 
   const currency = getCurrencySymbol(settings?.currency || 'USD');
   const printerMap = new Map(printers?.map((p) => [String(p.id), p.name]) || []);
-  const printDates = useMemo(() => archives?.map((a) => a.created_at) || [], [archives]);
 
   if (isLoading) {
     return (
@@ -1118,7 +1283,7 @@ export function StatsPage() {
     {
       id: 'quick-stats',
       title: t('stats.quickStats'),
-      component: <QuickStatsWidget stats={stats} currency={currency} />,
+      component: <QuickStatsWidget stats={stats} archives={archives || []} currency={currency} />,
       defaultSize: 2,
     },
     {
@@ -1142,7 +1307,13 @@ export function StatsPage() {
     {
       id: 'print-activity',
       title: t('stats.printActivity'),
-      component: (size) => <PrintActivityWidget printDates={printDates} size={size} dateFrom={effectiveDateRange.dateFrom} dateTo={effectiveDateRange.dateTo} />,
+      component: (size) => <PrintActivityWidget archives={archives || []} size={size} dateFrom={effectiveDateRange.dateFrom} dateTo={effectiveDateRange.dateTo} />,
+      defaultSize: 2,
+    },
+    {
+      id: 'private-psi-accounting',
+      title: t('stats.privatePsiAccounting'),
+      component: <PrivatePsiAccountingWidget stats={stats} currency={currency} />,
       defaultSize: 2,
     },
     {
@@ -1154,7 +1325,7 @@ export function StatsPage() {
     {
       id: 'printer-stats',
       title: t('stats.printerStats'),
-      component: <PrinterStatsWidget stats={stats} archives={archives || []} printerMap={printerMap} />,
+      component: <PrinterStatsWidget archives={archives || []} printerMap={printerMap} />,
       defaultSize: 4,
     },
     {
