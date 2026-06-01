@@ -33,6 +33,7 @@ const mockQueueItems = [
     started_at: null,
     completed_at: null,
     error_message: null,
+    comment: 'Watch first layer',
     created_at: '2024-01-01T00:00:00Z',
     archive_name: 'Test Print 1',
     archive_thumbnail: '/thumb1.png',
@@ -60,6 +61,7 @@ const mockQueueItems = [
     started_at: '2024-01-01T10:00:00Z',
     completed_at: null,
     error_message: null,
+    comment: null,
     created_at: '2024-01-01T00:00:00Z',
     archive_name: 'Active Print',
     archive_thumbnail: '/thumb2.png',
@@ -87,6 +89,7 @@ const mockQueueItems = [
     started_at: '2024-01-01T08:00:00Z',
     completed_at: '2024-01-01T09:00:00Z',
     error_message: null,
+    comment: 'Move to shelf A',
     created_at: '2024-01-01T00:00:00Z',
     archive_name: 'Completed Print',
     archive_thumbnail: '/thumb3.png',
@@ -493,6 +496,15 @@ describe('QueuePage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Completed Print')).toBeInTheDocument();
+      });
+    });
+
+    it('shows queue comments on cards and history rows', async () => {
+      render(<QueuePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Watch first layer')).toBeInTheDocument();
+        expect(screen.getByText('Move to shelf A')).toBeInTheDocument();
       });
     });
 

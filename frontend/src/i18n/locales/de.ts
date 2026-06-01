@@ -1295,7 +1295,6 @@ export default {
       requiresPrevious: 'Erfordert vorherigen Erfolg',
       autoPowerOff: 'Automatisch ausschalten',
       gcodeInjection: 'G-Code',
-      gcodeInjection: 'G-Code',
       slicerUserMissingWarning: 'Userbadge fehlt',
     },
     editSlicerUser: {
@@ -1316,6 +1315,12 @@ export default {
       privateMaterialPartial: 'Teilweise Privatesmaterial',
       privateMaterialFull: 'Voll Privatmaterial',
       totalCost: 'Kosten: {{amount}}',
+    },
+    comment: {
+      label: 'Kommentar',
+      add: 'Kommentar hinzufügen',
+      edit: 'Kommentar bearbeiten',
+      placeholder: 'Kommentar zur Warteschlange hinzufügen...',
     },
     // Empty state
     empty: {

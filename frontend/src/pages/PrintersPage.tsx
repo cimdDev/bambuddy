@@ -129,6 +129,7 @@ import { ConnectionDiagnosticModal, DiagnosticChecklist } from '../components/Co
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
+import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 
 export interface SpoolmanSlotAssignmentRow {
   printer_id: number;
@@ -2227,6 +2228,10 @@ function PrinterCard({
   });
 
   const currentQueueItem = printingQueueItems?.[0];
+  const currentPrintUser = currentQueueItem?.created_by_username || reprintUser?.username;
+  const canEditCurrentPrintComment = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
+  const hasCurrentPrintComment = Boolean(currentQueueItem?.comment?.trim());
+  const showCurrentPrintComment = !!currentQueueItem && (hasCurrentPrintComment || canEditCurrentPrintComment);
   const archiveId = (() => {
     const raw = currentQueueItem?.archive_id ?? activeArchiveId;
     const n = Number(raw);
@@ -2558,6 +2563,18 @@ function PrinterCard({
       }
       showToast(error.message || t('printers.toast.failedToSendCommand'), 'error');
     },
+  });
+
+  const updateQueueCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'printing'] });
+      queryClient.invalidateQueries({ queryKey: ['queue', printer.id, 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+    },
+    onError: (error: Error) => showToast(error.message || t('printers.toast.failedToUpdate'), 'error'),
   });
 
   // Chamber light mutation with optimistic update
@@ -3747,6 +3764,25 @@ function PrinterCard({
 
                 return (
                   <>
+                    {showCurrentPrintComment && currentQueueItem && (
+                      <div className="mt-2">
+                        <QueueItemCommentEditor
+                          comment={currentQueueItem.comment}
+                          canEdit={canEditCurrentPrintComment}
+                          onSave={async (comment) => {
+                            await updateQueueCommentMutation.mutateAsync({ itemId: currentQueueItem.id, comment });
+                          }}
+                          label={t('queue.comment.label')}
+                          addLabel={t('queue.comment.add')}
+                          placeholder={t('queue.comment.placeholder')}
+                          savingLabel={t('common.saving')}
+                          compact
+                          noMargin
+                          bare
+                          rightAlignAddButton
+                        />
+                      </div>
+                    )}
                     <div className="relative mt-2 flex items-center gap-2">
                       <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-bambu-dark-tertiary">
                         <div
@@ -3840,7 +3876,7 @@ function PrinterCard({
                           printName={printName || undefined}
                           className="w-24 h-24 max-[520px]:w-20 max-[520px]:h-20"
                         />
-                        <div className="flex h-24 max-[520px]:h-20 min-w-0 flex-1 flex-col justify-between pt-1">
+                        <div className="flex min-h-24 max-[520px]:min-h-20 min-w-0 flex-1 flex-col justify-between pt-1">
                           <div className="flex min-h-[18px] items-center gap-2 pr-8">
                             <p className="min-w-0 truncate text-sm text-bambu-gray">{getStatusDisplay(status.state, status.stg_cur_name)}</p>
                             {plateStatusPill}
@@ -3848,6 +3884,23 @@ function PrinterCard({
                           <p className={`min-h-[18px] truncate pr-8 text-sm ${printName ? 'text-white' : 'text-bambu-gray/70'}`}>
                             {printName || t('printers.noActiveJob', 'No active job')}
                           </p>
+                          {showCurrentPrintComment && currentQueueItem && (
+                            <QueueItemCommentEditor
+                              comment={currentQueueItem.comment}
+                              canEdit={canEditCurrentPrintComment}
+                              onSave={async (comment) => {
+                                await updateQueueCommentMutation.mutateAsync({ itemId: currentQueueItem.id, comment });
+                              }}
+                              label={t('queue.comment.label')}
+                              addLabel={t('queue.comment.add')}
+                              placeholder={t('queue.comment.placeholder')}
+                              savingLabel={t('common.saving')}
+                              compact
+                              noMargin
+                              bare
+                              rightAlignAddButton
+                            />
+                          )}
                           <div className="flex h-3 items-center gap-2 text-sm">
                             <div className="h-1.5 min-w-0 flex-1 rounded-full bg-bambu-dark-tertiary">
                               <div

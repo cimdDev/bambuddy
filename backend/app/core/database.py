@@ -3265,6 +3265,9 @@ async def run_migrations(conn):
         "CREATE INDEX IF NOT EXISTS ix_spoolman_k_profile_spool ON spoolman_k_profile (spoolman_spool_id)",
     )
 
+    # Migration: queue item operator comment.
+    await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN comment TEXT")
+
     # Migration: Add provider column to github_backup_config for multi-provider support
     await _safe_execute(conn, "ALTER TABLE github_backup_config ADD COLUMN provider VARCHAR(30) DEFAULT 'github'")
 

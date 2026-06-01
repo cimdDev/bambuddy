@@ -82,6 +82,7 @@ import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
 import { SlicerUserBadge } from '../components/SlicerUserBadge';
 import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
+import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 
 type QueueAccountingPatch = {
   private_job?: boolean;
@@ -365,6 +366,7 @@ function SortableQueueItem({
   onMoveUp,
   onMoveDown,
   onUpdateAccounting,
+  onUpdateComment,
   timeFormat = 'system',
   isSelected = false,
   onToggleSelect,
@@ -391,6 +393,7 @@ function SortableQueueItem({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onUpdateAccounting?: (patch: QueueAccountingPatch) => Promise<void>;
+  onUpdateComment?: (comment: string | null) => Promise<void>;
   timeFormat?: TimeFormat;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -469,6 +472,10 @@ function SortableQueueItem({
       ? 'private_partial'
       : 'company';
   const itemCost = estimatePrintCost(item.filament_used_grams, defaultCostPerKg);
+  const canEditComment = !!onUpdateComment && canModify('queue', 'update', item.created_by_id);
+  const hasComment = Boolean(item.comment?.trim());
+  // Always show comment editor when there's a comment or user can edit — regardless of print state
+  const showCommentEditor = hasComment || canEditComment;
 
   // This is an "if started now" estimate, not a cumulative queue forecast, so
   // it is only shown for items the page determined could actually start now
@@ -551,7 +558,7 @@ function SortableQueueItem({
               e.stopPropagation();
               onToggleSelect();
             }}
-            className={`hidden sm:flex items-center justify-center w-6 h-6 rounded border transition-colors shrink-0 ${
+            className={`hidden sm:flex items-center justify-center w-6 h-6 rounded border transition-colors shrink-0 mt-1 ${
               isSelected
                 ? 'bg-bambu-green border-bambu-green text-white'
                 : 'border-white/30 bg-black/30 hover:border-bambu-green/50'
@@ -571,7 +578,7 @@ function SortableQueueItem({
             <GripVertical className="w-4 h-4 text-bambu-gray" />
           </div>
         ) : position !== undefined ? (
-          <div className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-bambu-dark text-bambu-gray text-sm font-medium shrink-0">
+          <div className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-bambu-dark text-bambu-gray text-sm font-medium shrink-0 mt-0.5">
             #{position}
           </div>
         ) : (
@@ -579,7 +586,7 @@ function SortableQueueItem({
         )}
 
         {/* Thumbnail - use plate-specific thumbnail if plate_id is set */}
-        <div className="w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 bg-bambu-dark rounded-lg overflow-hidden">
+        <div className="w-10 h-10 sm:w-14 sm:h-14 flex-shrink-0 bg-bambu-dark rounded-lg overflow-hidden mt-0.5">
           {item.archive_thumbnail ? (
             <img
               src={
@@ -752,7 +759,6 @@ function SortableQueueItem({
             )}
           </div>
 
-          {/* Options badges */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2">
             {item.manual_start && (
               <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded-full border border-purple-200 dark:border-purple-500/20 flex items-center gap-1">
@@ -856,8 +862,26 @@ function SortableQueueItem({
               </span>
             )}
           </div>
+          {/* Comment editor — rendered here, above progress bar, for all item states */}
+          {showCommentEditor && (
+            <div className="mt-2 sm:mt-2.5" onClick={(e) => e.stopPropagation()}>
+              <QueueItemCommentEditor
+                comment={item.comment}
+                canEdit={canEditComment}
+                onSave={onUpdateComment}
+                label={t('queue.comment.label')}
+                addLabel={t('queue.comment.add')}
+                placeholder={t('queue.comment.placeholder')}
+                savingLabel={t('common.saving')}
+                compact
+                noMargin
+                bare
+                rightAlignAddButton
+              />
+            </div>
+          )}
 
-          {/* Progress bar for printing items - TODO: integrate with WebSocket */}
+          {/* Progress bar for printing items */}
           {isPrinting && status && (() => {
             // Gate progress/remaining/layer on printer actually running this print.
             // Between dispatch and RUNNING transition (H2D/P1 MQTT lag), status.progress
@@ -902,7 +926,6 @@ function SortableQueueItem({
             );
           })()}
 
-          {/* Waiting reason for model-based assignments */}
           {item.waiting_reason && item.status === 'pending' && (
             <p className="text-[10px] sm:text-xs text-purple-700 dark:text-purple-400 mt-1.5 sm:mt-2 flex items-start gap-1">
               <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
@@ -920,7 +943,6 @@ function SortableQueueItem({
               <span>{t('queue.filamentShort.rowBadge')}</span>
             </p>
           )}
-
           {/* Archive carries the slicer's own live-resolved AMS-slot pick
               (extra_data.slicer_ams_mapping) — reprints of this archive reuse
               the exact physical spool instead of re-deriving one. */}
@@ -943,11 +965,11 @@ function SortableQueueItem({
           )}
         </div>
 
-        {/* Status badge + Actions */}
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <StatusBadge status={item.status} waitingReason={item.waiting_reason} printerState={printerState} t={t} />
-
+        {/* Status badge + Actions — self-start keeps it top-aligned regardless of content height */}
+        <div className="flex flex-col items-end gap-2 shrink-0 self-start" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-0.5 sm:gap-1">
+            <StatusBadge status={item.status} waitingReason={item.waiting_reason} printerState={printerState} t={t} />
+
             {isPrinting && (
               <Button
                 variant="ghost"
@@ -1058,6 +1080,7 @@ interface QueueRowRenderProps {
   etaEligibleIds: Set<number>;
   etaNow: number;
   onUpdateAccounting?: (item: PrintQueueItem, patch: QueueAccountingPatch) => Promise<void>;
+  onUpdateComment?: (item: PrintQueueItem, comment: string | null) => Promise<void>;
   defaultCostPerKg: number;
   currencySymbol: string;
   aggregateForRows: (rows: QueueRow[]) => { count: number; time: number; weight: number };
@@ -1088,6 +1111,7 @@ function QueueRowRender(props: QueueRowRenderProps) {
     etaEligibleIds,
     etaNow,
     onUpdateAccounting,
+    onUpdateComment,
     defaultCostPerKg,
     currencySymbol,
     onMoveUp,
@@ -1114,6 +1138,7 @@ function QueueRowRender(props: QueueRowRenderProps) {
         showEta={etaEligibleIds.has(row.item.id)}
         etaNow={etaNow}
         onUpdateAccounting={onUpdateAccounting ? (patch) => onUpdateAccounting(row.item, patch) : undefined}
+        onUpdateComment={onUpdateComment ? (comment) => onUpdateComment(row.item, comment) : undefined}
         defaultCostPerKg={defaultCostPerKg}
         currencySymbol={currencySymbol}
         t={t}
@@ -1144,6 +1169,7 @@ function SortableBatchRow({
   etaEligibleIds,
   etaNow,
   onUpdateAccounting,
+  onUpdateComment,
   defaultCostPerKg,
   currencySymbol,
   aggregateForRows,
@@ -1340,6 +1366,7 @@ function SortableBatchRow({
               showEta={etaEligibleIds.has(child.id)}
               etaNow={etaNow}
               onUpdateAccounting={onUpdateAccounting ? (patch) => onUpdateAccounting(child, patch) : undefined}
+              onUpdateComment={onUpdateComment ? (comment) => onUpdateComment(child, comment) : undefined}
               defaultCostPerKg={defaultCostPerKg}
               currencySymbol={currencySymbol}
               t={t}
@@ -1366,6 +1393,7 @@ interface HistorySectionProps {
   onSortAscToggle: () => void;
   onRemove: (item: PrintQueueItem) => void;
   onRequeue: (item: PrintQueueItem) => void;
+  onUpdateComment?: (item: PrintQueueItem, comment: string | null) => Promise<void>;
   timeFormat: TimeFormat;
   batchCollapsed: Record<number, boolean>;
   toggleBatchCollapsed: (id: number) => void;
@@ -1388,6 +1416,7 @@ function HistorySection({
   onSortAscToggle,
   onRemove,
   onRequeue,
+  onUpdateComment,
   timeFormat,
   batchCollapsed,
   toggleBatchCollapsed,
@@ -1467,6 +1496,7 @@ function HistorySection({
                 item={row.item}
                 onRemove={() => onRemove(row.item)}
                 onRequeue={() => onRequeue(row.item)}
+                onUpdateComment={onUpdateComment ? (comment) => onUpdateComment(row.item, comment) : undefined}
                 timeFormat={timeFormat}
                 hasPermission={hasPermission}
                 canModify={canModify}
@@ -1550,6 +1580,7 @@ function HistorySection({
                       item={child}
                       onRemove={() => onRemove(child)}
                       onRequeue={() => onRequeue(child)}
+                      onUpdateComment={onUpdateComment ? (comment) => onUpdateComment(child, comment) : undefined}
                       timeFormat={timeFormat}
                       hasPermission={hasPermission}
                       canModify={canModify}
@@ -1840,6 +1871,15 @@ export function QueuePage() {
       setSelectedItems([]);
       setShowBulkEditModal(false);
       showToast(result.message);
+    },
+    onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: ({ itemId, comment }: { itemId: number; comment: string | null }) =>
+      api.updateQueueItem(itemId, { comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
     },
     onError: () => showToast(t('queue.toast.updateFailed'), 'error'),
   });
@@ -2741,6 +2781,9 @@ export function QueuePage() {
           onSortAscToggle={() => setHistorySortAsc(!historySortAsc)}
           onRemove={(item) => setConfirmAction({ type: 'remove', item })}
           onRequeue={setRequeueItem}
+          onUpdateComment={async (item, comment) => {
+            await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
+          }}
           timeFormat={timeFormat}
           batchCollapsed={batchCollapsed}
           toggleBatchCollapsed={toggleBatchCollapsed}
@@ -2770,6 +2813,9 @@ export function QueuePage() {
                     onStop={() => setConfirmAction({ type: 'stop', item })}
                     onRequeue={() => {}}
                     onStart={() => {}}
+                    onUpdateComment={async (comment) => {
+                      await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
+                    }}
                     timeFormat={timeFormat}
                     hasPermission={hasPermission}
                     canModify={canModify}
@@ -2915,6 +2961,9 @@ export function QueuePage() {
                           onUpdateAccounting={async (item, patch) => {
                             await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
                           }}
+                          onUpdateComment={async (item, comment) => {
+                            await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
+                          }}
                           defaultCostPerKg={defaultCostPerKg}
                           currencySymbol={currencySymbol}
                           aggregateForRows={aggregateForRows}
@@ -2959,6 +3008,9 @@ export function QueuePage() {
                                   etaNow={etaNow}
                                   onUpdateAccounting={async (item, patch) => {
                                     await updateAccountingMutation.mutateAsync({ itemId: item.id, patch });
+                                  }}
+                                  onUpdateComment={async (item, comment) => {
+                                    await updateCommentMutation.mutateAsync({ itemId: item.id, comment });
                                   }}
                                   defaultCostPerKg={defaultCostPerKg}
                                   currencySymbol={currencySymbol}
