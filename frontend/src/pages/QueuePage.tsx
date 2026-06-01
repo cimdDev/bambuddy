@@ -77,6 +77,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
 import { CompactHistoryRow } from '../components/CompactHistoryRow';
 import { QueueTimelineView } from '../components/QueueTimelineView';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
+import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 
 function formatWeight(g: number, useKg = false): string {
   if (useKg && g >= 1000) return `${(g / 1000).toFixed(1)}kg`;
@@ -387,6 +389,7 @@ function SortableQueueItem({
   etaNow?: number;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
   // Fetch printer status every 30 seconds while printing to monitor progress
   const { data: status } = useQuery({
     queryKey: ['printerStatus', item.printer_id],
@@ -435,6 +438,12 @@ function SortableQueueItem({
   const isPrinting = item.status === 'printing';
   const isPending = item.status === 'pending';
   const isHistory = ['completed', 'failed', 'skipped', 'cancelled'].includes(item.status);
+  const slicerUser = item.slicer_user || item.slicer_user_email || null;
+  const canEditSlicerUser = item.archive_id
+    ? canModify('archives', 'update', item.created_by_id)
+    : item.library_file_id
+      ? canModify('library', 'update', item.created_by_id)
+      : false;
 
   // This is an "if started now" estimate, not a cumulative queue forecast, so
   // it is only shown for items the page determined could actually start now
@@ -660,6 +669,46 @@ function SortableQueueItem({
                 {item.created_by_username}
               </span>
             )}
+            {slicerUser ? (
+              canEditSlicerUser ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setShowSlicerUserEdit(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setShowSlicerUserEdit(true);
+                    }
+                  }}
+                  className="hidden sm:inline-flex rounded-full"
+                  title={t('queue.editSlicerUser.editExisting')}
+                >
+                  <SlicerUserBadge user={slicerUser} />
+                </span>
+              ) : (
+                <SlicerUserBadge user={slicerUser} className="hidden sm:inline-flex" />
+              )
+            ) : (
+              <span
+                role={canEditSlicerUser ? 'button' : undefined}
+                tabIndex={canEditSlicerUser ? 0 : undefined}
+                onClick={canEditSlicerUser ? () => setShowSlicerUserEdit(true) : undefined}
+                onKeyDown={canEditSlicerUser ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowSlicerUserEdit(true);
+                  }
+                } : undefined}
+                className="hidden sm:inline-flex"
+                title={canEditSlicerUser ? t('queue.editSlicerUser.addMissing') : t('queue.badges.slicerUserMissingWarning')}
+              >
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
+                  <AlertCircle className="w-3 h-3" />
+                  {t('queue.badges.slicerUserMissingWarning')}
+                </span>
+              </span>
+            )}
             {isPending && !item.manual_start && (
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
@@ -865,6 +914,12 @@ function SortableQueueItem({
           </div>
         </div>
       </div>
+      {showSlicerUserEdit && (
+        <SlicerUserEditModal
+          item={item}
+          onClose={() => setShowSlicerUserEdit(false)}
+        />
+      )}
     </div>
   );
 }

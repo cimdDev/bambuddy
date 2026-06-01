@@ -2047,11 +2047,15 @@ async def list_files(
         print_time = None
         filament_grams = None
         sliced_for_model = None
+        slicer_user = None
+        slicer_user_email = None
         if f.file_metadata:
             print_name = f.file_metadata.get("print_name")
             print_time = f.file_metadata.get("print_time_seconds")
             filament_grams = f.file_metadata.get("filament_used_grams")
             sliced_for_model = f.file_metadata.get("sliced_for_model")
+            slicer_user = f.file_metadata.get("slicer_user")
+            slicer_user_email = f.file_metadata.get("slicer_user_email")
 
         file_list.append(
             FileListResponse(
@@ -2075,6 +2079,8 @@ async def list_files(
                 tags=[TagSummary(id=t.id, name=t.name) for t in f.tags],
                 variant_group_id=f.variant_group_id,
                 variant_count=variant_counts.get(f.variant_group_id, 0) if f.variant_group_id else 0,
+                slicer_user=slicer_user,
+                slicer_user_email=slicer_user_email,
             )
         )
 
@@ -4616,11 +4622,15 @@ async def get_file(
     print_time = None
     filament_grams = None
     sliced_for_model = None
+    slicer_user = None
+    slicer_user_email = None
     if file.file_metadata:
         print_name = file.file_metadata.get("print_name")
         print_time = file.file_metadata.get("print_time_seconds")
         filament_grams = file.file_metadata.get("filament_used_grams")
         sliced_for_model = file.file_metadata.get("sliced_for_model")
+        slicer_user = file.file_metadata.get("slicer_user")
+        slicer_user_email = file.file_metadata.get("slicer_user_email")
 
     return FileResponseSchema(
         id=file.id,
@@ -4648,6 +4658,8 @@ async def get_file(
         print_time_seconds=print_time,
         filament_used_grams=filament_grams,
         sliced_for_model=sliced_for_model,
+        slicer_user=slicer_user,
+        slicer_user_email=slicer_user_email,
     )
 
 
@@ -4711,6 +4723,12 @@ async def update_file(
 
     if data.notes is not None:
         file.notes = data.notes if data.notes else None
+
+    if data.slicer_user is not None or data.slicer_user_email is not None:
+        metadata = dict(file.file_metadata or {})
+        metadata["slicer_user"] = data.slicer_user.strip() if data.slicer_user else None
+        metadata["slicer_user_email"] = data.slicer_user_email.strip() if data.slicer_user_email else None
+        file.file_metadata = metadata
 
     await db.commit()
     await db.refresh(file)

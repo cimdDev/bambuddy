@@ -13,6 +13,8 @@ class ArchiveBase(BaseModel):
     quantity: int | None = None  # Number of items printed
     # User-defined link (Printables, Thingiverse, etc.)
     external_url: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
 
 class ArchiveUpdate(ArchiveBase):
@@ -69,6 +71,8 @@ class ArchiveResponse(BaseModel):
     bed_temperature: int | None
     bed_type: str | None = None  # e.g. "Cool Plate", "Textured PEI Plate" (from 3MF curr_bed_type)
     nozzle_temperature: int | None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
     sliced_for_model: str | None = None  # Printer model this file was sliced for
 
@@ -140,6 +144,8 @@ class ArchiveSlim(BaseModel):
     energy_kwh: float | None = None
     energy_cost: float | None = None
     quantity: int = 1
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
     created_at: datetime | None
 
     class Config:

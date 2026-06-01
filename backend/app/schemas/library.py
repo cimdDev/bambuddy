@@ -122,6 +122,8 @@ class FileUpdate(BaseModel):
     folder_id: int | None = None
     project_id: int | None = None
     notes: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
 
 class FileDuplicate(BaseModel):
@@ -174,6 +176,8 @@ class FileResponse(BaseModel):
     print_time_seconds: int | None = None
     filament_used_grams: float | None = None
     sliced_for_model: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
     class Config:
         from_attributes = True
@@ -215,6 +219,8 @@ class FileListResponse(BaseModel):
     print_time_seconds: int | None = None
     filament_used_grams: float | None = None
     sliced_for_model: str | None = None
+    slicer_user: str | None = None
+    slicer_user_email: str | None = None
 
     # Tags assigned to this file (#1268). Empty list when the file has none —
     # never null, so the FE can iterate without a guard.

@@ -125,6 +125,8 @@ import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
 import { ConnectionDiagnosticModal, DiagnosticChecklist } from '../components/ConnectionDiagnostic';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
+import { SlicerUserBadge } from '../components/SlicerUserBadge';
+import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 
 export interface SpoolmanSlotAssignmentRow {
   printer_id: number;
@@ -1834,7 +1836,7 @@ function PrinterCard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, canModify } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteArchives, setDeleteArchives] = useState(true);
@@ -2215,18 +2217,53 @@ function PrinterCard({
   const { data: printingQueueItems } = useQuery({
     queryKey: ['queue', printer.id, 'printing'],
     queryFn: () => api.getQueue(printer.id, 'printing'),
-    enabled: status?.state === 'RUNNING',
+    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
   // Fetch reprint user info (for prints started via Reprint, not queue - Issue #206)
   const { data: reprintUser } = useQuery({
     queryKey: ['currentPrintUser', printer.id],
     queryFn: () => api.getCurrentPrintUser(printer.id),
-    enabled: status?.state === 'RUNNING',
+    enabled: status?.state === 'RUNNING' || status?.state === 'PAUSE',
   });
 
+  const currentQueueItem = printingQueueItems?.[0];
   // Combine both sources: queue item user takes precedence, then reprint user
-  const currentPrintUser = printingQueueItems?.[0]?.created_by_username || reprintUser?.username;
+  const currentPrintUser = currentQueueItem?.created_by_username || reprintUser?.username;
+  const archiveId = (() => {
+    const raw = currentQueueItem?.archive_id ?? activeArchiveId;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  })();
+  const printingArchiveQuery = useQuery({
+    queryKey: ['printingArchive', printer.id, archiveId],
+    queryFn: () => api.getArchive(archiveId!),
+    enabled: (status?.state === 'RUNNING' || status?.state === 'PAUSE') && archiveId !== undefined,
+  });
+  const currentSlicerUser =
+    printingArchiveQuery.data?.slicer_user ??
+    printingArchiveQuery.data?.slicer_user_email ??
+    currentQueueItem?.slicer_user ??
+    currentQueueItem?.slicer_user_email ??
+    null;
+  const currentSlicerUserEditTarget = printingArchiveQuery.data
+    ? {
+        archive_id: printingArchiveQuery.data.id,
+        slicer_user: printingArchiveQuery.data.slicer_user,
+        slicer_user_email: printingArchiveQuery.data.slicer_user_email,
+      }
+    : currentQueueItem ?? null;
+  const currentMissingSlicerUser = !!currentSlicerUserEditTarget && !currentSlicerUser;
+  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
+  const canEditCurrentSlicerUser = printingArchiveQuery.data
+    ? canModify('archives', 'update', printingArchiveQuery.data.created_by_id)
+    : currentQueueItem
+      ? currentQueueItem.archive_id
+        ? canModify('archives', 'update', currentQueueItem.created_by_id)
+        : currentQueueItem.library_file_id
+          ? canModify('library', 'update', currentQueueItem.created_by_id)
+          : false
+    : false;
 
   // Fetch last completed print for this printer
   const { data: lastPrints } = useQuery({

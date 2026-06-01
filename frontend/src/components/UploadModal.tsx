@@ -3,10 +3,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Upload, X, File, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
-import type { BulkUploadResult } from '../api/client';
+import type { Archive, BulkUploadResult } from '../api/client';
 import { Card, CardContent } from './Card';
 import { Button } from './Button';
 import { useToast } from '../contexts/ToastContext';
+import { SlicerUserEditModal } from './SlicerUserEditModal';
+import { getSuggestedSlicerUser, rememberSlicerUser } from '../utils/slicerUserMemory';
 
 interface FileWithStatus {
   file: File;
@@ -30,6 +32,7 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
   );
   const [isDragging, setIsDragging] = useState(false);
   const [uploadResult, setUploadResult] = useState<BulkUploadResult | null>(null);
+  const [missingUserBadgeQueue, setMissingUserBadgeQueue] = useState<Archive[]>([]);
 
   // Close on Escape key
   useEffect(() => {
@@ -44,6 +47,30 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
     mutationFn: (filesToUpload: File[]) =>
       api.uploadArchivesBulk(filesToUpload),
     onSuccess: (result) => {
+      void (async () => {
+        const uploadedArchives = await Promise.all(
+          result.results.map(async (entry) => {
+            try {
+              return await api.getArchive(entry.id);
+            } catch {
+              return null;
+            }
+          })
+        );
+        const validArchives = uploadedArchives.filter((archive): archive is Archive => archive !== null);
+        for (const archive of validArchives) {
+          const observedUser = archive.slicer_user || archive.slicer_user_email;
+          if (observedUser) {
+            rememberSlicerUser(observedUser);
+          }
+        }
+        const missingSlicerUsers = validArchives.filter((archive) => !(archive.slicer_user || archive.slicer_user_email));
+        if (missingSlicerUsers.length > 0) {
+          setMissingUserBadgeQueue(missingSlicerUsers);
+          showToast(t('uploadModal.missingUserBadgeWarning', { count: missingSlicerUsers.length }), 'warning');
+        }
+      })();
+
       setUploadResult(result);
       queryClient.invalidateQueries({ queryKey: ['archives'] });
       queryClient.invalidateQueries({ queryKey: ['archiveStats'] });
@@ -145,11 +172,14 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
 
   const pendingCount = files.filter((f) => f.status === 'pending').length;
   const isUploading = uploadMutation.isPending;
+  const currentMissingUserBadgeArchive = missingUserBadgeQueue[0] || null;
+  const suggestedSlicerUser = getSuggestedSlicerUser();
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <CardContent className="p-0 flex flex-col h-full">
+    <>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <CardContent className="p-0 flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-bambu-dark-tertiary">
             <h2 className="text-xl font-semibold text-white">{t('uploadModal.title')}</h2>
@@ -260,33 +290,53 @@ export function UploadModal({ onClose, initialFiles }: UploadModalProps) {
             </div>
           )}
 
-          {/* Footer */}
-          <div className="flex gap-3 p-4 border-t border-bambu-dark-tertiary">
-            <Button variant="secondary" onClick={onClose} className="flex-1">
-              {uploadResult ? t('common.close') : t('common.cancel')}
-            </Button>
-            {!uploadResult && (
-              <Button
-                onClick={handleUpload}
-                disabled={pendingCount === 0 || isUploading}
-                className="flex-1"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('uploadModal.uploading')}
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    {t('uploadModal.upload')} {pendingCount > 0 && `(${pendingCount})`}
-                  </>
-                )}
+            {/* Footer */}
+            <div className="flex gap-3 p-4 border-t border-bambu-dark-tertiary">
+              <Button variant="secondary" onClick={onClose} className="flex-1">
+                {uploadResult ? t('common.close') : t('common.cancel')}
               </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              {!uploadResult && (
+                <Button
+                  onClick={handleUpload}
+                  disabled={pendingCount === 0 || isUploading}
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {t('uploadModal.uploading')}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      {t('uploadModal.upload')} {pendingCount > 0 && `(${pendingCount})`}
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      {currentMissingUserBadgeArchive && (
+        <SlicerUserEditModal
+          key={currentMissingUserBadgeArchive.id}
+          item={currentMissingUserBadgeArchive}
+          initialValue={suggestedSlicerUser ?? undefined}
+          description={t('uploadModal.confirmMissingUserBadge', {
+            name: currentMissingUserBadgeArchive.print_name || currentMissingUserBadgeArchive.filename,
+          })}
+          hint={suggestedSlicerUser ? t('uploadModal.confirmMissingUserBadgeHint', { user: suggestedSlicerUser }) : undefined}
+          onSaved={() => {
+            setMissingUserBadgeQueue((prev) => prev.slice(1));
+          }}
+          onCancelled={() => {
+            setMissingUserBadgeQueue((prev) => prev.slice(1));
+          }}
+          onClose={() => {
+          }}
+        />
+      )}
+    </>
   );
 }

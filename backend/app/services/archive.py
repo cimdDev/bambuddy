@@ -479,8 +479,39 @@ class ThreeMFParser:
                 val = data["curr_bed_type"]
                 if isinstance(val, str) and val.strip():
                     self.metadata["bed_type"] = val.strip()
+
+            # Custom printer_notes convention:
+            # User=alice
+            # alice@example.com
+            notes = data.get("printer_notes")
+            if isinstance(notes, list):
+                notes = "\n".join(str(x) for x in notes if x is not None)
+            if isinstance(notes, str):
+                slicer_user, slicer_user_email = self._parse_printer_notes(notes)
+                if slicer_user:
+                    self.metadata["slicer_user"] = slicer_user
+                if slicer_user_email:
+                    self.metadata["slicer_user_email"] = slicer_user_email
         except Exception:
             pass  # Print settings are optional; missing values are left unset
+
+    def _parse_printer_notes(self, notes: str) -> tuple[str | None, str | None]:
+        """Extract slicer user and email from printer notes."""
+        slicer_user = None
+        slicer_user_email = None
+
+        for raw_line in notes.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.lower().startswith("user="):
+                value = line.split("=", 1)[1].strip()
+                if value:
+                    slicer_user = value
+            elif "@" in line and " " not in line:
+                slicer_user_email = line
+
+        return slicer_user, slicer_user_email
 
     def _extract_settings_from_content(self, content: str):
         """Extract print settings from config content."""
@@ -1343,6 +1374,8 @@ class ArchiveService:
             bed_type=metadata.get("bed_type"),
             nozzle_temperature=metadata.get("nozzle_temperature"),
             sliced_for_model=metadata.get("sliced_for_model"),
+            slicer_user=metadata.get("slicer_user"),
+            slicer_user_email=metadata.get("slicer_user_email"),
             makerworld_url=metadata.get("makerworld_url"),
             designer=metadata.get("designer"),
             status=status,
