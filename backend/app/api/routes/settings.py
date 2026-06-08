@@ -434,6 +434,8 @@ _UI_PREFERENCE_FIELDS: tuple[str, ...] = (
     "camera_view_mode",
     "time_format",
     "date_format",
+    "currency",
+    "default_filament_cost",
     "drying_presets",
     "ams_humidity_thresholds",
     "ams_humidity_good",

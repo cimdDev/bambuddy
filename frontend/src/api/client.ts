@@ -4966,6 +4966,8 @@ export const api = {
       camera_view_mode?: 'window' | 'embedded';
       time_format?: 'system' | '12h' | '24h';
       date_format?: string;
+      currency?: string;
+      default_filament_cost?: number;
       drying_presets?: string;
       ams_humidity_thresholds?: string;
       ams_humidity_good?: number;

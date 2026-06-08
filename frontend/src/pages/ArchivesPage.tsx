@@ -541,8 +541,11 @@ function ArchiveCard({
   });
 
   const updateAccountingMutation = useMutation({
-    mutationFn: (patch: Pick<Archive, 'private_job' | 'private_material' | 'private_material_partial'>) =>
-      api.updateArchive(archive.id, patch),
+    mutationFn: (patch: {
+      private_job?: boolean;
+      private_material?: boolean;
+      private_material_partial?: boolean;
+    }) => api.updateArchive(archive.id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['archives'] });
     },
@@ -1291,8 +1294,8 @@ function ArchiveCard({
                 const nextPrivateJob = !archive.private_job;
                 updateAccountingMutation.mutate({
                   private_job: nextPrivateJob,
-                  private_material: nextPrivateJob ? archive.private_material : false,
-                  private_material_partial: nextPrivateJob ? archive.private_material_partial : false,
+                  private_material: nextPrivateJob ? !!archive.private_material : false,
+                  private_material_partial: nextPrivateJob ? !!archive.private_material_partial : false,
                 });
               }}
               disabled={!canModify('archives', 'update', archive.created_by_id)}

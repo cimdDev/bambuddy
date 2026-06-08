@@ -464,7 +464,6 @@ function SortableQueueItem({
     : item.library_file_id
       ? canModify('library', 'update', item.created_by_id)
       : false;
-  const canEditAccounting = isPending && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
   const canEditAccountingWhilePrinting = (isPending || isPrinting) && !!onUpdateAccounting && canModify('queue', 'update', item.created_by_id);
   const privateMaterialUsage: PrivateMaterialUsage = item.private_material
     ? 'private_full'
@@ -791,8 +790,8 @@ function SortableQueueItem({
                   const nextPrivateJob = !item.private_job;
                   void onUpdateAccounting?.({
                     private_job: nextPrivateJob,
-                    private_material: nextPrivateJob ? item.private_material : false,
-                    private_material_partial: nextPrivateJob ? item.private_material_partial : false,
+                    private_material: nextPrivateJob ? !!item.private_material : false,
+                    private_material_partial: nextPrivateJob ? !!item.private_material_partial : false,
                   });
                 }}
                 className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border transition-colors ${
@@ -1743,10 +1742,14 @@ export function QueuePage() {
     queryKey: ['settings'],
     queryFn: api.getSettings,
   });
+  const { data: uiPreferences } = useQuery({
+    queryKey: ['ui-preferences'],
+    queryFn: api.getUiPreferences,
+  });
 
-  const timeFormat: TimeFormat = settings?.time_format || 'system';
-  const defaultCostPerKg = settings?.default_filament_cost ?? 0;
-  const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
+  const timeFormat: TimeFormat = uiPreferences?.time_format || settings?.time_format || 'system';
+  const defaultCostPerKg = uiPreferences?.default_filament_cost ?? settings?.default_filament_cost ?? 0;
+  const currencySymbol = getCurrencySymbol(uiPreferences?.currency || settings?.currency || 'USD');
 
   const { data: queue, isLoading } = useQuery({
     queryKey: ['queue', filterPrinter, filterStatus],

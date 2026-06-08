@@ -496,3 +496,98 @@ async def test_archive_list_keeps_time_accuracy_for_single_run_archives(
     assert row["actual_time_seconds"] == 3600
     assert row["time_accuracy"] == 100.0
     assert row["run_count"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_stats_accounting_uses_run_values_without_archive_cartesian_multiplication(
+    async_client: AsyncClient, archive_factory, printer_factory, db_session
+):
+    """Accounting totals must be built from filtered run rows exactly once."""
+    printer = await printer_factory()
+
+    psi_archive = await archive_factory(
+        printer.id,
+        status="completed",
+        filament_used_grams=999.0,
+        cost=999.0,
+        private_job=False,
+        private_material=False,
+        private_material_partial=False,
+        with_run=False,
+    )
+    private_partial_archive = await archive_factory(
+        printer.id,
+        status="failed",
+        filament_used_grams=888.0,
+        cost=888.0,
+        private_job=True,
+        private_material=False,
+        private_material_partial=True,
+        with_run=False,
+    )
+    # This archive has huge archive-level values and no matching run row in the
+    # selected stats set. If the stats accounting query cross-joins archives,
+    # totals would explode.
+    await archive_factory(
+        printer.id,
+        status="completed",
+        filament_used_grams=250000.0,
+        cost=500000.0,
+        private_job=True,
+        private_material=True,
+        private_material_partial=False,
+        with_run=False,
+    )
+
+    db_session.add_all(
+        [
+            PrintLogEntry(
+                archive_id=psi_archive.id,
+                printer_id=printer.id,
+                status="completed",
+                filament_used_grams=100.0,
+                cost=2.5,
+                created_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
+            ),
+            PrintLogEntry(
+                archive_id=private_partial_archive.id,
+                printer_id=printer.id,
+                status="failed",
+                filament_used_grams=10.0,
+                cost=0.25,
+                created_at=datetime(2026, 5, 2, 10, 0, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    response = await async_client.get("/api/v1/archives/stats")
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["total_prints"] == 2
+    assert body["total_filament_grams"] == pytest.approx(110.0)
+    assert body["total_cost"] == pytest.approx(2.75)
+    assert body["accounting"]["jobs"] == {
+        "psi": 1,
+        "private": 1,
+        "psi_percent": 50.0,
+        "private_percent": 50.0,
+    }
+    assert body["accounting"]["material_weight_grams"] == {
+        "psi": 100.0,
+        "private": 0.0,
+        "partial": 10.0,
+        "psi_percent": pytest.approx(90.9),
+        "private_percent": 0.0,
+        "partial_percent": pytest.approx(9.1),
+    }
+    assert body["accounting"]["material_cost"] == {
+        "psi": 2.5,
+        "private": 0.0,
+        "partial": 0.25,
+        "psi_percent": pytest.approx(90.9),
+        "private_percent": 0.0,
+        "partial_percent": pytest.approx(9.1),
+    }

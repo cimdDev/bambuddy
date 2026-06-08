@@ -1147,9 +1147,11 @@ async def get_archive_stats(
             PrintArchive.private_job,
             PrintArchive.private_material,
             PrintArchive.private_material_partial,
-            PrintArchive.filament_used_grams,
-            PrintArchive.cost,
-        ).where(*base_conditions)
+            PrintLogEntry.filament_used_grams,
+            PrintLogEntry.cost,
+        )
+        .outerjoin(PrintArchive, PrintArchive.id == PrintLogEntry.archive_id)
+        .where(*base_conditions)
     )
     jobs_private = 0
     jobs_psi = 0

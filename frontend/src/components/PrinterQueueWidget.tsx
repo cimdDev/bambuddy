@@ -26,7 +26,10 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
   const { t } = useTranslation();
   const { canModify } = useAuth();
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings });
+  const { data: settings } = useQuery({
+    queryKey: ['ui-preferences'],
+    queryFn: api.getUiPreferences,
+  });
   const { data: queue } = useQuery({
     queryKey: ['queue', printerId, 'pending', printerModel],
     queryFn: () => api.getQueue(printerId, 'pending', printerModel || undefined),
