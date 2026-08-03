@@ -1,0 +1,20 @@
+-- SQLite
+SELECT
+  pa.id,
+  pa.print_name,
+  pa.filament_type AS material,
+  pa.filament_used_grams,
+  pa.cost,
+  pa.slicer_user AS userbadge,
+  CASE
+    WHEN pa.status = 'success' THEN 'erfolgreich'
+    WHEN pa.status = 'aborted' THEN 'abgebrochen'
+    WHEN pa.status = 'failed' THEN 'fehlgeschlagen'
+    ELSE pa.status
+  END AS ergebnis,
+  pa.completed_at
+FROM print_archives pa
+LEFT JOIN users u ON u.id = pa.created_by_id
+WHERE pa.private_job = 1
+   AND pa.private_material = 0
+ORDER BY pa.completed_at DESC, pa.id DESC;

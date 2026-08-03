@@ -86,6 +86,7 @@ import {
   LayoutGrid,
   MonitorPlay,
   ExternalLink,
+  User,
 } from 'lucide-react';
 
 // Aliased: lucide-react already exports a `Link` icon into this module.
@@ -127,8 +128,6 @@ import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
 import { ConnectionDiagnosticModal, DiagnosticChecklist } from '../components/ConnectionDiagnostic';
 import { getColorName, parseFilamentColor, isLightColor } from '../utils/colors';
-import { SlicerUserBadge } from '../components/SlicerUserBadge';
-import { SlicerUserEditModal } from '../components/SlicerUserEditModal';
 import { QueueItemCommentEditor } from '../components/QueueItemCommentEditor';
 
 export interface SpoolmanSlotAssignmentRow {
@@ -2228,44 +2227,10 @@ function PrinterCard({
   });
 
   const currentQueueItem = printingQueueItems?.[0];
-  const currentPrintUser = currentQueueItem?.created_by_username || reprintUser?.username;
+  const currentPrintUser = currentQueueItem?.created_by_username;
   const canEditCurrentPrintComment = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);
   const hasCurrentPrintComment = Boolean(currentQueueItem?.comment?.trim());
   const showCurrentPrintComment = !!currentQueueItem && (hasCurrentPrintComment || canEditCurrentPrintComment);
-  const archiveId = (() => {
-    const raw = currentQueueItem?.archive_id ?? activeArchiveId;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  })();
-  const printingArchiveQuery = useQuery({
-    queryKey: ['printingArchive', printer.id, archiveId],
-    queryFn: () => api.getArchive(archiveId!),
-    enabled: (status?.state === 'RUNNING' || status?.state === 'PAUSE') && archiveId !== undefined,
-  });
-  const currentSlicerUser =
-    printingArchiveQuery.data?.slicer_user ??
-    printingArchiveQuery.data?.slicer_user_email ??
-    currentQueueItem?.slicer_user ??
-    currentQueueItem?.slicer_user_email ??
-    null;
-  const currentSlicerUserEditTarget = printingArchiveQuery.data
-    ? {
-        archive_id: printingArchiveQuery.data.id,
-        slicer_user: printingArchiveQuery.data.slicer_user,
-        slicer_user_email: printingArchiveQuery.data.slicer_user_email,
-      }
-    : currentQueueItem ?? null;
-  const currentMissingSlicerUser = !!currentSlicerUserEditTarget && !currentSlicerUser;
-  const [showSlicerUserEdit, setShowSlicerUserEdit] = useState(false);
-  const canEditCurrentSlicerUser = printingArchiveQuery.data
-    ? canModify('archives', 'update', printingArchiveQuery.data.created_by_id)
-    : currentQueueItem
-      ? currentQueueItem.archive_id
-        ? canModify('archives', 'update', currentQueueItem.created_by_id)
-        : currentQueueItem.library_file_id
-          ? canModify('library', 'update', currentQueueItem.created_by_id)
-          : false
-    : false;
   const currentQueueCost = estimatePrintCost(currentQueueItem?.filament_used_grams, settings?.default_filament_cost ?? 0);
   const currencySymbol = getCurrencySymbol(settings?.currency || 'USD');
   const canEditCurrentQueueAccounting = !!currentQueueItem && canModify('queue', 'update', currentQueueItem.created_by_id);

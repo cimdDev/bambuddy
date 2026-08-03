@@ -881,7 +881,7 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
 
       {printFile && (
         <PrintModal
-          mode="reprint"
+          mode="create"
           libraryFileId={printFile.id}
           archiveName={printFile.filename}
           initialSelectedPrinterIds={[printerId]}
@@ -896,7 +896,7 @@ export function FileManagerModal({ printerId, printerName, onClose }: FileManage
 
       {scheduleFile && (
         <PrintModal
-          mode="add-to-queue"
+          mode="create"
           libraryFileId={scheduleFile.id}
           archiveName={scheduleFile.filename}
           initialSelectedPrinterIds={[printerId]}

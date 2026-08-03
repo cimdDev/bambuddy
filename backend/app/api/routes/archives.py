@@ -302,6 +302,14 @@ def archive_to_response(
     run_aggregate: dict | None = None,
 ) -> dict:
     """Convert archive model to response dict with computed fields."""
+    slicer_user = archive.slicer_user
+    slicer_user_email = archive.slicer_user_email
+    if archive.extra_data:
+        if not slicer_user:
+            slicer_user = archive.extra_data.get("slicer_user") or None
+        if not slicer_user_email:
+            slicer_user_email = archive.extra_data.get("slicer_user_email") or None
+
     data = {
         "id": archive.id,
         "printer_id": archive.printer_id,
@@ -330,8 +338,8 @@ def archive_to_response(
         "bed_temperature": archive.bed_temperature,
         "bed_type": archive.bed_type,
         "nozzle_temperature": archive.nozzle_temperature,
-        "slicer_user": archive.slicer_user,
-        "slicer_user_email": archive.slicer_user_email,
+        "slicer_user": slicer_user,
+        "slicer_user_email": slicer_user_email,
         "sliced_for_model": archive.sliced_for_model,
         "status": archive.status,
         "started_at": archive.started_at,
@@ -655,7 +663,7 @@ async def list_archives_slim(
             "private_job": bool(r.private_job),
             "private_material": bool(r.private_material),
             "private_material_partial": bool(r.private_material_partial),
-            "quantity": r.quantity or 1,
+            "quantity": 1,
             "created_at": r.created_at,
         }
         for r in rows
@@ -684,7 +692,7 @@ async def search_archives(
     slicer_user, and slicer_user_email fields.
     Supports partial matches with wildcards (e.g., 'vor*' matches 'voron').
     """
-    from sqlalchemy import text
+    from sqlalchemy import Text, cast, text
     from sqlalchemy.orm import selectinload
 
     from backend.app.core.db_dialect import is_sqlite
@@ -716,7 +724,8 @@ async def search_archives(
                 COALESCE(designer, '') || ' ' ||
                 COALESCE(filament_type, '') || ' ' ||
                 COALESCE(slicer_user, '') || ' ' ||
-                COALESCE(slicer_user_email, '')
+                COALESCE(slicer_user_email, '') || ' ' ||
+                COALESCE(extra_data::text, '')
             ) @@ to_tsquery('simple', :search_term)
             LIMIT :limit OFFSET :offset
         """)
@@ -743,6 +752,7 @@ async def search_archives(
                     | (PrintArchive.filament_type.ilike(like_pattern))
                     | (PrintArchive.slicer_user.ilike(like_pattern))
                     | (PrintArchive.slicer_user_email.ilike(like_pattern))
+                    | (cast(PrintArchive.extra_data, Text).ilike(like_pattern))
                 ),
                 PrintArchive.deleted_at.is_(None),
             )
@@ -1173,10 +1183,12 @@ async def get_archive_stats(
 
         cost_value = float(cost or 0)
         material_weight[bucket] += float(filament_used_grams or 0)
-        # Track all material cost buckets (PSI/company, private, and partial)
-        # so the stats split always reflects the full archive dataset.
-        material_cost[bucket] += cost_value
-        total_cost += cost_value
+        # Fully private material is user-supplied, so it contributes weight but
+        # not PSI/accounted material cost. Partial private material keeps its
+        # recorded cost for the shared-material portion.
+        if bucket != "private":
+            material_cost[bucket] += cost_value
+            total_cost += cost_value
 
     def _percent(part: float, total: float) -> float:
         if total <= 0:

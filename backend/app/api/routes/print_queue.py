@@ -82,6 +82,36 @@ def _normalize_queue_comment(comment: str | None) -> str | None:
     return trimmed or None
 
 
+def _resolve_slicer_user_fields(
+    primary_source: dict | None,
+    secondary_source: dict | None = None,
+) -> tuple[str | None, str | None]:
+    """Resolve slicer user metadata from the best available source.
+
+    The archive row is authoritative when present, but some older rows only
+    carry the values in ``extra_data`` or the originating library file's
+    metadata. Fall back in that order so the queue UI keeps showing the slicer
+    attribution after a job moves from pending to active/completed.
+    """
+
+    def _clean(value: object | None) -> str | None:
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        return value or None
+
+    slicer_user = _clean(primary_source.get("slicer_user")) if primary_source else None
+    slicer_user_email = _clean(primary_source.get("slicer_user_email")) if primary_source else None
+
+    if secondary_source:
+        if not slicer_user:
+            slicer_user = _clean(secondary_source.get("slicer_user"))
+        if not slicer_user_email:
+            slicer_user_email = _clean(secondary_source.get("slicer_user_email"))
+
+    return slicer_user, slicer_user_email
+
+
 def _extract_filament_types_from_3mf(file_path: Path, plate_id: int | None = None) -> list[str]:
     """Extract unique filament types from a 3MF file.
 
@@ -271,6 +301,8 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "slicer_user": None,
         "slicer_user_email": None,
     }
+    slicer_user = None
+    slicer_user_email = None
     response = PrintQueueItemResponse(**item_dict)
     if item.archive:
         # Soft-deleted archive: files are gone from disk but the row stays
@@ -322,8 +354,13 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
                         response.filament_used_grams = plate_meta.filament_used_grams
                     if plate_meta.bed_type:
                         response.bed_type = plate_meta.bed_type
-            response.slicer_user = item.archive.slicer_user
-            response.slicer_user_email = item.archive.slicer_user_email
+            slicer_user, slicer_user_email = _resolve_slicer_user_fields(
+                {
+                    "slicer_user": item.archive.slicer_user,
+                    "slicer_user_email": item.archive.slicer_user_email,
+                },
+                item.archive.extra_data if item.archive.extra_data else None,
+            )
     if item.library_file:
         response.library_file_name = (
             item.library_file.file_metadata.get("print_name") if item.library_file.file_metadata else None
@@ -341,10 +378,14 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
             response.nozzle_diameter = item.library_file.file_metadata.get("nozzle_diameter")
             response.sliced_for_model = item.library_file.file_metadata.get("sliced_for_model")
             response.bed_type = item.library_file.file_metadata.get("bed_type")
-            if not response.slicer_user:
-                response.slicer_user = item.library_file.file_metadata.get("slicer_user")
-            if not response.slicer_user_email:
-                response.slicer_user_email = item.library_file.file_metadata.get("slicer_user_email")
+        if item.library_file.file_metadata:
+            slicer_user, slicer_user_email = _resolve_slicer_user_fields(
+                {
+                    "slicer_user": slicer_user,
+                    "slicer_user_email": slicer_user_email,
+                },
+                item.library_file.file_metadata,
+            )
         if item.plate_id:
             lib_path = Path(item.library_file.file_path)
             library_file_path = lib_path if lib_path.is_absolute() else settings.base_dir / item.library_file.file_path
@@ -359,6 +400,8 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
                     response.bed_type = plate_meta.bed_type
     if item.printer:
         response.printer_name = item.printer.name
+    response.slicer_user = slicer_user
+    response.slicer_user_email = slicer_user_email
     return response
 
 

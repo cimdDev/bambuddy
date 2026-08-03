@@ -1313,6 +1313,61 @@ class TestQueueLibraryFileSupport:
         assert our_item["library_file_name"] == "Custom Print Name"
         assert our_item["print_time_seconds"] == 7200
 
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_list_queue_uses_library_slicer_user_when_archive_missing_it(
+        self, async_client: AsyncClient, printer_factory, library_file_factory, db_session
+    ):
+        """Verify queue rows keep slicer attribution after the archive link is added.
+
+        This mirrors the pending -> active transition where the queue row gains
+        an archive_id but the archive row itself does not yet carry slicer_user
+        fields. The response should still surface the library file metadata.
+        """
+        from backend.app.models.archive import PrintArchive
+        from backend.app.models.print_queue import PrintQueueItem
+
+        printer = await printer_factory()
+        lib_file = await library_file_factory(
+            file_metadata={
+                "print_name": "Custom Print Name",
+                "print_time_seconds": 7200,
+                "slicer_user": "alice",
+                "slicer_user_email": "alice@example.com",
+            }
+        )
+
+        archive = PrintArchive(
+            printer_id=printer.id,
+            filename="queue-slicer-user.3mf",
+            print_name="Queue Slicer User",
+            file_path="/test/queue-slicer-user.3mf",
+            file_size=2048,
+            content_hash="queue-slicer-user-hash",
+            status="printing",
+        )
+        db_session.add(archive)
+        await db_session.commit()
+        await db_session.refresh(archive)
+
+        item = PrintQueueItem(
+            printer_id=printer.id,
+            archive_id=archive.id,
+            library_file_id=lib_file.id,
+            status="printing",
+            position=1,
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        response = await async_client.get("/api/v1/queue/")
+        assert response.status_code == 200
+        items = response.json()
+        our_item = next((i for i in items if i["id"] == item.id), None)
+        assert our_item is not None
+        assert our_item["slicer_user"] == "alice"
+        assert our_item["slicer_user_email"] == "alice@example.com"
+
 
 class TestBulkUpdateEndpoint:
     """Tests for the /queue/bulk endpoint."""

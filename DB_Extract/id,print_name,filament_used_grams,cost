@@ -1,0 +1,135 @@
+id,print_name,material,filament_used_grams,cost,userbadge,ergebnis,completed_at
+844,FF-Schneisingen_LOGO,PLA,238.57,7.15,NULL,completed,2026-06-29 19:11:03.295408
+843,FF-Schneisingen LOGO,PLA,238.57,7.16,NULL,fehlgeschlagen,2026-06-29 12:06:15.621117
+837,GM83_pad_Holder V2,PLA,44.06,1.32,NULL,completed,2026-06-29 08:11:02.398486
+836,GM83_pad_Holder,PLA,4.64,0.14,GM83,completed,2026-06-29 06:40:12.440943
+831,sunglassesvisorclip,ABS,20.43,0.61,NULL,completed,2026-06-26 13:58:05.572463
+828,Rohruebergang,ABS,58.88,1.77,NULL,completed,2026-06-25 17:55:37.086140
+820,Kite handle 160,ABS,139.48,4.18,hirt_s,completed,2026-06-25 14:46:45.462970
+819,Kite handle 160,ABS,139.48,4.18,hirt_s,fehlgeschlagen,2026-06-25 10:33:52.389936
+803,PRD-TRN-00897019  Kiste 2.1_V1,"ABS, ABS-S",199.49,5.98,NULL,completed,2026-06-23 19:15:01.167037
+802,"Intex 1/1-2"" to 38mm",PETG,40.67,1.22,tripod_c,completed,2026-06-23 15:01:58.077544
+798,PRD-TRN-00897018  Kiste 3_V1,"ABS, ABS-S",314.56,9.43,MO83,completed,2026-06-22 21:47:54.510823
+787,Android C18 Streetwear Edition,PLA,691.77,18.11,BM83,completed,2026-06-22 05:38:23.275624
+793,PRD-TRN-00897018  Kiste 3_V1,"ABS, ABS-S",314.56,9.43,NULL,completed,2026-06-22 05:18:51.796252
+783,PRD-TRN-00900688  Kiste 2_V1,"ABS, ABS-S",390.9,11.72,NULL,completed,2026-06-19 23:10:26.660357
+781,PRD-TRN-00900688  Kiste 2_V1,"ABS, ABS-S",390.9,11.73,NULL,fehlgeschlagen,2026-06-19 14:13:38.478103
+737,GM83_Tennis Handy Holder,ABS,107.38,3.22,NULL,completed,2026-06-16 09:59:58.584732
+727,GM83_Tennis Handy Holder,ABS,107.38,3.22,giger_m,completed,2026-06-15 11:41:56.887785
+725,GM83_Tennis Handy Holder,ABS,131.24,3.94,NULL,fehlgeschlagen,2026-06-15 06:33:54.369145
+724,GM83_Tennis Handy Holder,ABS,131.24,3.94,NULL,fehlgeschlagen,2026-06-15 04:48:56.111319
+716,PRD-00897014  Kiste 1_V2,"ABS, ABS-S",756.13,34.09,NULL,completed,2026-06-12 23:56:23.925286
+715,Booster V3 / 1:100 SpaceX - Plate 9,PLA,385.57,11.57,tripod_c,archived,2026-06-12 08:38:15.995177
+714,Booster V3 / 1:100 SpaceX - Plate 9,PLA,385.57,11.57,tripod_c,archived,2026-06-12 08:35:52.494023
+712,PRD-00897014  Kiste 1_V2,"ABS, ABS-S",756.13,22.68,MO83,completed,2026-06-12 00:26:35.626661
+707,PRD-00897014  Kiste 1_V2,"ABS, ABS-S",756.13,22.69,MO83,completed,2026-06-10 23:17:41.638154
+706,Mount for Gardena shutoff,PETG,27.38,0.82,zumbac_p,completed,2026-06-10 11:58:20.846445
+689,Elf lady in short shorts and flowy tank,PLA,130.54,3.92,BM83,completed,2026-06-09 21:51:53.130086
+687,Kleiner Mann,ABS,0.23,0.01,tripod_c,archived,2026-06-09 09:51:36.427282
+683,Kleiner Mann,ABS,0.45,0.01,tripod_c,completed,2026-06-09 09:40:05.278992
+679,Untitled,ABS,0.89,0.03,zimmer_j,completed,2026-06-09 08:22:22.149236
+674,PRD-00897014  Kiste 1_V1,ABS,648.06,19.44,NULL,completed,2026-06-08 21:08:49.519799
+646,Panelhalterung,ABS,18.6,0.56,zumbac_p,completed,2026-06-05 09:03:27.749724
+639,Anime Office Girl | Elegant Desk Companion Statue,PLA,114.76,10.04,BM83,completed,2026-06-03 23:05:20.042015
+638,Anime Office Girl | Elegant Desk Companion Statue,PLA,114.76,3.44,BM83,fehlgeschlagen,2026-06-03 13:59:08.440323
+623,Gardena quick connector set,ABS,27.03,0.81,lachat_t,completed,2026-06-02 13:15:36.106042
+621,GM83_NJ_Egg_v2,ABS,83.06,2.49,NULL,completed,2026-06-02 11:13:14.655462
+614,Starship V3   (1:100),PLA,249.28,7.48,tripod_c,completed,2026-06-02 08:45:29.656481
+616,GM83_NJ_Egg.gcode,ABS,14.49,0.43,NULL,completed,2026-06-02 05:46:05.363900
+615,GM83_NJ_Egg,PLA,NULL,NULL,NULL,fehlgeschlagen,2026-06-02 05:09:13.824082
+613,Starship V3   (1:100),PLA,249.28,7.48,tripod_c,completed,2026-06-02 01:25:14.411334
+610,Booster V3 / 1:100 SpaceX,PLA,269.93,8.09,tripod_c,abgebrochen,2026-06-01 12:41:52.195053
+488,rocky5.gcode,PLA,69.37,2.08,NULL,abgebrochen,2026-06-01 12:38:42.266705
+304,TC83_Würfel.gcode,PLA,14.62,0.44,tripod_c,abgebrochen,2026-06-01 12:38:30.792463
+276,RE83 TSG-L.gcode,ABS,67.76,2.04,Renzo,abgebrochen,2026-06-01 12:38:16.109553
+376,GM83_Pen Holder_V3.gcode,ABS,29.55,0.89,MG83,abgebrochen,2026-06-01 12:38:13.322869
+609,PRD-00910626  Physical Product00910626  -.1  In Work,TPU-AMS,24.11,0.72,NULL,completed,2026-06-01 11:51:10.201901
+608,Booster V3 / 1:100 SpaceX,PLA,269.93,8.34,tripod_c,completed,2026-06-01 10:43:26.436759
+607,Booster V3 / 1:100 SpaceX,PLA,269.93,8.35,tripod_c,completed,2026-06-01 09:43:29.137216
+606,GM83_NJ_Egg,PLA,NULL,NULL,NULL,archived,2026-06-01 04:05:53.434401
+603,准备进攻的18号,"PLA-S, PLA",221.52,6.09,BM83,completed,2026-05-31 18:40:39.904570
+601,Airless TPU Ball,TPU,66.8,2.0,BM83,completed,2026-05-30 23:52:02.960453
+599,Anime Office Girl | Elegant Desk Companion Statue,PLA,66.45,1.98,BM83,completed,2026-05-30 16:47:53.648235
+596,Anime Office Girl | Elegant Desk Companion Statue,PLA,66.4,1.99,BM83,fehlgeschlagen,2026-05-30 07:51:05.727202
+594,Elektrolysezelle Sockel und Deckel_plate_1,ABS,329.94,9.9,bonett_l,completed,2026-05-30 01:12:09.332485
+595,RE83 PRD-00637053,ABS,388.52,11.65,Renzo,completed,2026-05-29 23:41:57.007674
+593,Bose Companion 3 Series II low-profile stand,ABS-GF,8.65,0.26,NULL,completed,2026-05-29 13:06:05.805585
+592,PRD-00900895  PSI_Logo_Wolke  30,PLA,0.61,0.02,tripod_c,completed,2026-05-29 11:49:56.286069
+591,PRD-00900895  PSI_Logo_Wolke  -.1  In Work,PLA,2.11,0.06,tripod_c,completed,2026-05-29 11:30:00.175294
+588,PRD-00908555 _ST-Case_Abstandhalter   -.1  In Work,ABS,54.06,1.62,shala_s,completed,2026-05-29 07:51:55.219810
+583,PRD-00861708,ABS,172.79,5.18,muehlebach_r,completed,2026-05-28 20:11:27.865991
+574,Motocross Helmet Keyring,PLA,328.16,9.65,BM83,completed,2026-05-28 05:32:56.383227
+575,Part 4,ABS,11.79,0.35,hirt_s,completed,2026-05-27 13:16:20.839672
+572,Gardena quick connector set,ABS,11.72,0.35,NULL,completed,2026-05-27 12:15:42.913472
+573,Kawaii Grim Reaper Reading Book Spooky 3D Printed,PLA,14.69,0.51,liefert_k,completed,2026-05-27 11:11:21.888837
+569,GARDENA kompatible Anschlüsse,ABS,20.86,0.63,NULL,completed,2026-05-27 10:09:41.000468
+570,Kawaii Grim Reaper Reading Book Spooky 3D Printed,PLA,14.69,0.51,liefert_k,completed,2026-05-27 09:35:46.218683
+567,Kawaii Grim Reaper Reading Book Spooky 3D Printed,PLA,14.69,0.44,liefert_k,fehlgeschlagen,2026-05-27 08:34:06.203731
+565,Kawaii Grim Reaper Reading Book Spooky 3D Printed,PLA,14.69,0.44,liefert_k,fehlgeschlagen,2026-05-27 07:55:11.114110
+564,IKEA EKET Schubladenfächer Schrank mit Schubladen,ABS,245.57,7.37,muehlebach_r,completed,2026-05-26 20:23:31.209956
+562,IKEA EKET Schubladenfächer Schrank mit Schubladen,ABS,245.58,7.37,muehlebach_r,completed,2026-05-26 20:15:11.504266
+563,IKEA EKET Schubladenfächer Schrank mit Schubladen,ABS,154.12,4.62,muehlebach_r,completed,2026-05-26 17:54:19.721539
+560,IKEA EKET Schubladenfächer Schrank mit Schubladen - Plate 2,ABS,177.01,5.31,muehlebach_r,completed,2026-05-26 17:05:32.280202
+558,IKEA EKET Schubladenfächer Schrank mit Schubladen - Plate 6,ABS,131.23,3.94,muehlebach_r,completed,2026-05-26 11:58:19.097703
+542,android 18 rex,"PLA-S, PLA",218.92,8.25,BM83,completed,2026-05-24 11:39:17.483739
+543,Airless TPU Ball,TPU,28.8,0.86,BM83,fehlgeschlagen,2026-05-24 08:47:23.576279
+532,IKEA EKET Schubladenfächer Schrank mit Schubladen - Plate 6,ABS,131.23,3.94,muehlebach_r,cancelled,2026-05-22 14:31:47.311055
+530,Kugelgelenk vielseitig einsetzbar,ABS,32.05,0.96,zumbac_p,completed,2026-05-22 12:37:20.521533
+521,PRD-00906833  extention Hook_X1E.gcode,ABS,43.2,1.3,tripod_c,completed,2026-05-21 10:44:48.658852
+520,Kesselhalter_V5.gcode,ABS,18.02,0.54,zumbac_p,completed,2026-05-21 06:44:58.188316
+515,Kessel_500.gcode,ABS,43.1,1.29,zumbac_p,completed,2026-05-20 09:46:11.155935
+514,Untitled.gcode,PLA,1.24,0.04,lachat_t,completed,2026-05-20 07:12:37.930532
+513,Kesselhalter_V3.gcode,ABS,7.41,0.22,zumbac_p,completed,2026-05-20 06:57:47.727861
+511,Kesselhalter_V2.gcode,ABS,7.51,0.23,zumbac_p,completed,2026-05-20 06:12:42.332424
+510,Kesselhalter_V1.gcode,ABS,8.84,0.27,zumbac_p,completed,2026-05-19 14:50:09.303877
+507,PRD-00906833  extention Hook  -.1  In Work.gcode,ABS,149.48,4.49,tripod_c,fehlgeschlagen,2026-05-19 14:14:05.023763
+496,IKEA EKET Schubladenfächer Schrank mit Schubladen,ABS,230.31,18.61,muehlebach_r,completed,2026-05-19 07:18:34.268339
+497,Hat Hanger,ABS,41.59,1.25,NULL,completed,2026-05-19 05:17:21.452700
+495,IKEA EKET Schubladenfächer Schrank mit Schubladen - Plate 6,ABS,131.23,7.24,muehlebach_r,completed,2026-05-18 17:27:10.972677
+486,Modern Buddha statue,"PLA, PLA-S",260.23,7.8,BM83,completed,2026-05-17 09:42:30.089447
+475,QR Code Plate Jugendraum.gcode,PLA,88.67,2.66,BM83,completed,2026-05-16 14:40:21.552793
+482,rocky4.gcode,PLA,60.04,1.8,NULL,fehlgeschlagen,2026-05-16 13:47:44.152879
+478,Rocky3.gcode,PLA,64.79,1.94,NULL,fehlgeschlagen,2026-05-16 12:25:39.175513
+477,Rocky2.gcode,PLA,64.79,1.94,NULL,cancelled,2026-05-16 09:33:46.568034
+473,rocky.gcode,PLA,51.48,1.54,boegli_t,cancelled,2026-05-15 12:59:59.132525
+464,SC83_Plate4.gcode,ABS,43.51,1.3,steinacher_p,completed,2026-05-14 18:33:33.153914
+461,SC83_Plate4.gcode,ABS,57.2,1.71,steinacher_p,completed,2026-05-14 15:24:56.909133
+462,SC83_Exzenterhebel.gcode,ABS,14.24,0.43,NULL,completed,2026-05-14 15:12:29.089305
+458,SC83_Plate3.gcode,ABS,115.82,3.48,steinacher_p,completed,2026-05-14 12:03:16.667817
+459,PRD-TRN-00632676_Sch ISO 7089-36.gcode,PLA,23.77,0.71,BM83,completed,2026-05-14 09:10:16.949888
+457,PRD-00904755  Front Einschub_V4.gcode,ABS,5.83,0.17,zumbac_p,completed,2026-05-13 15:23:32.433800
+455,PRD-00904755  Front Einschub_3.gcode,PLA,7.27,0.22,zumbac_p,completed,2026-05-13 13:51:46.676473
+451,PRD-00904755  Front Einschub_V2.gcode,PLA,2.04,0.06,zumbac_p,completed,2026-05-13 10:55:19.234977
+439,SC83_Plate1.gcode,ABS,98.53,2.96,steinacher_p,completed,2026-05-12 11:04:25.269825
+438,GM83_Heuball-Body.gcode,PLA,135.68,4.07,giger_m,completed,2026-05-12 05:50:27.114607
+437,GM83_Highland_Cow.gcode,ABS,75.73,2.27,giger_m,completed,2026-05-11 20:49:41.559306
+435,SC83_Plate2.gcode,ABS,124.48,3.74,steinacher_p,completed,2026-05-11 20:27:18.445115
+430,GM83_Highland_Cow.gcode,ABS,11.66,0.35,giger_m,completed,2026-05-11 11:13:02.023323
+427,Heuball-Body.gcode,ABS,65.25,1.96,giger_m,completed,2026-05-11 05:29:17.015056
+417,Drucktest.gcode,ABS,57.74,1.73,steinacher_p,completed,2026-05-08 10:31:56.792113
+415,IKEA EKET Schubladenfächer Schrank mit Schubladen,ABS,43.93,1.32,muehlebach_r,completed,2026-05-08 08:04:21.256320
+413,GM83_Pen Box Holder-1.gcode,ABS,29.47,0.88,giger_m,completed,2026-05-08 05:15:04.312158
+412,Ikea/Brio Train Accessories,ABS,72.34,2.17,hora_j,completed,2026-05-07 16:07:42.148754
+386,Space X Raptor 3 Rocket Engine |Society ROAR 3D,ABS,109.37,3.28,tripod_c,completed,2026-05-04 22:31:33.825100
+375,GM83_Pen Holder_V2.gcode,PLA,36.11,31.08,MG83,completed,2026-05-04 04:27:25.970775
+372,GM83_Pen Holder_V2.gcode,PLA,36.11,1.08,MG83,archived,2026-05-01 09:42:13.518233
+341,HalterungenBLStl_V2_.gcode,ABS,222.35,6.67,hirt_s,completed,2026-04-29 01:18:33.193691
+339,HS83_Griff_Gleiter.gcode,ABS,106.85,3.21,NULL,completed,2026-04-28 13:47:14.452423
+333,V2_Kurbel Gehäuse_Winkel_regatta_V2.gcode,"ABS-S, ABS",176.58,5.3,hirt_s,completed,2026-04-27 21:40:15.778858
+328,Fractions - math,ABS,18.28,0.55,tripod_c,completed,2026-04-27 09:55:16.093443
+293,Fractions - math,ABS,22.71,0.69,NULL,fehlgeschlagen,2026-04-24 07:06:53.766522
+289,RE83 TSG-L-2.gcode,ABS,70.42,2.11,Renzo,completed,2026-04-22 20:06:04.899431
+287,RE83 TSG-L.gcode,ABS,60.06,1.8,Renzo,fehlgeschlagen,2026-04-22 14:42:33.662525
+277,RE83_TSG-L,ABS,67.76,2.93,Renzo,completed,2026-04-21 07:03:43.144472
+278,IKEA EKET Schubladenfächer Schrank mit Schubladen,ABS,222.69,6.68,muehlebach_r,completed,2026-04-21 05:49:41.262240
+279,IKEA EKET Schubladenfächer Schrank mit Schubladen - Plate 2,ABS,126.85,3.81,muehlebach_r,completed,2026-04-20 17:45:02.357069
+234,RE83 Stange.gcode,PLA,60.34,1.81,Renzo,completed,2026-04-15 17:34:10.019540
+235,RE83 Halter.gcode,PLA,45.42,1.36,Renzo,completed,2026-04-15 17:03:18.149549
+232,Modular 100% printed vise,PLA,29.35,0.88,Renzo,completed,2026-04-15 11:33:28.411329
+233,Modular 100% printed vise - Plate 3,PETG,9.62,0.34,Renzo,completed,2026-04-15 11:20:17.209029
+204,Modular 100% printed vise,"PLA, TPU-AMS",117.11,4.39,NULL,completed,2026-04-09 12:32:04.412373
+131,PRD-00840673  Deckelhalter  -.1  In Work.gcode,ABS,133.73,4.01,steinacher_p,completed,2026-03-27 12:33:44.330378
+93,AA83_HallbachArray_Test.gcode,PLA,69.43,2.08,ammon_a,completed,2026-03-19 16:21:26.906980
+61,HR83_Trichter.gcode,PLA,58.67,1.76,herzog_m,completed,2026-03-09 10:24:43.658412
+43,TC83 Pokal - Enersuisse - Plate 3,PLA,6.96,0.2,tripod_c,completed,2026-03-05 09:48:35.248101
+36,Kallax Splitter,ABS,504.68,15.14,muehlebach_r,completed,2026-03-04 02:28:20.349392

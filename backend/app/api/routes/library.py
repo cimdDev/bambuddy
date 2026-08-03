@@ -572,6 +572,31 @@ async def save_3mf_bytes_to_library(
         raise
 
 
+async def save_file_bytes_to_library(
+    db: AsyncSession,
+    *,
+    file_bytes: bytes,
+    filename: str,
+    folder_id: int | None = None,
+    source_type: str | None = None,
+    source_url: str | None = None,
+    owner_id: int | None = None,
+    private_job: bool = False,
+) -> tuple[LibraryFile, bool]:
+    """Backward-compatible wrapper for callers that still import the older name."""
+
+    return await save_3mf_bytes_to_library(
+        db,
+        file_bytes=file_bytes,
+        filename=filename,
+        folder_id=folder_id,
+        source_type=source_type,
+        source_url=source_url,
+        owner_id=owner_id,
+        private_job=private_job,
+    )
+
+
 def extract_gcode_thumbnail(file_path: Path) -> bytes | None:
     """Extract embedded thumbnail from gcode file.
 

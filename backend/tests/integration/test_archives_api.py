@@ -217,6 +217,44 @@ class TestArchivesAPI:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_get_archive_falls_back_to_extra_data_slicer_user(
+        self, async_client: AsyncClient, printer_factory, db_session
+    ):
+        """Verify archive responses surface slicer attribution from extra_data.
+
+        Older rows and some import paths only preserve the slicer metadata in
+        ``extra_data``. The response should still expose it so the archive UI
+        and search stay consistent.
+        """
+        from backend.app.models.archive import PrintArchive
+
+        printer = await printer_factory()
+        archive = PrintArchive(
+            printer_id=printer.id,
+            filename="archive-slicer-user.3mf",
+            print_name="Archive Slicer User",
+            file_path="/test/archive-slicer-user.3mf",
+            file_size=2048,
+            content_hash="archive-slicer-user-hash",
+            status="completed",
+            extra_data={
+                "slicer_user": "bob",
+                "slicer_user_email": "bob@example.com",
+            },
+        )
+        db_session.add(archive)
+        await db_session.commit()
+        await db_session.refresh(archive)
+
+        response = await async_client.get(f"/api/v1/archives/{archive.id}")
+
+        assert response.status_code == 200
+        result = response.json()
+        assert result["slicer_user"] == "bob"
+        assert result["slicer_user_email"] == "bob@example.com"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_get_archive_not_found(self, async_client: AsyncClient):
         """Verify 404 for non-existent archive."""
         response = await async_client.get("/api/v1/archives/9999")
@@ -677,6 +715,36 @@ class TestArchivesAPI:
         resp = await async_client.get("/api/v1/archives/search?q=UniqueSoftDeleteCandidate")
         assert resp.status_code == 200
         assert resp.json() == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_search_finds_archive_by_extra_data_slicer_user(
+        self, async_client: AsyncClient, printer_factory, db_session
+    ):
+        """Search should match slicer_user even when it lives only in extra_data."""
+        from backend.app.models.archive import PrintArchive
+
+        printer = await printer_factory()
+        archive = PrintArchive(
+            printer_id=printer.id,
+            filename="search-extra-data.3mf",
+            print_name="Search Extra Data",
+            file_path="/test/search-extra-data.3mf",
+            file_size=2048,
+            content_hash="search-extra-data-hash",
+            status="completed",
+            extra_data={"slicer_user": "charlie", "slicer_user_email": "charlie@example.com"},
+        )
+        db_session.add(archive)
+        await db_session.commit()
+
+        resp = await async_client.get("/api/v1/archives/search?q=charlie")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert any(a["id"] == archive.id for a in data)
+        matched = next(a for a in data if a["id"] == archive.id)
+        assert matched["slicer_user"] == "charlie"
+        assert matched["slicer_user_email"] == "charlie@example.com"
 
     # ========================================================================
     # Statistics endpoints

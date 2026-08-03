@@ -1,0 +1,29 @@
+WITH categorized AS (
+  SELECT
+    CASE
+      WHEN private_job = 0 THEN 'PSI Druck'
+      WHEN private_job = 1 AND private_material = 0 AND private_material_partial = 0 THEN 'Privatdruck, PSI Material'
+      WHEN private_job = 1 AND private_material_partial = 1 THEN 'Privatdruck, gemischt/teilweise'
+      WHEN private_job = 1 AND private_material = 1 THEN 'Privatdruck, voll Privatmaterial'
+      ELSE 'Privatdruck, sonstig'
+    END AS kategorie,
+    COALESCE(print_time_seconds, 0) AS dauer_seconds,
+    COALESCE(cost, 0) AS kosten
+  FROM print_archives
+  WHERE status = 'completed'
+)
+SELECT
+  kategorie,
+  COUNT(*) AS anzahl,
+  ROUND(SUM(dauer_seconds) / 3600.0, 2) AS dauer_stunden,
+  ROUND(SUM(kosten), 2) AS kosten_total
+FROM categorized
+GROUP BY kategorie
+ORDER BY
+  CASE kategorie
+    WHEN 'PSI Druck' THEN 1
+    WHEN 'Privatdruck, PSI Material' THEN 2
+    WHEN 'Privatdruck, gemischt/teilweise' THEN 3
+    WHEN 'Privatdruck, voll Privatmaterial' THEN 4
+    ELSE 5
+  END;

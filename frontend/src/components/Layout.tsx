@@ -93,7 +93,7 @@ export function Layout() {
   // catalog fetched — and cached HSL-fallback color names during their first
   // render — refresh with the real catalog names. See #857.
   useColorCatalogVersion();
-  const { user, authEnabled, isAdmin, logout, hasPermission } = useAuth();
+  const { user, authEnabled, logout, hasPermission } = useAuth();
   const { showToast } = useToast();
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [changePasswordData, setChangePasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });

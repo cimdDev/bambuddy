@@ -1168,6 +1168,7 @@ async def run_migrations(conn):
                     filament_type,
                     slicer_user,
                     slicer_user_email,
+                    extra_data,
                     content='print_archives',
                     content_rowid='id'
                 )
@@ -1181,8 +1182,8 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_insert AFTER INSERT ON print_archives BEGIN
-                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
-                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type, new.slicer_user, new.slicer_user_email);
+                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data)
+                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type, new.slicer_user, new.slicer_user_email, new.extra_data);
                 END
             """)
             )
@@ -1193,8 +1194,8 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_delete AFTER DELETE ON print_archives BEGIN
-                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
-                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type, old.slicer_user, old.slicer_user_email);
+                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data)
+                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type, old.slicer_user, old.slicer_user_email, old.extra_data);
                 END
             """)
             )
@@ -1205,10 +1206,10 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_update AFTER UPDATE ON print_archives BEGIN
-                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
-                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type, old.slicer_user, old.slicer_user_email);
-                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email)
-                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type, new.slicer_user, new.slicer_user_email);
+                    INSERT INTO archive_fts(archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data)
+                    VALUES ('delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type, old.slicer_user, old.slicer_user_email, old.extra_data);
+                    INSERT INTO archive_fts(rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data)
+                    VALUES (new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type, new.slicer_user, new.slicer_user_email, new.extra_data);
                 END
             """)
             )
@@ -2190,7 +2191,7 @@ async def run_migrations(conn):
     try:
         res = await conn.execute(text("PRAGMA table_info(archive_fts)"))
         cols = {row[1] for row in res.fetchall()}
-        needs_rebuild = not {"slicer_user", "slicer_user_email"}.issubset(cols)
+        needs_rebuild = not {"slicer_user", "slicer_user_email", "extra_data"}.issubset(cols)
 
         if needs_rebuild:
             await conn.execute(text("DROP TRIGGER IF EXISTS archive_fts_insert"))
@@ -2208,6 +2209,7 @@ async def run_migrations(conn):
                     filament_type,
                     slicer_user,
                     slicer_user_email,
+                    extra_data,
                     content='print_archives',
                     content_rowid='id'
                 )
@@ -2216,10 +2218,10 @@ async def run_migrations(conn):
             await conn.execute(
                 text("""
                 INSERT INTO archive_fts(
-                    rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                    rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data
                 )
                 SELECT
-                    id, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                    id, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data
                 FROM print_archives
                 """)
             )
@@ -2227,11 +2229,11 @@ async def run_migrations(conn):
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_insert AFTER INSERT ON print_archives BEGIN
                     INSERT INTO archive_fts(
-                        rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                        rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data
                     )
                     VALUES (
                         new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type,
-                        new.slicer_user, new.slicer_user_email
+                        new.slicer_user, new.slicer_user_email, new.extra_data
                     );
                 END
                 """)
@@ -2240,11 +2242,11 @@ async def run_migrations(conn):
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_delete AFTER DELETE ON print_archives BEGIN
                     INSERT INTO archive_fts(
-                        archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                        archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data
                     )
                     VALUES (
                         'delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type,
-                        old.slicer_user, old.slicer_user_email
+                        old.slicer_user, old.slicer_user_email, old.extra_data
                     );
                 END
                 """)
@@ -2253,19 +2255,19 @@ async def run_migrations(conn):
                 text("""
                 CREATE TRIGGER IF NOT EXISTS archive_fts_update AFTER UPDATE ON print_archives BEGIN
                     INSERT INTO archive_fts(
-                        archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                        archive_fts, rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data
                     )
                     VALUES (
                         'delete', old.id, old.print_name, old.filename, old.tags, old.notes, old.designer, old.filament_type,
-                        old.slicer_user, old.slicer_user_email
+                        old.slicer_user, old.slicer_user_email, old.extra_data
                     );
 
                     INSERT INTO archive_fts(
-                        rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email
+                        rowid, print_name, filename, tags, notes, designer, filament_type, slicer_user, slicer_user_email, extra_data
                     )
                     VALUES (
                         new.id, new.print_name, new.filename, new.tags, new.notes, new.designer, new.filament_type,
-                        new.slicer_user, new.slicer_user_email
+                        new.slicer_user, new.slicer_user_email, new.extra_data
                     );
                 END
                 """)
