@@ -45,6 +45,7 @@ import { getCurrencySymbol } from '../utils/currency';
 import { formatWeight } from '../utils/weight';
 import { parseUTCDate, formatDuration } from '../utils/date';
 import { MetricToggle, type Metric } from '../components/MetricToggle';
+import { psiSplitStatsWidgets, psiStatsWidgets } from '../custom/psi'; // PSI-SEAM
 
 // Timeframe types and helpers
 type TimeframePreset = 'today' | 'this-week' | 'this-month' | 'last-7' | 'last-30' | 'last-90' | 'this-year' | 'all-time' | 'custom';
@@ -1223,7 +1224,11 @@ export function StatsPage() {
       component: <MaterialNumberStats currency={currency} dateFrom={effectiveDateRange.dateFrom} dateTo={effectiveDateRange.dateTo} />,
       defaultSize: 2,
     }] as DashboardWidget[])),
+    // PSI-SEAM: PSI vs. private widgets, same period and user filter
+    ...psiStatsWidgets({ dateFrom: effectiveDateRange.dateFrom, dateTo: effectiveDateRange.dateTo, createdById: createdByIdParam, currency, printerNames: printerMap }),
   ];
+  // PSI-SEAM: activity and printer charts split into PSI (green) and private (blue)
+  psiSplitStatsWidgets(widgets, { dateFrom: effectiveDateRange.dateFrom, dateTo: effectiveDateRange.dateTo, createdById: createdByIdParam, printerNames: printerMap });
 
   return (
     <div className="p-4 md:p-8">

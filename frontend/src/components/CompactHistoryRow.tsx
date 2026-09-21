@@ -16,6 +16,7 @@ import { api } from '../api/client';
 import { type TimeFormat, formatDuration, formatRelativeTime } from '../utils/date';
 import type { PrintQueueItem, Permission } from '../api/client';
 import { Button } from './Button';
+import { PsiJobStrip } from '../custom/psi'; // PSI-SEAM
 import { queueItemDisplayName } from '../utils/queueItemName';
 
 const STATUS_CONFIG = {
@@ -180,6 +181,9 @@ export function CompactHistoryRow({
           </span>
         )}
       </div>
+
+      {/* PSI-SEAM */}
+      <PsiJobStrip entity="queue" id={item.id} variant="compact" className="mt-1 ml-[3.25rem]" />
 
       {/* Error message — only rendered on failed/skipped rows. */}
       {showErrorMessage && (
