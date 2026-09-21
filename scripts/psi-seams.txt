@@ -1,0 +1,14 @@
+# The complete list of upstream files the PSI layer is allowed to modify.
+# Every change in them must be an insertion marked PSI-SEAM (see
+# docs/custom-features/SOP.md, "Seams"). scripts/psi-guard.sh enforces this.
+#
+# path                                              what the seam does
+backend/app/main.py                               # install() routes+hooks; startup() in lifespan
+frontend/src/pages/ArchivesPage.tsx               # strip on archive card + list row
+frontend/src/pages/QueuePage.tsx                  # strip on queue card (pending/printing)
+frontend/src/components/CompactHistoryRow.tsx     # strip on queue history row
+frontend/src/pages/PrintersPage.tsx               # strip for the running job on the printer card
+frontend/src/components/PrinterQueueWidget.tsx    # read-only strip for "next in queue"
+frontend/src/pages/FileManagerPage.tsx            # strip on file card + list row
+frontend/src/pages/StatsPage.tsx                  # PSI widgets on the stats dashboard
+frontend/src/App.tsx                              # /psi route + sidebar entry (registered from custom/psi/app)
