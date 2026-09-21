@@ -160,6 +160,7 @@ import { HMSErrorModal, filterKnownHMSErrors } from '../components/HMSErrorModal
 import { AiDetectionModal } from '../components/AiDetectionModal';
 import { aiDetectionClass, type AiDetection } from '../utils/aiDetection';
 import { PrinterQueueWidget } from '../components/PrinterQueueWidget';
+import { PsiPrinterJobStrip } from '../custom/psi'; // PSI-SEAM
 import { PrinterHASensorRow } from '../components/PrinterHASensorRow';
 import { AMSHistoryModal } from '../components/AMSHistoryModal';
 import { AmsBackupModal } from '../components/AmsBackupModal';
@@ -4467,6 +4468,10 @@ function PrinterCard({
                           </div>
                         </div>
                       </div>
+                      {/* PSI-SEAM: running job's user, PSI/private, note */}
+                      {isActivePrint && (
+                        <PsiPrinterJobStrip queueItemId={printingQueueItems?.[0]?.id} archiveId={activeArchiveId} className="mt-2" />
+                      )}
                       <PrinterQueueWidget
                         printerId={printer.id}
                         printerModel={printer.model}
