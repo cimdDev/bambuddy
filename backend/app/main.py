@@ -8910,6 +8910,11 @@ async def lifespan(app: FastAPI):
 
     await init_db()
 
+    # PSI-SEAM: custom schema + background work. docs/custom-features/SOP.md
+    from backend.app.custom import startup as psi_custom_startup
+
+    await psi_custom_startup()
+
     # Browser download tokens expire after five minutes. Remove abandoned
     # prepared ZIPs at startup as well as before each new preparation so a
     # quiet appliance cannot retain an unusable bundle indefinitely.
@@ -9904,6 +9909,11 @@ app.include_router(obico.router, prefix=app_settings.api_prefix)
 app.include_router(metrics.router, prefix=app_settings.api_prefix)
 app.include_router(virtual_printers.router, prefix=app_settings.api_prefix)
 app.include_router(spoolbuddy.router, prefix=app_settings.api_prefix)
+
+# PSI-SEAM: custom routes + ORM hooks, before the SPA catch-all. docs/custom-features/SOP.md
+from backend.app.custom import install as psi_custom_install  # noqa: E402
+
+psi_custom_install(app)
 
 
 # Serve static files (React build)
