@@ -1,0 +1,12 @@
+# PSI build of Bambuddy. Layered over upstream's docker-compose.yml, which stays
+# untouched:
+#
+#   docker compose -f docker-compose.yml -f deploy/psi/compose.psi.yml ...
+#
+# Use scripts/psi-deploy.sh rather than calling this by hand; it backs up the
+# database first and tags the image so every release can be rolled back.
+services:
+  bambuddy:
+    image: bambuddy-custom:${PSI_IMAGE_TAG:?set PSI_IMAGE_TAG, e.g. 1.2.6b1-psi.3.0}
+    build:
+      context: .
