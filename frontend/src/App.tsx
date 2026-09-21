@@ -8,6 +8,7 @@ import { QueuePage } from './pages/QueuePage';
 import { StatsPage } from './pages/StatsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { FinancePage } from './pages/FinancePage';
+import { PSI_ACCOUNTING_PERMISSION, PsiAccountingPage } from './custom/psi/app'; // PSI-SEAM
 import { ProfilesPage } from './pages/ProfilesPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -212,6 +213,8 @@ function App() {
                   <Route path="pipelines/runs" element={<Navigate to="/queue?tab=pipelines" replace />} />
                   <Route path="stats" element={<StatsPage />} />
                   <Route path="profiles" element={<ProfilesPage />} />
+                  {/* PSI-SEAM: PSI accounting page */}
+                  <Route path="psi" element={<PermissionRoute permission={PSI_ACCOUNTING_PERMISSION}><PsiAccountingPage /></PermissionRoute>} />
                   <Route path="finance" element={<PermissionRoute permission="cost_centers:read_own"><FinancePage /></PermissionRoute>} />
                   <Route path="maintenance" element={<MaintenancePage />} />
                   <Route path="projects" element={<ProjectsPage />} />

@@ -72,6 +72,7 @@ import { PurgeOldFilesModal } from '../components/PurgeOldFilesModal';
 import { useToast } from '../contexts/ToastContext';
 import { usePageFileDrop } from '../hooks/usePageFileDrop';
 import { useAuth } from '../contexts/AuthContext';
+import { PsiJobStrip } from '../custom/psi'; // PSI-SEAM
 import { formatDuration, parseUTCDate, formatDate } from '../utils/date';
 import { formatFileSize } from '../utils/file';
 import { assignableProjects } from '../utils/projectTree';
@@ -929,6 +930,8 @@ function FileCard({ file, isSelected, onSelect, onDelete, onDownload, onPrint, o
             {file.created_by_username}
           </div>
         )}
+        {/* PSI-SEAM: user, PSI/private, note */}
+        <PsiJobStrip entity="library" id={file.id} className="mt-1.5" />
         {/* #2680: last-modified date, toggled from the toolbar. Uses the real
             on-disk mtime when known, else the DB created_at. */}
         {showModified && (
@@ -2531,6 +2534,8 @@ export function FileManagerPage() {
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm text-white truncate">{file.print_name || file.filename}</div>
+                        {/* PSI-SEAM */}
+                        <PsiJobStrip entity="library" id={file.id} variant="compact" className="mt-0.5" />
                         {/* #2680: last-modified date under the name, toggled from
                             the toolbar. Real on-disk mtime when known, else created_at. */}
                         {showModified && (

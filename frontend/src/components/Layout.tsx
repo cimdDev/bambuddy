@@ -20,6 +20,7 @@ import { Card, CardHeader, CardContent } from './Card';
 import { parseUTCDate } from '../utils/date';
 import { Button } from './Button';
 import { BugReportBubble } from './BugReportBubble';
+import { psiNavPermissions } from '../custom/psi/permissions'; // PSI-SEAM
 import {
   getHiddenSidebarSystemItemIds,
   getSidebarOrder,
@@ -332,6 +333,8 @@ export function Layout() {
       // Administrators and Operators — hold it). The advanced-auth /
       // user_notifications enablement gate is applied separately below.
       notifications: 'notifications:user_email',
+      // PSI-SEAM: the PSI accounting entry needs psi_accounting:read
+      ...psiNavPermissions,
     };
 
     const isHidden = (id: string) => {

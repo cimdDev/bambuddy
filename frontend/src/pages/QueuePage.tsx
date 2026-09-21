@@ -76,6 +76,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { QueueStatsBar } from '../components/QueueStatsBar';
 import { CompactHistoryRow } from '../components/CompactHistoryRow';
+import { PsiJobStrip } from '../custom/psi'; // PSI-SEAM
 import { QueueTimelineView } from '../components/QueueTimelineView';
 import { compareQueueOrder, compareQueueOrderAcrossLanes } from '../utils/queueOrder';
 import { BatchOrdersView } from '../components/BatchOrdersView';
@@ -717,6 +718,9 @@ function SortableQueueItem({
               </span>
             )}
           </div>
+
+          {/* PSI-SEAM: user, PSI/private, note */}
+          <PsiJobStrip entity="queue" id={item.id} className="mt-2" />
 
           {/* Progress bar for printing items - TODO: integrate with WebSocket */}
           {isPrinting && status && (() => {

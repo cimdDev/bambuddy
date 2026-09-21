@@ -80,6 +80,7 @@ import { UploadModal } from '../components/UploadModal';
 import { PurgeArchivesModal } from '../components/PurgeArchivesModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { EditArchiveModal, FAILURE_REASON_KEYS } from '../components/EditArchiveModal';
+import { PsiJobStrip } from '../custom/psi'; // PSI-SEAM
 import { PrintLogModal } from '../components/PrintLogModal';
 import { ColumnConfigModal, type ColumnConfig } from '../components/ColumnConfigModal';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
@@ -1306,6 +1307,9 @@ function ArchiveCard({
           </div>
         )}
 
+        {/* PSI-SEAM: user, PSI/private, note */}
+        <PsiJobStrip entity="archive" id={archive.id} className="mb-3" />
+
         {/* Spacer to push content to bottom */}
         <div className="flex-1" />
 
@@ -2336,6 +2340,8 @@ function ArchiveListRow({
               </Link>
             )}
           </div>
+          {/* PSI-SEAM */}
+          <PsiJobStrip entity="archive" id={archive.id} variant="compact" className="mt-0.5" />
           {(archive.filament_type || archive.sliced_for_model) && (
             <div className="flex items-center gap-1.5 mt-0.5">
               {archive.sliced_for_model && (

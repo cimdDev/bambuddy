@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import { formatRelativeTime } from '../utils/date';
 import { filterCompatibleQueueItems } from '../utils/printer';
 import { queueItemDisplayName } from '../utils/queueItemName';
+import { PsiJobStrip } from '../custom/psi'; // PSI-SEAM
 
 interface PrinterQueueWidgetProps {
   printerId: number;
@@ -56,6 +57,8 @@ export function PrinterQueueWidget({ printerId, printerModel, loadedFilamentType
             <p className="text-sm text-white truncate">
               {nextItem ? queueItemDisplayName(nextItem) : ''}
             </p>
+            {/* PSI-SEAM: read-only, the tile is one link */}
+            {nextItem && <PsiJobStrip entity="queue" id={nextItem.id} variant="readonly" className="mt-1" />}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
